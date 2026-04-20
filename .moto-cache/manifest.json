@@ -1,6 +1,6 @@
 {
   "builder" : "shikki@0.3.0",
-  "built_at" : "2026-04-20T06:12:34Z",
+  "built_at" : "2026-04-20T06:52:16Z",
   "files" : {
     "api_surface" : {
       "path" : "api-surface.json",
@@ -32,7 +32,7 @@
     }
   },
   "git_branch" : "fix\/spm-audit-cleanup",
-  "git_commit" : "33757826c2cd20076de8b1872d2a7c36905b406c",
+  "git_commit" : "647080259ae5e091700c885c91ab5a149b58ca00",
   "language" : "swift",
   "project" : "AIKit",
   "schema_version" : 1,
