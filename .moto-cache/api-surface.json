@@ -1,0 +1,73 @@
+{
+  "modules" : [
+    {
+      "name" : "AIKit",
+      "public_functions" : [
+
+      ],
+      "public_protocols" : [
+        "AIProvider",
+        "ModelRegistry",
+        "RuntimeEngine"
+      ],
+      "public_types" : [
+        "AICapabilities",
+        "AIChunk",
+        "AIKitError",
+        "AIMessage",
+        "AIProviderStatus",
+        "AIRequest",
+        "AIResponse",
+        "AITool",
+        "AIToolCall",
+        "CoreMLEngine",
+        "CoreMLEngine",
+        "DefaultModelRegistry",
+        "DownloadProgress",
+        "HFModelInfo",
+        "HFSearchFilter",
+        "HuggingFaceClient",
+        "LocalModel",
+        "LocalModelStore",
+        "MCPContent",
+        "MCPEngine",
+        "MCPInputSchema",
+        "MCPPropertySchema",
+        "MCPProvider",
+        "MCPTool",
+        "MCPToolResult",
+        "MLXEngine",
+        "MLXEngine",
+        "MLXVideoProvider",
+        "MediaLanguagePreferences",
+        "MediaLanguageResolver",
+        "MediaProfile",
+        "MediaType",
+        "MockAIProvider",
+        "MockModelRegistry",
+        "MockRuntimeEngine",
+        "ModelDescriptor",
+        "ModelDomain",
+        "ModelDownloader",
+        "ModelFilter",
+        "ModelFormat",
+        "ModelIdentifier",
+        "OpenAICompatibleEngine",
+        "OpenAIProvider",
+        "PerformanceStat",
+        "PerformanceStore",
+        "ProviderPreferences",
+        "ProviderRouter",
+        "ResponseFormat",
+        "Result",
+        "Role",
+        "ShellRunner",
+        "SourceBehavior",
+        "TokenUsage",
+        "TranslationDecision",
+        "UsageContext",
+        "VideoGenerationOptions"
+      ]
+    }
+  ]
+}

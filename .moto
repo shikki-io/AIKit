@@ -1,0 +1,22 @@
+# .moto -- DNS for code
+# This file tells AI agents where to find the project's architecture cache.
+
+[project]
+name = "AIKit"
+description = "AI provider abstraction layer"
+language = "swift"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/obyw-one/AIKit"
+
+[cache]
+commit = "64708025"
+schema = "1"
+branches = ["main", "develop"]
+
+[cache.local]
+path = ".moto-cache/"
+
+[attribution]
+authors = ["Jeoffrey Thirot <jeoffrey@obyw.one>"]
+organization = "OBYW.one SASU"
+created = "2026-04-20"

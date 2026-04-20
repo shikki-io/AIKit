@@ -1,0 +1,15 @@
+{
+  "AIKit" : [
+    "CoreML",
+    "Foundation",
+    "NetKit"
+  ],
+  "AIKitTests" : [
+    "Foundation",
+    "NetKit",
+    "Testing"
+  ],
+  "unknown" : [
+    "PackageDescription"
+  ]
+}
