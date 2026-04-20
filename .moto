@@ -5,15 +5,11 @@
 name = "AIKit"
 description = "AI provider abstraction layer"
 language = "swift"
-build_system = "spm"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/obyw-one/AIKit"
 
-[architecture]
-modules = ["AIKit"]
-
 [cache]
-commit = "0b251cf72"
+commit = "33757826"
 schema = "1"
 branches = ["main", "develop"]
 

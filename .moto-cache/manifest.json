@@ -1,0 +1,46 @@
+{
+  "builder" : "shikki@0.3.0",
+  "built_at" : "2026-04-20T06:12:34Z",
+  "files" : {
+    "api_surface" : {
+      "path" : "api-surface.json",
+      "sha256" : "2f6c4bcdfba28cfd8bb68ca762c386e39e8fac5e98394f11f9b9ceac04b5fdff"
+    },
+    "dependencies" : {
+      "path" : "dependencies.json",
+      "sha256" : "d5d5413df524183652cd1e02d4a739559650b2c483c62a032c47aa25cfc79b52"
+    },
+    "package" : {
+      "path" : "package.json",
+      "sha256" : "976dd5feb4b1ae17e997629d5d8d7a2c0168d4860ad9489cd1f5c355db073359"
+    },
+    "patterns" : {
+      "path" : "patterns.json",
+      "sha256" : "1b3fe11f8517fa392e0441e1c86ae262ffd517192414abaaf3a62c08284fd86c"
+    },
+    "protocols" : {
+      "path" : "protocols.json",
+      "sha256" : "df0ed4ae8dd63c78e06c3540a667589f479bfa38ecfed300f8704516adc280fb"
+    },
+    "tests" : {
+      "path" : "tests.json",
+      "sha256" : "5a0e07f419c428dd5cf0aa43b99e01b45d7e0e0557e990d5d51825eb3a66313b"
+    },
+    "types" : {
+      "path" : "types.json",
+      "sha256" : "328c365a4c2b157e952d8ab78aadcbcdb7a16a569dcf0fddb5a77f166521a18b"
+    }
+  },
+  "git_branch" : "fix\/spm-audit-cleanup",
+  "git_commit" : "33757826c2cd20076de8b1872d2a7c36905b406c",
+  "language" : "swift",
+  "project" : "AIKit",
+  "schema_version" : 1,
+  "stats" : {
+    "protocols" : 3,
+    "source_files" : 39,
+    "test_count" : 130,
+    "total_cache_tokens" : 13903,
+    "types" : 112
+  }
+}
