@@ -1,7 +1,0 @@
-{
-  "fixturePattern" : "Factory methods (make*) in test files",
-  "framework" : "swift-testing",
-  "mockPattern" : "Mock* classes\/structs",
-  "testCount" : 130,
-  "testFiles" : 17
-}
