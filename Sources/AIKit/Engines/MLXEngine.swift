@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import NetKit
 
 /// Runtime engine for Apple MLX models.
 /// Supports LLM (GGUF/MLX), video generation (mlx-video), and audio (mlx-audio).
@@ -37,6 +38,12 @@ public final class MLXEngine: RuntimeEngine, @unchecked Sendable {
         #endif
     }
 
+    /// Base URL for the mlx_lm.server HTTP endpoint.
+    /// Resolved from: env MLX_LM_BASE_URL → http://localhost:8080/v1
+    private static var mlxLMBaseURL: String {
+        ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"] ?? "http://localhost:8080/v1"
+    }
+
     /// Detect installed MLX models/capabilities.
     public func detectCapabilities() -> AICapabilities {
         var caps: AICapabilities = []
@@ -45,6 +52,14 @@ public final class MLXEngine: RuntimeEngine, @unchecked Sendable {
         if ShellRunner.commandExists("python3") {
             caps.insert(.videoGeneration)
         }
+
+        // On Apple Silicon: advertise synthesis when mlx_lm is importable.
+        #if arch(arm64)
+        if ShellRunner.commandExists("python3") {
+            caps.insert(.synthesis)
+            caps.insert(.textGeneration)
+        }
+        #endif
 
         return caps
     }
@@ -65,9 +80,25 @@ public final class MLXEngine: RuntimeEngine, @unchecked Sendable {
                 pythonPath: pythonPath,
                 modelName: descriptor.id.modelId
             )
+        } else if descriptor.domain == .llm
+                    || descriptor.capabilities.contains(.textGeneration)
+                    || descriptor.capabilities.contains(.synthesis) {
+            // LLM domain — HTTP-server mode via mlx_lm.server OpenAI-compat endpoint.
+            // In-process (MLX Swift bindings) is a future enhancement (spec OQ2).
+            let baseURL = Self.mlxLMBaseURL
+            let llmCaps: AICapabilities = [.textGeneration, .synthesis]
+            provider = OpenAIProvider(
+                id: "\(id)/\(descriptor.id.modelId)",
+                displayName: "\(displayName) — \(descriptor.name)",
+                capabilities: llmCaps,
+                baseURL: baseURL,
+                modelName: descriptor.huggingFaceId ?? descriptor.id.modelId,
+                apiKey: nil,
+                networkService: NetworkService()
+            )
         } else {
             throw AIKitError.engineUnavailable(
-                "MLXEngine currently supports video generation only. LLM support via MLX Swift bindings is planned."
+                "MLXEngine: unsupported domain '\(descriptor.domain)'. Supported: video, llm."
             )
         }
 

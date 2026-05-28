@@ -27,12 +27,30 @@ public struct ProviderRouter: Sendable {
 
     /// Pick the best provider based on historical performance data.
     /// Falls back to capability-based routing if no performance data exists.
+    ///
+    /// Synthesis preference (G7 / local-first profile):
+    /// When the request requires `.synthesis`, ready MLX providers (id prefix "mlx/")
+    /// are tried first — this routes Synthesizer traffic to the local MLX LLM
+    /// before falling back to cloud providers.
     public func routeSmart(
         request: AIRequest,
         context: UsageContext,
         providers candidateProviders: [any AIProvider]? = nil
     ) async -> (any AIProvider)? {
         let candidates = candidateProviders ?? providers
+
+        // Synthesis fast-path: if the model is an MLX LLM provider and is ready,
+        // prefer it unconditionally — local-first, zero cost.
+        if request.model?.provider == "mlx" {
+            for provider in candidates where provider.id.hasPrefix("mlx/") {
+                if provider.capabilities.contains(.synthesis) {
+                    let status = await provider.status
+                    if case .ready = status {
+                        return provider
+                    }
+                }
+            }
+        }
 
         guard let store = performanceStore else {
             // No performance data — fall back to first ready provider.

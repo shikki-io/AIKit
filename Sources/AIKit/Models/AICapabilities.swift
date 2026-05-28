@@ -19,4 +19,8 @@ public struct AICapabilities: OptionSet, Sendable, Codable, Hashable {
     public static let vision          = AICapabilities(rawValue: 1 << 8)
     public static let toolUse         = AICapabilities(rawValue: 1 << 9)
     public static let videoGeneration = AICapabilities(rawValue: 1 << 10)
+
+    /// Context-aware synthesis (local-first profile — routes to MLX LLM when available).
+    /// Advertised by MLXEngine when loaded in LLM domain on Apple Silicon.
+    public static let synthesis       = AICapabilities(rawValue: 1 << 11)
 }
