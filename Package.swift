@@ -15,7 +15,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(name: "NetKit", path: "/Users/jeoffrey/.shikki/workspaces/obyw-one/projects/shikki/packages/NetKit"),
+        .package(url: "https://github.com/FJ-Studios/NetKit.git", from: "0.1.0"),
     ],
     targets: [
         .target(
