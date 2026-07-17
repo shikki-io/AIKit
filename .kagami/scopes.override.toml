@@ -1,0 +1,11 @@
+# AIKit kagami scopes (bootstrapped 2026-07-17 with the session-index migration).
+
+[[scopes]]
+name = "AgentSessionIndex"
+language = "swift"
+package_path = "."
+type_patterns = ["AgentSessionIndexTests", "ClaudeSessionIndexTests", "AgentSessionEntry", "ClaudeSessionIndex", "AgentSessionIndexProvider", "ClaudeSessionIndexProvider"]
+test_file_patterns = ["**/AIKitTests/AgentSessionIndexTests.swift"]
+timeout = 120
+expected_test_min = 12
+description = "Session-store contract + claude conformer. Run: kagami test --scope AgentSessionIndex"

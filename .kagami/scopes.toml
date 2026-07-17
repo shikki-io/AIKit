@@ -1,0 +1,16 @@
+generated_at = "2026-07-17T19:28:50Z"
+generated_by = "kagami auto-discover --write-cache"
+source_mtime_iso = "2026-07-17T19:27:36Z"
+source_sha = "70a9f5a"
+
+[[scopes]]
+discovered_via = "swift-package-ast"
+language = "swift"
+module_patterns = ["AIKitTests"]
+name = "AIKitTests"
+package_path = "/Users/jeoffrey/.shikki/workspaces/fj-studio/projects/AIKit"
+source_paths = ["Tests/AIKitTests/"]
+test_command = ["swift", "test", "--filter", "AIKitTests"]
+test_file_patterns = []
+test_target_name = "AIKitTests"
+type_patterns = []
