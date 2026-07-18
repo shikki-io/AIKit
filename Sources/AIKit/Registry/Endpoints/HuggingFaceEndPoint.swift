@@ -1,5 +1,5 @@
 import Foundation
-import NetKit
+import ShiNetKit
 
 /// EndPoint definitions for the HuggingFace Hub API.
 enum HuggingFaceEndPoint: EndPoint {

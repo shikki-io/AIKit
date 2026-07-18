@@ -1,5 +1,5 @@
 import Foundation
-import NetKit
+import ShiNetKit
 
 /// EndPoint for OpenAI-compatible /v1/models.
 struct OpenAIModelsListEndPoint: EndPoint {

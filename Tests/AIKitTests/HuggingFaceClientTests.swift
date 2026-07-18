@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 @testable import AIKit
-@testable import NetKit
+@testable import ShiNetKit
 
 @Suite("HuggingFaceClient")
 struct HuggingFaceClientTests {

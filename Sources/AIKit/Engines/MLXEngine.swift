@@ -1,6 +1,6 @@
 #if os(macOS)
 import Foundation
-import NetKit
+import ShiNetKit
 
 /// Runtime engine for Apple MLX models.
 /// Supports LLM (GGUF/MLX), video generation (mlx-video), and audio (mlx-audio).
