@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import NetKit
+import ShiNetKit
 @testable import AIKit
 
 @Suite("MCPEngine")

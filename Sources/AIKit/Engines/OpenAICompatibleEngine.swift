@@ -1,5 +1,5 @@
 import Foundation
-import NetKit
+import ShiNetKit
 
 /// OpenAI-compatible engine — works with OpenAI, LM Studio, Ollama, and any
 /// server exposing /v1/chat/completions and /v1/models endpoints.

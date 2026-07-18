@@ -15,20 +15,21 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/FJ-Studios/NetKit.git", from: "0.1.0"),
+        // ShiNetKit v1.0.0 — module renamed at source (collision fix, no aliases ever).
+        .package(url: "https://github.com/FJ-Studios/NetKit.git", from: "1.0.0"),
     ],
     targets: [
         .target(
             name: "AIKit",
             dependencies: [
-                .product(name: "NetKit", package: "NetKit"),
+                .product(name: "ShiNetKit", package: "NetKit"),
             ]
         ),
         .testTarget(
             name: "AIKitTests",
             dependencies: [
                 "AIKit",
-                .product(name: "NetKit", package: "NetKit"),
+                .product(name: "ShiNetKit", package: "NetKit"),
             ]
         ),
     ]

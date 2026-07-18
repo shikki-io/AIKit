@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 @testable import AIKit
-import NetKit
+import ShiNetKit
 
 @Suite("OpenAICompatibleEngine")
 struct OpenAICompatibleEngineTests {

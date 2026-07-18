@@ -1,0 +1,24 @@
+{
+  "originHash" : "965ea4a6b9222e527c50f6cc2650b662b2b4f54ffef4f7f4faf48a010367d249",
+  "pins" : [
+    {
+      "identity" : "corekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/FJ-Studios/CoreKit.git",
+      "state" : {
+        "revision" : "991279f6a93d96b91196abaa603a8dedda07d4cf",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "netkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/FJ-Studios/NetKit.git",
+      "state" : {
+        "revision" : "a592cfa06fb5ac35683b6a3b64d0d99fa877076f",
+        "version" : "1.0.0"
+      }
+    }
+  ],
+  "version" : 3
+}
