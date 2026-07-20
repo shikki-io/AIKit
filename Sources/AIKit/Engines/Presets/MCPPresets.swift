@@ -1,4 +1,4 @@
-import ShiNetKit
+import NetKit
 
 public extension MCPEngine {
     /// Pre-configured for Koharu manga translator MCP server.

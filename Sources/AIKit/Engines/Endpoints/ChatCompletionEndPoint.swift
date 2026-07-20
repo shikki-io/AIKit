@@ -1,5 +1,5 @@
 import Foundation
-import ShiNetKit
+import NetKit
 
 /// EndPoint for OpenAI-compatible /v1/chat/completions.
 struct OpenAIChatCompletionEndPoint: EndPoint {
