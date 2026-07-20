@@ -1,5 +1,5 @@
 import Foundation
-import ShiNetKit
+import NetKit
 
 /// Search filter for HuggingFace model queries.
 public struct HFSearchFilter: Sendable {

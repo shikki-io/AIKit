@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 @testable import AIKit
-@testable import ShiNetKit
+@testable import NetKit
 
 @Suite("DefaultModelRegistry")
 struct DefaultModelRegistryTests {

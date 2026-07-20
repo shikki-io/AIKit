@@ -1,5 +1,5 @@
 import Foundation
-import ShiNetKit
+import NetKit
 
 /// AIProvider that talks to any OpenAI-compatible API.
 public struct OpenAIProvider: AIProvider, Sendable {

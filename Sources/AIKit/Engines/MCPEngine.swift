@@ -1,5 +1,5 @@
 import Foundation
-import ShiNetKit
+import NetKit
 
 /// Generic MCP (Model Context Protocol) client engine.
 /// Connects to any MCP server exposing tools — Koharu, LM Studio MCP, custom servers.

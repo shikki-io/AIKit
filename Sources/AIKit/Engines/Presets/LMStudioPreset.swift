@@ -1,4 +1,4 @@
-import ShiNetKit
+import NetKit
 
 public extension OpenAICompatibleEngine {
     /// Pre-configured for LM Studio local server.
