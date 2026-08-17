@@ -9,7 +9,7 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/obyw-one/AIKit"
 
 [cache]
-commit = "64708025"
+commit = "1df4d3dd"
 schema = "1"
 branches = ["main", "develop"]
 
