@@ -17,6 +17,5 @@ branches = ["main", "develop"]
 path = ".moto-cache/"
 
 [attribution]
-authors = ["Jeoffrey Thirot <jeoffrey@obyw.one>"]
 organization = "OBYW.one SASU"
 created = "2026-04-20"
