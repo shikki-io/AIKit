@@ -8,3 +8,5 @@
 .kagami/*.db-shm
 .kagami/*.db-wal
 .kagami/*.write-lock
+.kagami/tmp/
+.DS_Store
