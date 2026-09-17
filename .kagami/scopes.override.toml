@@ -27,5 +27,5 @@ package_path = "."
 type_patterns = ["ProviderModelCatalog", "AnthropicFamily", "HistoricalAnthropicId", "ModelAliasMap", "ArgsTemplate", "CLISubprocessProviderConfig", "StreamEvent", "StreamParsing", "ClaudeCodeStreamJSONParser", "CursorTextParser", "AiderMixedParser", "ProviderHealthCheck", "ProviderModelCatalogTests", "ModelAliasResolutionTests", "ArgsTemplateRenderingTests", "ClaudeCodeStreamJSONParserTests", "CursorTextParserTests", "AiderMixedParserTests"]
 test_file_patterns = ["**/AIKitTests/Providers/*.swift"]
 timeout = 120
-expected_test_min = 54
+expected_test_min = 56
 description = "Dependency-free provider family (catalog, alias map, args template, stream parsers, health check) relocated from shikki. Run: kagami test --scope AIKitProviders"

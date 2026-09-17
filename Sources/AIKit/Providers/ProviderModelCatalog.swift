@@ -46,6 +46,19 @@ public enum AnthropicFamily: String, CaseIterable, Sendable, Codable, Hashable {
     case fable51 = "claude-fable-5-1"
 }
 
+// MARK: - Model capability tiers (cost-router matching)
+
+/// Model-id prefixes a cost router matches against, per capability tier.
+/// Cross-provider on purpose (Mistral, Anthropic, OpenAI): a router asks
+/// "is this model code-capable / frontier?", and the answer lives with the
+/// rest of model identity instead of inline in the router.
+public enum ProviderModelCapability {
+    /// A model id containing one of these (lowercased) qualifies for code tasks.
+    public static let codeCapablePrefixes: [String] = ["devstral", "claude-", "gpt-4", "o3"]
+    /// A model id containing one of these (lowercased) qualifies for high-stakes tasks.
+    public static let frontierPrefixes: [String] = ["claude-opus", "gpt-4o", "o3"]
+}
+
 // MARK: - ProviderModelCatalog
 
 /// Typed catalog of provider model identity.

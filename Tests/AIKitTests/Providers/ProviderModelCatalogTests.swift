@@ -71,4 +71,20 @@ struct ProviderModelCatalogTests {
         #expect(overridden.resolve("opus") == AnthropicFamily.sonnet5.rawValue)
         #expect(overridden.canonical(for: .opus5) == AnthropicFamily.opus5.rawValue)
     }
+
+    @Test("Every current-family canonical id is code-capable")
+    func currentFamilyIsCodeCapable() {
+        for id in ProviderModelCatalog.default.allCanonicalIds {
+            #expect(ProviderModelCapability.codeCapablePrefixes.contains { id.contains($0) },
+                    "\(id) should match a code-capable prefix")
+        }
+    }
+
+    @Test("The frontier tier is a subset of the code-capable tier")
+    func frontierImpliesCodeCapable() {
+        for prefix in ProviderModelCapability.frontierPrefixes {
+            #expect(ProviderModelCapability.codeCapablePrefixes.contains { prefix.contains($0) },
+                    "frontier prefix \(prefix) should also be code-capable")
+        }
+    }
 }
