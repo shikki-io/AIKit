@@ -1,5 +1,5 @@
 {
-  "originHash" : "965ea4a6b9222e527c50f6cc2650b662b2b4f54ffef4f7f4faf48a010367d249",
+  "originHash" : "72002b70cf6d89a713910965f498b354e2617348f12a096bbf34993af7da55a4",
   "pins" : [
     {
       "identity" : "corekit",
@@ -15,8 +15,26 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/FJ-Studios/NetKit.git",
       "state" : {
-        "revision" : "a592cfa06fb5ac35683b6a3b64d0d99fa877076f",
-        "version" : "1.0.0"
+        "revision" : "1a708b3bc1484275122863606e18975a082a1649",
+        "version" : "2.2.0"
+      }
+    },
+    {
+      "identity" : "shellkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/obyw-one/ShellKit",
+      "state" : {
+        "revision" : "505fb73bd72c0075ed98c93a274f1a45e675a2c8",
+        "version" : "0.1.1"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "9c6fb14227f55d8f711ce3847dc2f419fb0ecacb",
+        "version" : "1.15.1"
       }
     }
   ],
