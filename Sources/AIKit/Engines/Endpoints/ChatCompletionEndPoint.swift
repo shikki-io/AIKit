@@ -26,7 +26,7 @@ struct OpenAIChatCompletionEndPoint: EndPoint {
 
     var body: [String: Any]? {
         guard let data = try? JSONEncoder().encode(requestBody),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         return dict
     }
@@ -57,7 +57,8 @@ enum ChatCompletionReply: Decodable, Sendable {
 
         init(from decoder: Decoder) throws {
             if let single = try? decoder.singleValueContainer(),
-               let text = try? single.decode(String.self) {
+                let text = try? single.decode(String.self)
+            {
                 message = text
                 return
             }
@@ -68,7 +69,8 @@ enum ChatCompletionReply: Decodable, Sendable {
 
     init(from decoder: Decoder) throws {
         if let container = try? decoder.container(keyedBy: ChatCompletionReplyKey.self),
-           let body = try? container.decode(ErrorBody.self, forKey: .error) {
+            let body = try? container.decode(ErrorBody.self, forKey: .error)
+        {
             self = .serverError(message: body.message)
             return
         }
