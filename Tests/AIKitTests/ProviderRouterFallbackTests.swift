@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 // MARK: - ProviderRouterFallbackTests
@@ -95,7 +96,7 @@ struct ProviderRouterFallbackTests {
             )
         } throws: { error in
             guard let aiKitError = error as? AIKitError,
-                  case .allProvidersFailed(let attempts) = aiKitError
+                case .allProvidersFailed(let attempts) = aiKitError
             else {
                 return false
             }
@@ -134,7 +135,7 @@ struct ProviderRouterFallbackTests {
             try await router().routeWithFallback(request: request(), providers: [])
         } throws: { error in
             guard let aiKitError = error as? AIKitError,
-                  case .allProvidersFailed(let attempts) = aiKitError
+                case .allProvidersFailed(let attempts) = aiKitError
             else {
                 return false
             }
@@ -178,7 +179,7 @@ struct ProviderRouterFallbackTests {
             )
         } throws: { error in
             guard let aiKitError = error as? AIKitError,
-                  case .allProvidersFailed(let attempts) = aiKitError
+                case .allProvidersFailed(let attempts) = aiKitError
             else {
                 return false
             }
@@ -228,9 +229,11 @@ struct ProviderRouterFallbackTests {
     func availabilityFailuresFallBack() {
         #expect(FallbackEligibility.allows(AIKitError.engineUnavailable("MLX needs macOS")))
         #expect(FallbackEligibility.allows(AIKitError.noProviderAvailable(.voiceToText)))
-        #expect(FallbackEligibility.allows(AIKitError.modelNotFound(
-            ModelIdentifier(provider: "openai", modelId: "absent")
-        )))
+        #expect(
+            FallbackEligibility.allows(
+                AIKitError.modelNotFound(
+                    ModelIdentifier(provider: "openai", modelId: "absent")
+                )))
         #expect(!FallbackEligibility.allows(AIKitError.downloadFailed("HTTP 404")))
         #expect(!FallbackEligibility.allows(AIKitError.allProvidersFailed([])))
     }

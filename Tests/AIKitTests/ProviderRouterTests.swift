@@ -1,4 +1,5 @@
 import Testing
+
 @testable import AIKit
 
 @Suite("ProviderRouter")
@@ -85,10 +86,11 @@ struct ProviderRouterTests {
             Issue.record("Expected allProvidersFailed error")
         } catch let error as AIKitError {
             #expect(
-                error == .allProvidersFailed([
-                    AIProviderAttempt(providerID: "a", cause: "Request failed: err"),
-                    AIProviderAttempt(providerID: "b", cause: "Request failed: err"),
-                ])
+                error
+                    == .allProvidersFailed([
+                        AIProviderAttempt(providerID: "a", cause: "Request failed: err"),
+                        AIProviderAttempt(providerID: "b", cause: "Request failed: err"),
+                    ])
             )
         } catch {
             Issue.record("Unexpected error type: \(error)")

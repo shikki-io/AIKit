@@ -55,9 +55,11 @@ public struct FallbackProviderChain: AgentProviding, Sendable {
         for (index, provider) in providers.enumerated() {
             let providerName = String(describing: type(of: provider))
             do {
-                logger.info("Trying provider \(index + 1)/\(providers.count)", metadata: [
-                    "provider": "\(providerName)"
-                ])
+                logger.info(
+                    "Trying provider \(index + 1)/\(providers.count)",
+                    metadata: [
+                        "provider": "\(providerName)"
+                    ])
                 let result = try await provider.run(prompt: prompt, timeout: timeout)
                 return result
             } catch {
