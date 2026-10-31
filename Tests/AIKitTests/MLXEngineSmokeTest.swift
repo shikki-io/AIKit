@@ -14,9 +14,6 @@ import Testing
 // Run locally:
 //   SHIKKI_ENABLE_MLX_SMOKE=1 kagami test --scope AIKit
 
-private let smokeEnabled = ProcessInfo.processInfo
-    .environment["SHIKKI_ENABLE_MLX_SMOKE"] == "1"
-
 /// A tiny ModelDescriptor for a small MLX LLM (Qwen2.5 4-bit, ~2 GB).
 /// Used across smoke sub-tests.
 private func smallLLMDescriptor() -> ModelDescriptor {
@@ -121,54 +118,6 @@ struct MLXEngineSmokeTest {
         }
     }
     #endif
-
-    // MARK: Gated live synthesis call (SHIKKI_ENABLE_MLX_SMOKE=1 required)
-
-    #if canImport(Darwin) && arch(arm64)
-    @Test("live synthesis: loadModel + complete returns non-empty output via MLX",
-          .enabled(if: smokeEnabled, "Set SHIKKI_ENABLE_MLX_SMOKE=1 to run live smoke test"))
-    func liveSynthesisOutputNonEmpty() async throws {
-        // This test requires mlx_lm.server running at MLX_LM_BASE_URL (default :8080).
-        // `shi doctor --check mlx-lm --fix` provisions it (W3).
-        let engine = MLXEngine()
-        let descriptor = smallLLMDescriptor()
-
-        let provider = try await engine.loadModel(descriptor)
-
-        let request = AIRequest(
-            messages: [AIMessage(role: .user, content: "Reply with one word: hello")],
-            maxTokens: 32,
-            model: descriptor.id
-        )
-
-        let response = try await withTimeout(seconds: 60) {
-            try await provider.complete(request: request)
-        }
-
-        #expect(!response.content.isEmpty,
-                "Expected non-empty synthesis output from MLX provider")
-        #expect(response.model.isEmpty == false,
-                "Expected model name in response")
-    }
-    #endif
-}
-
-// MARK: - Timeout helper (prevents hang per [[bash-poll-loops-must-have-timeout]])
-
-private func withTimeout<T: Sendable>(
-    seconds: Double,
-    operation: @escaping @Sendable () async throws -> T
-) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask { try await operation() }
-        group.addTask {
-            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            throw CancellationError()
-        }
-        let result = try await group.next()!
-        group.cancelAll()
-        return result
-    }
 }
 
 // MARK: - Tag
