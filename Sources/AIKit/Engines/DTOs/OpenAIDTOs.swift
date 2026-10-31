@@ -44,6 +44,14 @@ struct ChatCompletionRequest: Encodable, Sendable {
 /// OpenAI-compatible chat completion response.
 struct ChatCompletionResponseDTO: Decodable, Sendable {
     let id: String
+    /// The model that actually answered.
+    ///
+    /// Optional because a reply is not required to echo it, and because this
+    /// type is decode-only — no call site builds it memberwise. Measured on LM
+    /// Studio 2026-10-31: this surface *ignores* an unknown `model` in the
+    /// request and answers with whatever is loaded, so the request's model name
+    /// is not evidence of who answered and the reply's value is (BR-AIL-06).
+    let model: String?
     let choices: [Choice]
     let usage: Usage?
 
@@ -163,7 +171,7 @@ struct JSONFragment: Encodable, Sendable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         if let data = rawJSON.data(using: .utf8),
-           let object = try? JSONSerialization.jsonObject(with: data) {
+            let object = try? JSONSerialization.jsonObject(with: data) {
             // Re-serialize through the encoder to produce valid nested JSON.
             let reEncoded = try JSONSerialization.data(withJSONObject: object)
             let rawValue = try JSONDecoder().decode(AnyCodable.self, from: reEncoded)
