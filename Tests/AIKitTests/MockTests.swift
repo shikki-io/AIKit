@@ -1,4 +1,5 @@
 import Testing
+
 @testable import AIKit
 
 @Suite("Mocks")
@@ -8,11 +9,13 @@ struct MockTests {
     func cannedResponses() async throws {
         let r1 = AIResponse(
             content: "first", model: "m",
-            tokensUsed: TokenUsage(prompt: 1, completion: 1), latencyMs: 1
+            tokensUsed: TokenUsage(prompt: 1, completion: 1), latencyMs: 1,
+            providerID: "mock"
         )
         let r2 = AIResponse(
             content: "second", model: "m",
-            tokensUsed: TokenUsage(prompt: 2, completion: 2), latencyMs: 2
+            tokensUsed: TokenUsage(prompt: 2, completion: 2), latencyMs: 2,
+            providerID: "mock"
         )
         let mock = MockAIProvider(responses: [r1, r2])
 
