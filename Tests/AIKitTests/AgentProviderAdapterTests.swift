@@ -122,15 +122,16 @@ struct AgentProviderAdapterTests {
             )
         )
 
-        #expect(rendered == """
-        You are terse.
+        #expect(
+            rendered == """
+                You are terse.
 
-        user: First?
+                user: First?
 
-        assistant: Yes.
+                assistant: Yes.
 
-        user: Second?
-        """)
+                user: Second?
+                """)
     }
 
     @Test("a system prompt in front of one message still labels nothing")
@@ -195,7 +196,7 @@ struct AgentProviderAdapterTests {
     @Test("the adapter is a provider a router can hold")
     func adapterIsAnAIProvider() async throws {
         let providers: [any AIProvider] = [
-            makeSUT(agent: StubAgent(output: "from the CLI"), id: "cli", modelName: "m"),
+            makeSUT(agent: StubAgent(output: "from the CLI"), id: "cli", modelName: "m")
         ]
         let response = try await providers[0].complete(
             request: AIRequest(messages: [AIMessage(role: .user, content: "q")])
