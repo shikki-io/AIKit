@@ -12,7 +12,7 @@ let package = Package(
         .library(
             name: "AIKit",
             targets: ["AIKit"]
-        ),
+        )
     ],
     dependencies: [
         // NetKit v2.1.0 — generic name restored (name-restoration epic 2026-07-20); fuzzy fork consolidated so no collision.
@@ -39,6 +39,10 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS])),
             ]
+        ),
+        .testTarget(
+            name: "AIKitLiveTests",
+            dependencies: ["AIKit"]
         ),
         .testTarget(
             name: "AIKitTests",

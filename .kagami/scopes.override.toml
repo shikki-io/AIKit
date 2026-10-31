@@ -37,3 +37,11 @@ test_file_patterns = ["**/AIKitTests/Providers/*.swift"]
 timeout = 120
 expected_test_min = 106
 description = "Provider family relocated from shikki: catalog, alias map, args template, stream parsers, health check (S1) plus the CLI subprocess provider, fallback chain, LM Studio provider, budget ledger and provider-id vocabulary (S2). Run: kagami test --scope AIKitProviders"
+
+[[scopes]]
+name = "AIKitLive"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitLiveTests"
+pre_pr_default = false
+timeout_seconds = 120
