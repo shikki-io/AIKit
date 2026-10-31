@@ -157,8 +157,56 @@ public struct HuggingFaceClient: Sendable {
         return result
     }
 
+    /// Every file in a model repository, with the checksum the hub published
+    /// for it.
+    ///
+    /// This is what `ModelStore` verifies against, so it is the live source of
+    /// the two digests `ModelFileDigest` describes: `lfs.oid` (SHA-256) for an
+    /// LFS-tracked file, the tree's own `oid` (git blob SHA-1) otherwise.
+    /// Directories are dropped — only files are downloaded or verified.
+    public func files(repoId: String, revision: String = "main") async throws -> [ModelFile] {
+        let endpoint = HuggingFaceEndPoint.listTree(id: repoId, revision: revision)
+        let entries: [HFTreeEntry] = try await networkService.sendRequest(endpoint: endpoint)
+        return entries.filter { $0.type == "file" }.map(\.asModelFile)
+    }
+
     /// Build a download URL for a specific file in a model repo.
-    public func downloadURL(repoId: String, filename: String) -> URL {
-        URL(string: "https://huggingface.co/\(repoId)/resolve/main/\(filename)")!
+    public func downloadURL(repoId: String, filename: String, revision: String = "main") -> URL {
+        URL(string: "https://huggingface.co/\(repoId)/resolve/\(revision)/\(filename)")!
+    }
+}
+
+// MARK: - Tree entry
+
+/// One entry of `/api/models/<id>/tree/<revision>`.
+///
+/// Shape measured on 2026-10-31 against
+/// `mlx-community/Mistral-7B-Instruct-v0.3-4bit`: `lfs` is present on
+/// `model.safetensors` and `tokenizer.model` and absent on every JSON file, so
+/// it is decoded as optional and its absence means "not LFS-tracked", never
+/// "unknown".
+struct HFTreeEntry: Sendable, Decodable {
+    struct LFS: Sendable, Decodable {
+        let oid: String
+        let size: Int64
+    }
+
+    let type: String
+    let path: String
+    let size: Int64
+    let oid: String?
+    let lfs: LFS?
+
+    /// The file plus the strongest digest the hub published for it.
+    var asModelFile: ModelFile {
+        let digest: ModelFileDigest? =
+            if let lfs {
+                .sha256(lfs.oid)
+            } else if let oid {
+                .gitBlobSHA1(oid)
+            } else {
+                nil
+            }
+        return ModelFile(path: path, sizeBytes: lfs?.size ?? size, digest: digest)
     }
 }

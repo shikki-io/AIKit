@@ -39,12 +39,29 @@ let package = Package(
         // source files that need it sit behind `#if canImport(ShellKit)`.
         .package(url: "https://github.com/obyw-one/ShellKit", from: "0.1.0"),
         // mlx-swift-lm — in-process on-device inference, reached only by the
-        // AIKitMLX target (W7). `from: "2.31.3"` is the constraint
-        // shikki-client already resolves with, and it requires mlx-swift
-        // >=0.31.3 <0.32.0: W11 has the client depend on AIKit *and* Irori,
-        // and Irori pins mlx-swift from "0.31.3", so a wider range here would
-        // make that graph unresolvable.
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "2.31.3"),
+        // AIKitMLX target. `from: "3.32.3"` and never a pin: W13 of spec
+        // ai-layer-aikit-core-2026-10-31 moved this off `from: "2.31.3"`, which
+        // admits no 3.x at all.
+        //
+        // 3.x is a breaking release: Downloader, Tokenizer and TokenizerLoader
+        // became protocols with no shipped conformance, so AIKitMLX supplies
+        // both (MLXHubDownloader, TransformersTokenizerLoader). In exchange the
+        // package no longer depends on a Hub client at all, which is what lets
+        // AIKit own the one cache root.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.32.3"),
+        // mlx-swift, declared here rather than taken transitively, because
+        // AIKitMLX imports `MLX` itself (MLX.Memory.cacheLimit). `from:` and
+        // never `exact:` or `.upToNextMinor`.
+        //
+        // mlx-swift-lm 3.32.3 caps this at `.upToNextMinor(from: "0.32.3")`, so
+        // 0.33 stays out of the graph until upstream moves. That cap is
+        // upstream's shared constraint and is not ours to widen here: the
+        // intersection with this range resolves to 0.32.3.
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.32.3"),
+        // swift-transformers — `Tokenizers.AutoTokenizer`, the concrete
+        // tokenizer mlx-swift-lm 3.x no longer carries. AIKitMLX only: AIKit
+        // itself tokenizes nothing.
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.5"),
     ],
     targets: [
         .target(
@@ -64,6 +81,8 @@ let package = Package(
                 "AIKit",
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
             ]
         ),
         .testTarget(
