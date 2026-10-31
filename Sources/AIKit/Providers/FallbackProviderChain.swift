@@ -50,7 +50,7 @@ public struct FallbackProviderChain: AgentProviding, Sendable {
             throw ChainError.noProviders
         }
 
-        var lastError: (any Error)?
+        var attempts: [AIProviderAttempt] = []
 
         for (index, provider) in providers.enumerated() {
             let providerName = String(describing: type(of: provider))
@@ -61,7 +61,7 @@ public struct FallbackProviderChain: AgentProviding, Sendable {
                 let result = try await provider.run(prompt: prompt, timeout: timeout)
                 return result
             } catch {
-                lastError = error
+                attempts.append(AIProviderAttempt(providerID: providerName, error: error))
                 if isFallbackEligible(error) {
                     logger.warning(
                         "Provider \(providerName) failed (fallback-eligible), trying next",
@@ -79,39 +79,22 @@ public struct FallbackProviderChain: AgentProviding, Sendable {
             }
         }
 
-        // All providers exhausted
-        let message = lastError.map { String(describing: $0) } ?? "unknown"
-        throw ChainError.allProvidersFailed(
-            "All \(providers.count) providers failed. Last error: \(message)"
-        )
+        // All providers exhausted. Every cause, not just the last one: a chain
+        // whose primary was rate-limited and whose fallback refused the
+        // connection used to report only the refusal (BR-AIL-07).
+        throw ChainError.allProvidersFailed(AIProviderAttempt.summary(of: attempts))
     }
 
     // MARK: - Fallback Eligibility
 
     /// Determines whether an error should trigger fallback to the next provider.
-    /// Rate limits (429) and connection errors are fallback-eligible.
+    ///
+    /// Delegates to `FallbackEligibility`, the one rule this chain now shares
+    /// with `ProviderRouter.routeWithFallback`. The rule used to live here and
+    /// the router had none at all, so the same error fell back in one path and
+    /// not the other. Rate limits (429) and connection errors stay eligible.
     static func isFallbackEligible(_ error: any Error) -> Bool {
-        // LM Studio specific errors
-        if let lmError = error as? LMStudioProvider.LMStudioError {
-            switch lmError {
-            case .connectionRefused, .rateLimited:
-                return true
-            case .invalidResponse, .httpError, .emptyContent:
-                return false
-            }
-        }
-
-        // URLError network issues
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .cannotConnectToHost, .networkConnectionLost, .timedOut, .cannotFindHost:
-                return true
-            default:
-                return false
-            }
-        }
-
-        return false
+        FallbackEligibility.allows(error)
     }
 
     /// Instance check: the built-in rules, then the caller's own.
