@@ -352,8 +352,7 @@
             if buffer.format.sampleRate == sampleRate,
                 buffer.format.channelCount == 1,
                 buffer.format.commonFormat == .pcmFormatFloat32,
-                let channel = buffer.floatChannelData
-            {
+                let channel = buffer.floatChannelData {
                 return Array(UnsafeBufferPointer(start: channel[0], count: Int(buffer.frameLength)))
             }
 
@@ -461,10 +460,7 @@
                     features[name] = audioURL.path as NSString
 
                 case .multiArray:
-                    guard let constraint = description.multiArrayConstraint else {
-                        throw Self.cannotFill(name, description)
-                    }
-                    guard let window = Self.sampleWindow(in: constraint.shape) else {
+                    guard let constraint = description.multiArrayConstraint, let window = Self.sampleWindow(in: constraint.shape) else {
                         throw Self.cannotFill(name, description)
                     }
                     // Decoded at most once, however many windows the package

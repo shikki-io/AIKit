@@ -223,8 +223,7 @@ public struct DeviceCapability: Sendable, Equatable {
         if machine.hasPrefix("Mac15,") { return .macM3 }
         if machine.hasPrefix("Mac14,") { return .macM2 }
         if machine.hasPrefix("Mac13,") || machine.hasPrefix("MacBookAir10,") || machine.hasPrefix("MacBookPro17,")
-            || machine.hasPrefix("MacBookPro18,") || machine.hasPrefix("Macmini9,") || machine.hasPrefix("iMac21,")
-        {
+            || machine.hasPrefix("MacBookPro18,") || machine.hasPrefix("Macmini9,") || machine.hasPrefix("iMac21,") {
             return .macM1
         }
         // Unknown — conservative default

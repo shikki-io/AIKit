@@ -235,10 +235,7 @@ extension AIRequest {
         public var status: AIProviderStatus {
             get async {
                 let fm = FileManager.default
-                guard fm.isExecutableFile(atPath: binaryPath) else {
-                    return .unavailable
-                }
-                guard fm.fileExists(atPath: Self.expandingTilde(weightsPath)) else {
+                guard fm.isExecutableFile(atPath: binaryPath), fm.fileExists(atPath: Self.expandingTilde(weightsPath)) else {
                     return .unavailable
                 }
                 return .ready
