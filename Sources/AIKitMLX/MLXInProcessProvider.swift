@@ -284,10 +284,19 @@ public struct MLXContainerSession: MLXModelSession {
     /// Load the weights a descriptor names.
     ///
     /// A descriptor with a `localPath` loads from that directory and never
-    /// touches the network; otherwise the HuggingFace id is fetched, and the
-    /// progress handler reports the download.
+    /// touches the network; otherwise the HuggingFace id is fetched through
+    /// `downloader`, and the progress handler reports the download.
+    ///
+    /// `downloader` and `tokenizerLoader` are parameters because mlx-swift-lm
+    /// 3.x made both protocols with no shipped conformance (W13 of spec
+    /// ai-layer-aikit-core-2026-10-31). The defaults are AIKit's own:
+    /// `MLXHubDownloader` keeps one verified cache root, and
+    /// `TransformersTokenizerLoader` reads the tokenizer out of the snapshot it
+    /// verified. 2.x took a `HubApi` here and defaulted it to a second cache.
     public static func load(
         _ model: ModelDescriptor,
+        downloader: any Downloader = MLXHubDownloader(),
+        tokenizerLoader: any TokenizerLoader = TransformersTokenizerLoader(),
         progress: @Sendable @escaping (Double) -> Void
     ) async throws -> any MLXModelSession {
         // The hardware limit lives here and not in the provider: the provider
@@ -304,11 +313,15 @@ public struct MLXContainerSession: MLXModelSession {
 
         let container: ModelContainer
         if let directory = model.localPath {
-            container = try await loadModelContainer(directory: directory) {
-                progress($0.fractionCompleted)
-            }
+            // 3.x: `directory:` became `from:`, and the local overload reports
+            // no progress because there is no download to report — the weights
+            // are already where they will be read from.
+            container = try await loadModelContainer(from: directory, using: tokenizerLoader)
+            progress(1)
         } else {
             container = try await loadModelContainer(
+                from: downloader,
+                using: tokenizerLoader,
                 id: model.huggingFaceId ?? model.id.modelId
             ) {
                 progress($0.fractionCompleted)
@@ -355,6 +368,15 @@ public struct MLXContainerSession: MLXModelSession {
                         continue
                     case .toolCall:
                         // Tool loops for local models are out of scope (#1859).
+                        continue
+                    case .rejectedToolCall:
+                        // New in mlx-swift-lm 3.x: the model emitted something
+                        // tool-shaped that the parser refused. Dropped for the
+                        // same reason as `.toolCall` — with tool loops out of
+                        // scope there is no caller to hand it to — and named
+                        // rather than caught by a `default`, so the next case
+                        // upstream adds is a compile error here instead of
+                        // silence.
                         continue
                     }
                 }

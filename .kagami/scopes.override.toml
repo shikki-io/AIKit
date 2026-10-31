@@ -19,13 +19,15 @@ type_patterns = ["Tests"]
 # the top level, and the old single-star glob described only the top level.
 test_file_patterns = ["**/AIKitTests/**/*.swift"]
 timeout_seconds = 300
-# Measured 2026-10-31 at 046a8fb (W1 of spec ai-layer-aikit-core-2026-10-31):
-# 258 tests discovered, 257 passed, 0 failed, 1 skipped (the MLX live-synthesis
-# test, which needs a real model on disk). The floor is the number that
-# actually executes, so a scope that silently stops discovering its suites
-# exits 2 instead of reporting success forever. Raise this only with a
-# measurement, never to make a red test pass.
-expected_test_min = 257
+# Measured 2026-10-31 at the W13 commit of spec ai-layer-aikit-core-2026-10-31:
+# `kagami test --scope AIKitAll --strict` reported 413/413. The previous floor
+# was 257, measured at 046a8fb (W1) when the target held 258 tests with 1
+# skipped; W2-W7 took it to 395 and W13's ModelStoreTests adds 18.
+#
+# The floor is the number that actually executes, so a scope that silently
+# stops discovering its suites exits 2 instead of reporting success forever.
+# Raise this only with a measurement, never to make a red test pass.
+expected_test_min = 413
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -59,11 +61,16 @@ timeout_seconds = 120
 # Xcode 27.2 RC reported "uninstalled" while 27.0 and 26.6 reported
 # "installed", which is why this is opt-in rather than a pre-PR default.
 #
-# No expected_test_min yet: the floor must be a measurement, and this scope has
-# not been measured under the fleet's selected toolchain.
+# CORRECTION, later the same day (W13): the selected Xcode 27.2 (27B48) now
+# reports `Status: installed` for MetalToolchain 27B47, and this scope builds
+# and runs. `pre_pr_default` stays false all the same — the requirement is a
+# machine-level component, so a builder without it must not be told the scope
+# is red.
 [[scopes]]
 name = "AIKitMLX"
-expected_test_min = 29
+# Measured 2026-10-31 at the W13 commit: 39/39. Was 29 at W7; W13's
+# MLXHubDownloaderTests adds 10.
+expected_test_min = 39
 language = "swift"
 package_path = "."
 test_target_name = "AIKitMLXTests"
