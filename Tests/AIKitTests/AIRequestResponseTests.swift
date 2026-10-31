@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 @Suite("AIRequest and AIResponse")
@@ -43,7 +44,8 @@ struct AIRequestResponseTests {
             model: "gpt-5",
             tokensUsed: TokenUsage(prompt: 10, completion: 5),
             latencyMs: 42,
-            toolCalls: [AIToolCall(name: "search", arguments: "{\"q\": \"test\"}")]
+            toolCalls: [AIToolCall(name: "search", arguments: "{\"q\": \"test\"}")],
+            providerID: "openai"
         )
 
         let encoder = JSONEncoder()
