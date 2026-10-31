@@ -15,9 +15,17 @@ name = "AIKitAll"
 language = "swift"
 package_path = "."
 type_patterns = ["Tests"]
-test_file_patterns = ["**/AIKitTests/*.swift"]
-timeout = 300
-expected_test_min = 14
+# Recurse: the target has suites in Tests/AIKitTests/Providers/ as well as at
+# the top level, and the old single-star glob described only the top level.
+test_file_patterns = ["**/AIKitTests/**/*.swift"]
+timeout_seconds = 300
+# Measured 2026-10-31 at 046a8fb (W1 of spec ai-layer-aikit-core-2026-10-31):
+# 258 tests discovered, 257 passed, 0 failed, 1 skipped (the MLX live-synthesis
+# test, which needs a real model on disk). The floor is the number that
+# actually executes, so a scope that silently stops discovering its suites
+# exits 2 instead of reporting success forever. Raise this only with a
+# measurement, never to make a red test pass.
+expected_test_min = 257
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]

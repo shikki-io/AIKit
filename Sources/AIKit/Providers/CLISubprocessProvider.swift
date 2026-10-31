@@ -1,3 +1,12 @@
+// MARK: - Platform gate
+//
+// W1 of spec `ai-layer-aikit-core-2026-10-31` (BR-AIL-02). ShellKit is a
+// macOS-only dependency — it builds on `Foundation.Process`, absent from the
+// iOS SDK — so the whole provider compiles only where ShellKit can be
+// imported. On iOS the type is simply not part of the AIKit surface; callers
+// that need a CLI backend are macOS by construction.
+#if canImport(ShellKit)
+
 import Foundation
 import Logging
 import ShellKit
@@ -180,3 +189,5 @@ public struct CLISubprocessProvider: AgentProviding, Sendable {
         )
     }
 }
+
+#endif  // canImport(ShellKit)

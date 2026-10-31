@@ -1,3 +1,13 @@
+// MARK: - Platform gate
+//
+// W1 of spec `ai-layer-aikit-core-2026-10-31` (BR-AIL-02). This config type
+// describes a `kind = "cli-subprocess"` provider, and that provider only
+// exists where ShellKit does (macOS). Gating the config with its provider
+// keeps the feature family whole: iOS never offers a config for a backend it
+// cannot run. The file imports no ShellKit symbol itself — the gate is about
+// the feature, not the dependency.
+#if canImport(ShellKit)
+
 import Foundation
 
 // MARK: - CLISubprocessProviderConfig
@@ -156,3 +166,5 @@ public struct CLISubprocessProviderConfig: Sendable, Equatable {
         )
     }
 }
+
+#endif  // canImport(ShellKit)
