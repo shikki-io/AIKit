@@ -355,11 +355,14 @@ public struct ModelStore: Sendable {
             try fileManager.removeItem(at: destination)
         }
 
+        // A hub cache entry is a relative symlink, and linking the link itself
+        // leaves a path that resolves to nothing from its new directory.
+        let file = source.resolvingSymlinksInPath()
         do {
-            try fileManager.linkItem(at: source, to: destination)
+            try fileManager.linkItem(at: file, to: destination)
             return true
         } catch let error as NSError where error.isCrossDevice {
-            try fileManager.copyItem(at: source, to: destination)
+            try fileManager.copyItem(at: file, to: destination)
             return false
         }
         // Any other link failure is news — a permission problem reported as a

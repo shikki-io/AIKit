@@ -110,6 +110,33 @@ struct ModelStoreTests {
         #expect(Set(bytesUnderBothRoots).count == 1, "two inodes would mean the bytes were copied")
     }
 
+    @Test("A file found through a relative symlink is adopted as the real file")
+    func adoptsTheRealFileBehindARelativeSymlink() throws {
+        let sandbox = try Sandbox()
+        let repository = "mlx-community/Test-7B-4bit"
+
+        // The HuggingFace cache: a snapshot entry is `../../blobs/<id>`, which
+        // means nothing once the link itself moves to another directory.
+        let bytes = Data("a small file the hub cache keeps behind a link".utf8)
+        let cache = sandbox.extraRoot.appendingPathComponent("hub-cache")
+        let blob = cache.appendingPathComponent("blobs").appendingPathComponent("abc")
+        try Self.write(bytes, to: blob)
+        let snapshot = cache.appendingPathComponent("snapshots").appendingPathComponent("rev")
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        let link = snapshot.appendingPathComponent("config.json")
+        try FileManager.default.createSymbolicLink(
+            atPath: link.path,
+            withDestinationPath: "../../blobs/abc"
+        )
+
+        let destination = sandbox.store
+            .directory(forRepository: repository)
+            .appendingPathComponent("config.json")
+        try sandbox.store.adopt(link, as: destination)
+
+        #expect(try Data(contentsOf: destination) == bytes)
+    }
+
     @Test("A file whose bytes differ is not located, however right its name looks")
     func doesNotReuseAFileThatOnlyLooksRight() throws {
         let sandbox = try Sandbox()
