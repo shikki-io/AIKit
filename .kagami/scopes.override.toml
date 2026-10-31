@@ -45,3 +45,27 @@ package_path = "."
 test_target_name = "AIKitLiveTests"
 pre_pr_default = false
 timeout_seconds = 120
+
+# W7 of spec ai-layer-aikit-core-2026-10-31. AIKitAll resolves to the
+# AIKitTests target alone, so the on-device provider's suite needs its own
+# scope or no gate ever runs it.
+#
+# pre_pr_default = false for the same reason AIKitLive carries it: the scope
+# needs something the machine may not have. AIKitMLXTests links mlx-swift,
+# whose Metal kernels are compiled from source on every Apple platform, so the
+# scope cannot build unless the SELECTED Xcode has its MetalToolchain component
+# installed. Check with `xcodebuild -showComponent MetalToolchain`; install with
+# `xcodebuild -downloadComponent MetalToolchain`. On 2026-10-31 the selected
+# Xcode 27.2 RC reported "uninstalled" while 27.0 and 26.6 reported
+# "installed", which is why this is opt-in rather than a pre-PR default.
+#
+# No expected_test_min yet: the floor must be a measurement, and this scope has
+# not been measured under the fleet's selected toolchain.
+[[scopes]]
+name = "AIKitMLX"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitMLXTests"
+pre_pr_default = false
+timeout_seconds = 600
+description = "On-device MLX provider, extracted from shikki-client (W7). Needs the Metal toolchain. Run: kagami test --scope AIKitMLX"
