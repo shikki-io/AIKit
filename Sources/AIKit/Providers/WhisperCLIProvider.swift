@@ -138,21 +138,21 @@ extension AIRequest {
 
             public var errorDescription: String? {
                 switch self {
-                case let .binaryNotFound(path):
+                case .binaryNotFound(let path):
                     "whisper-cli not found at \(path). Install: brew install whisper-cpp"
-                case let .weightsNotFound(path):
+                case .weightsNotFound(let path):
                     "Whisper weights not found at \(path). Download: whisper-cpp --download-model large-v3-turbo"
-                case let .audioNotReadable(detail):
+                case .audioNotReadable(let detail):
                     "The request's audio is not a readable local file: \(detail)"
-                case let .audioNotStageable(detail):
+                case .audioNotStageable(let detail):
                     "Could not create this transcription's working files: \(detail)"
-                case let .nonZeroExit(exitCode, stderr):
+                case .nonZeroExit(let exitCode, let stderr):
                     "whisper-cli exited \(exitCode): \(stderr)"
-                case let .timedOut(limit):
+                case .timedOut(let limit):
                     "whisper-cli exceeded its \(Int(limit))s limit and was killed"
-                case let .launchFailed(reason):
+                case .launchFailed(let reason):
                     "whisper-cli could not be launched: \(reason)"
-                case let .emptyTranscript(path):
+                case .emptyTranscript(let path):
                     "whisper-cli exited 0 but produced no transcript for \(path) — "
                         + "the audio may carry no speech, or the weights may be wrong for its language"
                 }
@@ -418,7 +418,7 @@ extension AIRequest {
         /// one, which `StagedAudio.cleanUp()` removes.
         static func stage(_ audio: AIInput) throws -> StagedAudio {
             switch audio.source {
-            case let .url(url):
+            case .url(let url):
                 guard url.isFileURL else {
                     throw TranscriptionError.audioNotReadable(
                         "\(url.absoluteString) is not a file URL; fetch it before transcribing"
@@ -429,7 +429,7 @@ extension AIRequest {
                 }
                 return StagedAudio(path: url.path, temporary: false)
 
-            case let .data(data):
+            case .data(let data):
                 guard !data.isEmpty else {
                     throw TranscriptionError.audioNotReadable("the request carries 0 bytes of audio")
                 }
