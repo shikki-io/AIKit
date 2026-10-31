@@ -1,6 +1,6 @@
 #if canImport(CoreML)
-import Foundation
 import CoreML
+import Foundation
 
 /// Runtime engine for CoreML compiled models (.mlmodel/.mlpackage).
 /// Best for vision tasks on Neural Engine (ANE): OCR, layout detection, inpainting.
@@ -134,7 +134,8 @@ struct CoreMLProvider: AIProvider, @unchecked Sendable {
             content: resultText,
             model: id,
             tokensUsed: TokenUsage(prompt: 0, completion: 0),
-            latencyMs: latencyMs
+            latencyMs: latencyMs,
+            providerID: id
         )
     }
 }

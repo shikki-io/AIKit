@@ -43,7 +43,8 @@ public struct OpenAIProvider: AIProvider, Sendable {
                 completion: response.usage?.completionTokens ?? 0
             ),
             latencyMs: latencyMs,
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            providerID: id
         )
     }
 

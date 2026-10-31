@@ -78,7 +78,9 @@ public struct MLXVideoProvider: AIProvider, Sendable {
             content: outputPath,
             model: modelName,
             tokensUsed: TokenUsage(prompt: 0, completion: 0),
-            latencyMs: latencyMs
+            latencyMs: latencyMs,
+            providerID: id,
+            outputs: [AIOutput(kind: .video, url: URL(fileURLWithPath: outputPath))]
         )
     }
 
