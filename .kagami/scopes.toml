@@ -1,7 +1,19 @@
-generated_at = "2026-10-31T13:35:06Z"
+generated_at = "2026-10-31T13:47:24Z"
 generated_by = "kagami auto-discover --write-cache"
-source_mtime_iso = "2026-10-31T13:33:52Z"
-source_sha = "046a8fb"
+source_mtime_iso = "2026-10-31T13:44:59Z"
+source_sha = "5d93c8a"
+
+[[scopes]]
+discovered_via = "swift-package-ast"
+language = "swift"
+module_patterns = ["AIKitLiveTests"]
+name = "AIKitLiveTests"
+package_path = "."
+source_paths = ["Tests/AIKitLiveTests/"]
+test_command = ["swift", "test", "--filter", "AIKitLiveTests"]
+test_file_patterns = ["**/MLXEngineLiveSmokeTests.swift"]
+test_target_name = "AIKitLiveTests"
+type_patterns = ["MLXEngineLiveSmokeTests"]
 
 [[scopes]]
 discovered_via = "swift-package-ast"

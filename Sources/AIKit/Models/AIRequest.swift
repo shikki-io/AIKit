@@ -9,6 +9,10 @@ public struct AIRequest: Sendable, Codable {
     public var model: ModelIdentifier?
     public var tools: [AITool]?
     public var responseFormat: ResponseFormat?
+    /// Media the request carries, by reference or by value.
+    /// Empty for a text-only request, which is why it is not optional:
+    /// "no inputs" and "an empty list of inputs" are the same thing.
+    public var inputs: [AIInput]
 
     public init(
         messages: [AIMessage],
@@ -17,7 +21,8 @@ public struct AIRequest: Sendable, Codable {
         maxTokens: Int = 1024,
         model: ModelIdentifier? = nil,
         tools: [AITool]? = nil,
-        responseFormat: ResponseFormat? = nil
+        responseFormat: ResponseFormat? = nil,
+        inputs: [AIInput] = []
     ) {
         self.messages = messages
         self.systemPrompt = systemPrompt
@@ -26,6 +31,124 @@ public struct AIRequest: Sendable, Codable {
         self.model = model
         self.tools = tools
         self.responseFormat = responseFormat
+        self.inputs = inputs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case messages
+        case systemPrompt
+        case temperature
+        case maxTokens
+        case model
+        case tools
+        case responseFormat
+        case inputs
+    }
+
+    /// Decodes a request, including one stored before `inputs` existed.
+    /// Callers persist `AIRequest`, so a payload written by an earlier version
+    /// must stay readable: a missing `inputs` key means no media, not a failure.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        messages = try container.decode([AIMessage].self, forKey: .messages)
+        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt)
+        temperature = try container.decode(Double.self, forKey: .temperature)
+        maxTokens = try container.decode(Int.self, forKey: .maxTokens)
+        model = try container.decodeIfPresent(ModelIdentifier.self, forKey: .model)
+        tools = try container.decodeIfPresent([AITool].self, forKey: .tools)
+        responseFormat = try container.decodeIfPresent(ResponseFormat.self, forKey: .responseFormat)
+        inputs = try container.decodeIfPresent([AIInput].self, forKey: .inputs) ?? []
+    }
+}
+
+/// What a media payload is, in either direction.
+public enum AIMediaKind: String, Sendable, Codable {
+    case audio
+    case image
+    case video
+    case document
+    /// A text artifact a provider produced as a file rather than as `content`.
+    case text
+}
+
+/// Where a media payload lives: by reference, or by value.
+///
+/// A URL keeps a large file out of memory and out of every log that prints a
+/// request; data is for a payload that has no file behind it. A source is one
+/// or the other, never both and never neither.
+public enum AIMediaSource: Sendable, Equatable {
+    case url(URL)
+    case data(Data)
+}
+
+extension AIMediaSource: Codable {
+    enum CodingKeys: String, CodingKey {
+        case url
+        case data
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let url = try container.decodeIfPresent(URL.self, forKey: .url) {
+            self = .url(url)
+        } else if let data = try container.decodeIfPresent(Data.self, forKey: .data) {
+            self = .data(data)
+        } else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "A media source carries either a url or data; this payload carries neither."
+                )
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .url(let url):
+            try container.encode(url, forKey: .url)
+        case .data(let data):
+            try container.encode(data, forKey: .data)
+        }
+    }
+}
+
+/// A media input carried by an `AIRequest`.
+///
+/// An audio file for transcription, an image for a vision model: the kind says
+/// what it is, the source says where it is, and the provider's
+/// `AICapabilities` decide whether it can be served at all.
+public struct AIInput: Sendable, Codable, Equatable {
+    public var kind: AIMediaKind
+    public var source: AIMediaSource
+    /// IANA media type when the caller knows it, for example `audio/wav`.
+    public var mimeType: String?
+
+    public init(kind: AIMediaKind, source: AIMediaSource, mimeType: String? = nil) {
+        self.kind = kind
+        self.source = source
+        self.mimeType = mimeType
+    }
+
+    public init(kind: AIMediaKind, url: URL, mimeType: String? = nil) {
+        self.init(kind: kind, source: .url(url), mimeType: mimeType)
+    }
+
+    public init(kind: AIMediaKind, data: Data, mimeType: String? = nil) {
+        self.init(kind: kind, source: .data(data), mimeType: mimeType)
+    }
+
+    /// The input's location, when it is carried by reference.
+    public var url: URL? {
+        if case .url(let url) = source { return url }
+        return nil
+    }
+
+    /// The input's bytes, when it is carried by value.
+    public var data: Data? {
+        if case .data(let data) = source { return data }
+        return nil
     }
 }
 

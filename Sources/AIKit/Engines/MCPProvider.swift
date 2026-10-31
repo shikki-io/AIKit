@@ -57,7 +57,8 @@ public struct MCPProvider: AIProvider, Sendable {
             content: content,
             model: id,
             tokensUsed: TokenUsage(prompt: 0, completion: 0),
-            latencyMs: latencyMs
+            latencyMs: latencyMs,
+            providerID: id
         )
     }
 }
