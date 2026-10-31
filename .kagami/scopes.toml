@@ -1,7 +1,7 @@
-generated_at = "2026-10-31T13:47:24Z"
+generated_at = "2026-10-31T14:20:32Z"
 generated_by = "kagami auto-discover --write-cache"
-source_mtime_iso = "2026-10-31T13:44:59Z"
-source_sha = "5d93c8a"
+source_mtime_iso = "2026-10-31T14:15:50Z"
+source_sha = "94a4f11"
 
 [[scopes]]
 discovered_via = "swift-package-ast"
@@ -18,11 +18,23 @@ type_patterns = ["MLXEngineLiveSmokeTests"]
 [[scopes]]
 discovered_via = "swift-package-ast"
 language = "swift"
+module_patterns = ["AIKitMLXTests"]
+name = "AIKitMLXTests"
+package_path = "."
+source_paths = ["Tests/AIKitMLXTests/"]
+test_command = ["swift", "test", "--filter", "AIKitMLXTests"]
+test_file_patterns = ["**/MLXInProcessProviderTests.swift"]
+test_target_name = "AIKitMLXTests"
+type_patterns = ["DeviceCapabilityTests", "MLXContainerSessionTurnsTests", "MLXInProcessProviderTests", "ModelDescriptorDeviceFieldsTests"]
+
+[[scopes]]
+discovered_via = "swift-package-ast"
+language = "swift"
 module_patterns = ["AIKitTests"]
 name = "AIKitTests"
 package_path = "."
 source_paths = ["Tests/AIKitTests/"]
 test_command = ["swift", "test", "--filter", "AIKitTests"]
-test_file_patterns = ["**/AICapabilitiesTests.swift", "**/AIRequestResponseTests.swift", "**/AgentSessionIndexTests.swift", "**/AiderMixedParserTests.swift", "**/ArgsTemplateRenderingTests.swift", "**/BudgetDeductionTests.swift", "**/CLISubprocessProviderInitTests.swift", "**/ClaudeCodeStreamJSONParserTests.swift", "**/ConcurrencyCapTests.swift", "**/CoreMLEngineTests.swift", "**/CursorTextParserTests.swift", "**/DefaultModelRegistryTests.swift", "**/FallbackProviderChainTests.swift", "**/HuggingFaceClientTests.swift", "**/LMStudioProviderTests.swift", "**/LocalModelStoreTests.swift", "**/MCPEngineTests.swift", "**/MLXEngineSmokeTest.swift", "**/MLXEngineTests.swift", "**/MediaLanguagePreferencesTests.swift", "**/MediaLanguageResolverTests.swift", "**/MockTests.swift", "**/ModelAliasResolutionTests.swift", "**/ModelDescriptorTests.swift", "**/OpenAICompatibleEngineTests.swift", "**/OpenAIDTOTests.swift", "**/PerformanceStoreTests.swift", "**/ProviderHealthCheckTests.swift", "**/ProviderModelCatalogTests.swift", "**/ProviderRouterTests.swift", "**/SmartRouterTests.swift"]
+test_file_patterns = ["**/AICapabilitiesTests.swift", "**/AIRequestInputTests.swift", "**/AIRequestResponseTests.swift", "**/AgentSessionIndexTests.swift", "**/AiderMixedParserTests.swift", "**/ArgsTemplateRenderingTests.swift", "**/BudgetDeductionTests.swift", "**/CLISubprocessProviderInitTests.swift", "**/ClaudeCodeStreamJSONParserTests.swift", "**/ConcurrencyCapTests.swift", "**/CoreMLEngineTests.swift", "**/CursorTextParserTests.swift", "**/DefaultModelRegistryTests.swift", "**/FallbackProviderChainTests.swift", "**/HuggingFaceClientTests.swift", "**/LMStudioProviderTests.swift", "**/LocalModelStoreTests.swift", "**/MCPEngineTests.swift", "**/MLXEngineSmokeTest.swift", "**/MLXEngineTests.swift", "**/MediaLanguagePreferencesTests.swift", "**/MediaLanguageResolverTests.swift", "**/MockTests.swift", "**/ModelAliasResolutionTests.swift", "**/ModelDescriptorTests.swift", "**/OpenAICompatibleEngineTests.swift", "**/OpenAIDTOTests.swift", "**/PerformanceStoreTests.swift", "**/ProviderHealthCheckTests.swift", "**/ProviderModelCatalogTests.swift", "**/ProviderRouterTests.swift", "**/SmartRouterTests.swift"]
 test_target_name = "AIKitTests"
-type_patterns = ["AICapabilitiesTests", "AIRequestResponseTests", "AgentSessionIndexTests", "AiderMixedParserTests", "ArgsTemplateRenderingTests", "BudgetDeductionTests", "CLISubprocessProviderInitTests", "ClaudeCodeStreamJSONParserTests", "ClaudeSessionIndexTests", "ConcurrencyCapTests", "CoreMLEngineTests", "CursorTextParserTests", "DefaultModelRegistryTests", "FallbackProviderChainTests", "HuggingFaceClientTests", "LMStudioProviderTests", "LocalModelStoreTests", "MCPEngineTests", "MLXEngineSmokeTest", "MLXEngineTests", "MediaLanguagePreferencesTests", "MediaLanguageResolverTests", "MockTests", "ModelAliasResolutionTests", "ModelDescriptorTests", "OpenAICompatibleEngineTests", "OpenAIDTOTests", "PerformanceStoreTests", "ProviderHealthCheckTests", "ProviderModelCatalogTests", "ProviderRouterTests", "SmartRouterTests"]
+type_patterns = ["AICapabilitiesTests", "AIRequestInputTests", "AIRequestResponseTests", "AgentSessionIndexTests", "AiderMixedParserTests", "ArgsTemplateRenderingTests", "BudgetDeductionTests", "CLISubprocessProviderInitTests", "ClaudeCodeStreamJSONParserTests", "ClaudeSessionIndexTests", "ConcurrencyCapTests", "CoreMLEngineTests", "CursorTextParserTests", "DefaultModelRegistryTests", "FallbackProviderChainTests", "HuggingFaceClientTests", "LMStudioProviderTests", "LocalModelStoreTests", "MCPEngineTests", "MLXEngineSmokeTest", "MLXEngineTests", "MediaLanguagePreferencesTests", "MediaLanguageResolverTests", "MockTests", "ModelAliasResolutionTests", "ModelDescriptorTests", "OpenAICompatibleEngineTests", "OpenAIDTOTests", "PerformanceStoreTests", "ProviderHealthCheckTests", "ProviderModelCatalogTests", "ProviderRouterTests", "SmartRouterTests"]
