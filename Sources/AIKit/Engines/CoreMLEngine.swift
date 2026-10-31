@@ -313,7 +313,7 @@
         /// `AVAudioFile` reads paths, not bytes.
         static func fileURL(for audio: AIInput) throws -> URL {
             switch audio.source {
-            case let .url(url):
+            case .url(let url):
                 guard url.isFileURL else {
                     throw AIKitError.requestFailed(
                         "\(url.absoluteString) is not a file URL; fetch it before transcribing"
@@ -324,7 +324,7 @@
                 }
                 return url
 
-            case let .data(data):
+            case .data(let data):
                 guard !data.isEmpty else {
                     throw AIKitError.requestFailed("The request carries 0 bytes of audio")
                 }
