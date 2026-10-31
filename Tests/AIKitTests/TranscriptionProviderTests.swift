@@ -65,20 +65,24 @@ struct TranscriptionProviderTests {
             var bytes = Data()
 
             func append(_ string: String) { bytes.append(contentsOf: Array(string.utf8)) }
-            func append32(_ value: Int) { bytes.append(contentsOf: withUnsafeBytes(of: UInt32(value).littleEndian, Array.init)) }
-            func append16(_ value: Int) { bytes.append(contentsOf: withUnsafeBytes(of: UInt16(value).littleEndian, Array.init)) }
+            func append32(_ value: Int) {
+                bytes.append(contentsOf: withUnsafeBytes(of: UInt32(value).littleEndian, Array.init))
+            }
+            func append16(_ value: Int) {
+                bytes.append(contentsOf: withUnsafeBytes(of: UInt16(value).littleEndian, Array.init))
+            }
 
             append("RIFF")
             append32(36 + dataBytes)
             append("WAVE")
             append("fmt ")
-            append32(16)      // PCM header size
-            append16(1)       // PCM
-            append16(1)       // mono
+            append32(16)  // PCM header size
+            append16(1)  // PCM
+            append16(1)  // mono
             append32(sampleRate)
             append32(sampleRate * 2)  // byte rate
-            append16(2)       // block align
-            append16(16)      // bits per sample
+            append16(2)  // block align
+            append16(16)  // bits per sample
             append("data")
             append32(dataBytes)
             bytes.append(Data(count: dataBytes))
@@ -158,7 +162,7 @@ struct TranscriptionProviderTests {
             _ = try imageOnly.audioInput(servedBy: .voiceToText)
             Issue.record("A request with no audio must not resolve an audio input")
         } catch let error as AIKitError {
-            guard case let .requestFailed(reason) = error else {
+            guard case .requestFailed(let reason) = error else {
                 Issue.record("Expected .requestFailed, got \(error)")
                 return
             }
