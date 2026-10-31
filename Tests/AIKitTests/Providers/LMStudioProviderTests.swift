@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 // MARK: - Mock URLProtocol
@@ -12,11 +13,11 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var mockError: (any Error)?
     nonisolated(unsafe) static var lastRequest: URLRequest?
 
-    override class func canInit(with request: URLRequest) -> Bool {
+    override static func canInit(with request: URLRequest) -> Bool {
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
         request
     }
 
@@ -213,7 +214,7 @@ struct LMStudioProviderTests {
     @Test("throws invalidResponse on malformed JSON")
     func invalidJSONThrows() throws {
         let provider = LMStudioProvider(model: "test")
-        let badData = "not json at all".data(using: .utf8)!
+        let badData = Data("not json at all".utf8)
 
         #expect(throws: LMStudioProvider.LMStudioError.self) {
             try provider.parseResponse(badData)
