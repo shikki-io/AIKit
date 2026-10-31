@@ -57,10 +57,12 @@ public struct LMStudioProvider: AgentProviding, Sendable {
         logger: Logger = Logger(label: "shikki.lmstudio-provider"),
         networkService: (any NetworkProtocol)? = nil
     ) {
-        self.baseURL = baseURL
+        self.baseURL =
+            baseURL
             ?? ProcessInfo.processInfo.environment["LMSTUDIO_URL"]
             ?? "http://127.0.0.1:1234"
-        self.model = model
+        self.model =
+            model
             ?? ProcessInfo.processInfo.environment["LMSTUDIO_MODEL"]
             ?? "local-model"
         self.requestTimeout = requestTimeout
@@ -71,10 +73,12 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     // MARK: - AgentProviding
 
     public func run(prompt: String, timeout: TimeInterval) async throws -> String {
-        logger.info("LM Studio request", metadata: [
-            "model": "\(model)",
-            "url": "\(baseURL)",
-        ])
+        logger.info(
+            "LM Studio request",
+            metadata: [
+                "model": "\(model)",
+                "url": "\(baseURL)",
+            ])
 
         let response: AIResponse
         do {

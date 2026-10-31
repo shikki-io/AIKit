@@ -359,7 +359,7 @@ struct OpenAIProviderTests {
     func errorBodyOn200() async throws {
         let network = MockNetworkService()
         network.resultData = try JSONSerialization.data(withJSONObject: [
-            "error": ["message": "Unexpected endpoint or method. (POST /v1/v1/chat/completions)"],
+            "error": ["message": "Unexpected endpoint or method. (POST /v1/v1/chat/completions)"]
         ])
         let provider = OpenAIProvider(
             id: "openai-compatible",
@@ -388,10 +388,11 @@ struct OpenAIProviderTests {
     @Test("a completion still decodes, and names the provider that answered")
     func completionStillDecodes() async throws {
         let network = MockNetworkService()
-        network.resultData = Data("""
-        {"id":"chatcmpl-1","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},
-        "finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
-        """.utf8)
+        network.resultData = Data(
+            """
+            {"id":"chatcmpl-1","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},
+            "finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+            """.utf8)
         let provider = OpenAIProvider(
             id: "lmstudio",
             displayName: "LM Studio",
