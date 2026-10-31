@@ -2,6 +2,11 @@ import Foundation
 import NetKit
 
 /// AIProvider that talks to any OpenAI-compatible API.
+///
+/// One provider serves every server that speaks `/v1/chat/completions`: OpenAI
+/// itself, LM Studio, Ollama, any proxy in front of them. `LMStudioProvider`
+/// is a thin `AgentProviding` adapter over this type rather than a second
+/// implementation of the same wire format.
 public struct OpenAIProvider: AIProvider, Sendable {
     public let id: String
     public let displayName: String
@@ -11,6 +16,42 @@ public struct OpenAIProvider: AIProvider, Sendable {
     let modelName: String
     let apiKey: String?
     let networkService: any NetworkProtocol
+
+    /// The message `complete` throws when a 200 reply carries no choices.
+    ///
+    /// `LMStudioProvider` matches on this exact value to keep its own
+    /// `.emptyContent` case, so thrower and matcher read one constant instead
+    /// of two copies of a sentence that could drift apart.
+    static let emptyReplyMessage = "Empty response — no choices returned"
+
+    /// Create a provider for one model on one OpenAI-compatible server.
+    /// - Parameters:
+    ///   - id: The `AIProvider.id` this provider reports, and the value every
+    ///     answer carries in `AIResponse.providerID`.
+    ///   - displayName: Human-readable name.
+    ///   - capabilities: What this model can do, as the caller knows it.
+    ///   - baseURL: Server root, for example `http://127.0.0.1:1234`. The
+    ///     endpoint owns the path (BR-AIL-09).
+    ///   - modelName: Model name as the server knows it.
+    ///   - apiKey: Bearer token, when the server wants one.
+    ///   - networkService: The transport. Inject a mock in tests (BR-AIL-12).
+    public init(
+        id: String,
+        displayName: String,
+        capabilities: AICapabilities,
+        baseURL: String,
+        modelName: String,
+        apiKey: String? = nil,
+        networkService: any NetworkProtocol
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.capabilities = capabilities
+        self.baseURL = baseURL
+        self.modelName = modelName
+        self.apiKey = apiKey
+        self.networkService = networkService
+    }
 
     public var status: AIProviderStatus {
         get async { .ready }
@@ -22,13 +63,29 @@ public struct OpenAIProvider: AIProvider, Sendable {
         let chatRequest = buildChatRequest(from: request, stream: false)
         let endpoint = makeEndpoint(for: chatRequest)
 
-        let response: ChatCompletionResponseDTO = try await networkService.sendRequest(endpoint: endpoint)
+        // A transport failure travels as the type it was thrown as — `URLError`,
+        // `NetKit.NetworkError` — because a caller deciding whether to fall back
+        // needs to tell a refused connection from a server that answered
+        // (BR-AIL-07, W5). Flattening it into a string here would erase that.
+        let reply: ChatCompletionReply = try await networkService.sendRequest(endpoint: endpoint)
+
+        let response: ChatCompletionResponseDTO
+        switch reply {
+        case .completion(let completion):
+            response = completion
+        case .serverError(let message):
+            // BR-AIL-10: the server answered 200 and said why it could not
+            // serve the request. Its own words travel, with the URL they came
+            // from — a `/v1` left in a server root reads as a bad reply
+            // otherwise, and the URL is what names that mistake.
+            throw AIKitError.requestFailed("\(message) — from \(requestTarget(endpoint))")
+        }
 
         let elapsed = startTime.duration(to: .now)
         let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
 
         guard let firstChoice = response.choices.first else {
-            throw AIKitError.requestFailed("Empty response — no choices returned")
+            throw AIKitError.requestFailed(Self.emptyReplyMessage)
         }
 
         let toolCalls = firstChoice.message.toolCalls?.map { call in
@@ -102,6 +159,13 @@ public struct OpenAIProvider: AIProvider, Sendable {
             tools: tools,
             responseFormat: responseFormat
         )
+    }
+
+    /// The URL a request to `endpoint` actually goes to, for an error message
+    /// that has to name where it came from.
+    private func requestTarget(_ endpoint: OpenAIChatCompletionEndPoint) -> String {
+        networkService.createRequest(endPoint: endpoint).url?.absoluteString
+            ?? "\(baseURL)\(endpoint.path)"
     }
 
     private func makeEndpoint(for chatRequest: ChatCompletionRequest) -> OpenAIChatCompletionEndPoint {
@@ -184,5 +248,36 @@ private final class SSEStreamDelegate: NSObject, URLSessionDataDelegate, @unchec
         if !delta.isEmpty || isComplete {
             continuation.yield(AIChunk(delta: delta, isComplete: isComplete))
         }
+    }
+}
+
+// MARK: - Timeout-carrying transport
+
+/// A `NetworkProtocol` that puts a caller's timeout on the request it builds.
+///
+/// NetKit's `createRequest` leaves `URLRequest.timeoutInterval` at its
+/// 60-second default, and `sendRequest` runs on `URLSession.shared`, so a
+/// provider cannot otherwise wait longer than a minute. A local model loading
+/// cold needs more than a minute, and a request that dies at 60 seconds reads
+/// as a dead server rather than a slow one — the misreading W5's fallback rule
+/// exists to avoid. `createRequest(endPoint:)` is a `NetworkProtocol`
+/// requirement and not only an extension default, so the override here is the
+/// one the inherited `sendRequest` calls.
+struct TimeoutNetworkService: NetworkProtocol {
+    /// Seconds a single request may take.
+    let timeoutInterval: TimeInterval
+    /// NetKit's own request builder, reached through a type that does not
+    /// override it. Delegating keeps the URL, header and body construction in
+    /// one place instead of copying it here to drift.
+    private let base = NetworkService()
+
+    init(timeoutInterval: TimeInterval) {
+        self.timeoutInterval = timeoutInterval
+    }
+
+    func createRequest(endPoint: EndPoint) -> URLRequest {
+        var request = base.createRequest(endPoint: endPoint)
+        request.timeoutInterval = timeoutInterval
+        return request
     }
 }
