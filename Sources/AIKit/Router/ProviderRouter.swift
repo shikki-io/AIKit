@@ -84,19 +84,52 @@ public struct ProviderRouter: Sendable {
         return nil
     }
 
-    /// Try providers in order until one succeeds. Throws allProvidersFailed if none work.
+    /// Try providers in order until one succeeds, keeping every failure.
+    ///
+    /// The answer carries its own `providerID`, so a response that came from the
+    /// second provider says so (BR-AIL-06). When nobody answers, the thrown
+    /// `AIKitError.allProvidersFailed` lists each provider and its cause
+    /// (BR-AIL-07) — this method used to swallow all of them in
+    /// `catch { continue }` and throw a bare case.
+    ///
+    /// Whether a failure moves on to the next provider is
+    /// `FallbackEligibility`'s single rule, shared with
+    /// `FallbackProviderChain`. An error that no other provider can fix stops
+    /// the walk rather than burning the rest of the list.
+    ///
+    /// No deadline is imposed here: a timeout belongs to the caller, because a
+    /// local model loading weights for the first time is slow, not down, and a
+    /// router-side deadline would read it as down.
+    ///
+    /// - Throws: the provider's own error when the first attempt fails for a
+    ///   reason no other provider can fix; `AIKitError.allProvidersFailed`
+    ///   otherwise, carrying one attempt per provider asked.
     public func routeWithFallback(
         request: AIRequest,
         providers fallbackProviders: [any AIProvider]
     ) async throws -> AIResponse {
+        var attempts: [AIProviderAttempt] = []
+
         for provider in fallbackProviders {
             do {
                 return try await provider.complete(request: request)
             } catch {
-                continue
+                attempts.append(AIProviderAttempt(providerID: provider.id, error: error))
+
+                guard FallbackEligibility.allows(error) else {
+                    // Trying the rest cannot help. Rethrow the real error when it
+                    // is all that happened, so the caller keeps the typed cause;
+                    // wrap it once earlier providers have already failed, so
+                    // their causes are not dropped on the way out.
+                    if attempts.count == 1 {
+                        throw error
+                    }
+                    throw AIKitError.allProvidersFailed(attempts)
+                }
             }
         }
-        throw AIKitError.allProvidersFailed
+
+        throw AIKitError.allProvidersFailed(attempts)
     }
 }
 

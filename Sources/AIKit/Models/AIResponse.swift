@@ -14,19 +14,30 @@ public struct AIResponse: Sendable, Codable, Equatable {
     /// that cannot name its author hides a misrouted request.
     ///
     /// Empty only when read from a payload written before provenance was
-    /// recorded; a live provider always fills it.
+    /// recorded; a live provider always fills it, because the memberwise
+    /// initialiser requires it.
     public var providerID: String
     /// Media the provider produced, by reference or by value.
     /// Empty for a text-only answer, which arrives in `content`.
     public var outputs: [AIOutput]
 
+    /// Builds a response, naming the provider that produced it.
+    ///
+    /// `providerID` has no default on purpose. It carried `""` when provenance
+    /// was introduced, which meant a provider that forgot to name itself
+    /// compiled and shipped an anonymous answer — and after a fallback an
+    /// anonymous answer hides which provider actually served the request
+    /// (BR-AIL-06). Requiring it moves that from a runtime blank to a compile
+    /// error. Decoding keeps its tolerance: an *old stored payload* has no
+    /// provenance to give and must still be readable, which is
+    /// `init(from:)`'s job, not this one's.
     public init(
         content: String,
         model: String,
         tokensUsed: TokenUsage,
         latencyMs: Int,
         toolCalls: [AIToolCall]? = nil,
-        providerID: String = "",
+        providerID: String,
         outputs: [AIOutput] = []
     ) {
         self.content = content
