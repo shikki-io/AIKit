@@ -63,9 +63,19 @@ timeout_seconds = 120
 # not been measured under the fleet's selected toolchain.
 [[scopes]]
 name = "AIKitMLX"
+expected_test_min = 29
 language = "swift"
 package_path = "."
 test_target_name = "AIKitMLXTests"
 pre_pr_default = false
 timeout_seconds = 600
 description = "On-device MLX provider, extracted from shikki-client (W7). Needs the Metal toolchain. Run: kagami test --scope AIKitMLX"
+
+[[scopes]]
+name = "AIKitVoiceLive"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitLiveTests"
+type_patterns = ["VoiceLoopbackLiveTests"]
+pre_pr_default = false
+timeout_seconds = 180
