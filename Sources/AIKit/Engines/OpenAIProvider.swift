@@ -43,7 +43,8 @@ public struct OpenAIProvider: AIProvider, Sendable {
                 completion: response.usage?.completionTokens ?? 0
             ),
             latencyMs: latencyMs,
-            toolCalls: toolCalls
+            toolCalls: toolCalls,
+            providerID: id
         )
     }
 
@@ -174,8 +175,8 @@ private final class SSEStreamDelegate: NSObject, URLSessionDataDelegate, @unchec
         }
 
         guard let data = payload.data(using: .utf8),
-              let chunk = try? JSONDecoder().decode(ChatCompletionChunkDTO.self, from: data),
-              let firstChoice = chunk.choices.first
+            let chunk = try? JSONDecoder().decode(ChatCompletionChunkDTO.self, from: data),
+            let firstChoice = chunk.choices.first
         else { return }
 
         let delta = firstChoice.delta.content ?? ""

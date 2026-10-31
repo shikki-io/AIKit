@@ -7,19 +7,97 @@ public struct AIResponse: Sendable, Codable, Equatable {
     public var tokensUsed: TokenUsage
     public var latencyMs: Int
     public var toolCalls: [AIToolCall]?
+    /// The `AIProvider.id` that actually answered.
+    ///
+    /// After a fallback this is the provider that succeeded, not the one that
+    /// was asked first — which is the whole point of recording it: a response
+    /// that cannot name its author hides a misrouted request.
+    ///
+    /// Empty only when read from a payload written before provenance was
+    /// recorded; a live provider always fills it.
+    public var providerID: String
+    /// Media the provider produced, by reference or by value.
+    /// Empty for a text-only answer, which arrives in `content`.
+    public var outputs: [AIOutput]
 
     public init(
         content: String,
         model: String,
         tokensUsed: TokenUsage,
         latencyMs: Int,
-        toolCalls: [AIToolCall]? = nil
+        toolCalls: [AIToolCall]? = nil,
+        providerID: String = "",
+        outputs: [AIOutput] = []
     ) {
         self.content = content
         self.model = model
         self.tokensUsed = tokensUsed
         self.latencyMs = latencyMs
         self.toolCalls = toolCalls
+        self.providerID = providerID
+        self.outputs = outputs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case content
+        case model
+        case tokensUsed
+        case latencyMs
+        case toolCalls
+        case providerID
+        case outputs
+    }
+
+    /// Decodes a response, including one stored before `providerID` and
+    /// `outputs` existed. Responses are cached by callers, so a payload from an
+    /// earlier version must not throw on read: it simply has no provenance.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        content = try container.decode(String.self, forKey: .content)
+        model = try container.decode(String.self, forKey: .model)
+        tokensUsed = try container.decode(TokenUsage.self, forKey: .tokensUsed)
+        latencyMs = try container.decode(Int.self, forKey: .latencyMs)
+        toolCalls = try container.decodeIfPresent([AIToolCall].self, forKey: .toolCalls)
+        providerID = try container.decodeIfPresent(String.self, forKey: .providerID) ?? ""
+        outputs = try container.decodeIfPresent([AIOutput].self, forKey: .outputs) ?? []
+    }
+}
+
+/// A media output produced by a provider.
+///
+/// The mirror of `AIInput`: a generated image, a rendered video, a transcript
+/// written to a file. Text that fits in a string belongs in
+/// `AIResponse.content` instead.
+public struct AIOutput: Sendable, Codable, Equatable {
+    public var kind: AIMediaKind
+    public var source: AIMediaSource
+    /// IANA media type when the provider reports one, for example `video/mp4`.
+    public var mimeType: String?
+
+    public init(kind: AIMediaKind, source: AIMediaSource, mimeType: String? = nil) {
+        self.kind = kind
+        self.source = source
+        self.mimeType = mimeType
+    }
+
+    public init(kind: AIMediaKind, url: URL, mimeType: String? = nil) {
+        self.init(kind: kind, source: .url(url), mimeType: mimeType)
+    }
+
+    public init(kind: AIMediaKind, data: Data, mimeType: String? = nil) {
+        self.init(kind: kind, source: .data(data), mimeType: mimeType)
+    }
+
+    /// The output's location, when it is carried by reference.
+    public var url: URL? {
+        if case .url(let url) = source { return url }
+        return nil
+    }
+
+    /// The output's bytes, when it is carried by value.
+    public var data: Data? {
+        if case .data(let data) = source { return data }
+        return nil
     }
 }
 
