@@ -40,13 +40,14 @@ public struct MLXHubDownloader: Downloader {
         @Sendable (_ repository: String, _ revision: String) async throws -> [ModelFile]
 
     /// Move one file's bytes to `destination`, reporting `(written, total)`.
-    public typealias FileTransfer = @Sendable (
-        _ repository: String,
-        _ revision: String,
-        _ path: String,
-        _ destination: URL,
-        _ onBytes: @Sendable @escaping (Int64, Int64) -> Void
-    ) async throws -> Void
+    public typealias FileTransfer =
+        @Sendable (
+            _ repository: String,
+            _ revision: String,
+            _ path: String,
+            _ destination: URL,
+            _ onBytes: @Sendable @escaping (Int64, Int64) -> Void
+        ) async throws -> Void
 
     /// Told `(file path, bytes hashed, bytes total)` while a file is verified.
     ///

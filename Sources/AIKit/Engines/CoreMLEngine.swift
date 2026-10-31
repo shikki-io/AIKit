@@ -460,7 +460,9 @@
                     features[name] = audioURL.path as NSString
 
                 case .multiArray:
-                    guard let constraint = description.multiArrayConstraint, let window = Self.sampleWindow(in: constraint.shape) else {
+                    guard let constraint = description.multiArrayConstraint,
+                        let window = Self.sampleWindow(in: constraint.shape)
+                    else {
                         throw Self.cannotFill(name, description)
                     }
                     // Decoded at most once, however many windows the package

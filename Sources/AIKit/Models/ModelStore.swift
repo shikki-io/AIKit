@@ -240,7 +240,8 @@ public struct ModelStore: Sendable {
     /// `../../etc` names a directory called `.._.._etc`.
     public func destination(for file: ModelFile, ofRepository id: String) -> URL? {
         let directory = directory(forRepository: id)
-        let candidate = directory
+        let candidate =
+            directory
             .appending(path: file.path, directoryHint: .notDirectory)
             .standardizedFileURL
         let base = directory.standardizedFileURL.path
@@ -295,7 +296,8 @@ public struct ModelStore: Sendable {
         as file: ModelFile,
         onProgress: (@Sendable (Int64, Int64) -> Void)? = nil
     ) -> Bool {
-        guard let digest = file.digest, let size = Self.sizeOfFile(at: url, using: fileManager), size == file.sizeBytes, let actual = try? self.digest(ofFileAt: url, matching: digest, onProgress: onProgress)
+        guard let digest = file.digest, let size = Self.sizeOfFile(at: url, using: fileManager), size == file.sizeBytes,
+            let actual = try? self.digest(ofFileAt: url, matching: digest, onProgress: onProgress)
         else {
             return false
         }

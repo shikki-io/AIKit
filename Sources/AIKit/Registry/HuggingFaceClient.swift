@@ -100,7 +100,7 @@ public struct HFModelInfo: Sendable, Codable, Equatable {
         case "automatic-speech-recognition", "text-to-speech", "audio-classification":
             return .voice
         case "image-classification", "object-detection", "image-segmentation",
-             "visual-question-answering", "image-to-text", "document-question-answering":
+            "visual-question-answering", "image-to-text", "document-question-answering":
             return .vision
         case "text-to-image", "image-to-image":
             return .inpainting
@@ -122,7 +122,7 @@ public struct HFModelInfo: Sendable, Codable, Equatable {
         case "text-to-speech":
             return .textToVoice
         case "image-classification", "object-detection", "visual-question-answering",
-             "image-to-text", "document-question-answering":
+            "image-to-text", "document-question-answering":
             return .vision
         case "text-to-image", "image-to-image":
             return .imageGeneration
