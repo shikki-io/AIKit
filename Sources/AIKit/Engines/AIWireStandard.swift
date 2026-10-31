@@ -329,7 +329,8 @@ extension AIWireStandard {
         let reply: Family.Reply = try await networkService.sendRequest(endpoint: endpoint)
         let elapsed = start.duration(to: .now)
         let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
-        let requestURL = networkService.createRequest(endPoint: endpoint).url?.absoluteString
+        let requestURL =
+            networkService.createRequest(endPoint: endpoint).url?.absoluteString
             ?? "\(target.server.description)\(Family.standard.path)"
         return try Family.response(
             from: reply,

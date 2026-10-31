@@ -32,112 +32,112 @@ import Testing
 
 /// `/v1/chat/completions` — HTTP 200.
 private let chatCompletionsReply = """
-{
-  "id": "chatcmpl-khd9f53ms98pkmkg2wo91",
-  "object": "chat.completion",
-  "created": 1793457204,
-  "model": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
-  "choices": [
     {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "pong",
-        "reasoning_content": "",
-        "tool_calls": []
+      "id": "chatcmpl-khd9f53ms98pkmkg2wo91",
+      "object": "chat.completion",
+      "created": 1793457204,
+      "model": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "pong",
+            "reasoning_content": "",
+            "tool_calls": []
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 9,
+        "completion_tokens": 3,
+        "total_tokens": 12,
+        "completion_tokens_details": { "reasoning_tokens": 0 }
       },
-      "logprobs": null,
-      "finish_reason": "stop"
+      "stats": {},
+      "system_fingerprint": "mistralai_devstral-small-2-24b-instruct-2512-mlx"
     }
-  ],
-  "usage": {
-    "prompt_tokens": 9,
-    "completion_tokens": 3,
-    "total_tokens": 12,
-    "completion_tokens_details": { "reasoning_tokens": 0 }
-  },
-  "stats": {},
-  "system_fingerprint": "mistralai_devstral-small-2-24b-instruct-2512-mlx"
-}
-"""
+    """
 
 /// `/v1/responses` — HTTP 200. Note `"error": null` on a SUCCESSFUL reply.
 private let responsesReply = """
-{
-  "id": "resp_b13bdc5d60556b007624d79ebde5ff0358439b1d87179228",
-  "object": "response",
-  "created_at": 1793457212,
-  "completed_at": 1793457212,
-  "status": "completed",
-  "incomplete_details": null,
-  "model": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
-  "previous_response_id": null,
-  "instructions": null,
-  "output": [
     {
-      "id": "msg_afef27hbd5u5kzzic98z5o",
-      "type": "message",
-      "role": "assistant",
+      "id": "resp_b13bdc5d60556b007624d79ebde5ff0358439b1d87179228",
+      "object": "response",
+      "created_at": 1793457212,
+      "completed_at": 1793457212,
       "status": "completed",
-      "content": [
-        { "type": "output_text", "text": "pong", "annotations": [], "logprobs": [] }
-      ]
+      "incomplete_details": null,
+      "model": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
+      "previous_response_id": null,
+      "instructions": null,
+      "output": [
+        {
+          "id": "msg_afef27hbd5u5kzzic98z5o",
+          "type": "message",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            { "type": "output_text", "text": "pong", "annotations": [], "logprobs": [] }
+          ]
+        }
+      ],
+      "error": null,
+      "tools": [],
+      "tool_choice": "auto",
+      "usage": {
+        "input_tokens": 9,
+        "output_tokens": 2,
+        "total_tokens": 11,
+        "input_tokens_details": { "cached_tokens": 8 },
+        "output_tokens_details": { "reasoning_tokens": 0 }
+      },
+      "max_output_tokens": 16,
+      "store": true,
+      "service_tier": "default",
+      "metadata": {}
     }
-  ],
-  "error": null,
-  "tools": [],
-  "tool_choice": "auto",
-  "usage": {
-    "input_tokens": 9,
-    "output_tokens": 2,
-    "total_tokens": 11,
-    "input_tokens_details": { "cached_tokens": 8 },
-    "output_tokens_details": { "reasoning_tokens": 0 }
-  },
-  "max_output_tokens": 16,
-  "store": true,
-  "service_tier": "default",
-  "metadata": {}
-}
-"""
+    """
 
 /// `/v1/messages` — HTTP 200.
 private let anthropicMessagesReply = """
-{
-  "id": "msg_0302tng5wkeadg5qtbnjrzn",
-  "type": "message",
-  "role": "assistant",
-  "content": [
-    { "type": "text", "text": "pong" }
-  ],
-  "model": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
-  "stop_reason": "end_turn",
-  "stop_sequence": null,
-  "usage": {
-    "input_tokens": 9,
-    "output_tokens": 3,
-    "cache_read_input_tokens": 8
-  }
-}
-"""
+    {
+      "id": "msg_0302tng5wkeadg5qtbnjrzn",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        { "type": "text", "text": "pong" }
+      ],
+      "model": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 9,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 8
+      }
+    }
+    """
 
 /// `/api/v1/chat` — HTTP 200.
 private let lmStudioNativeReply = """
-{
-  "model_instance_id": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
-  "output": [
-    { "type": "message", "content": "pong" }
-  ],
-  "stats": {
-    "input_tokens": 9,
-    "total_output_tokens": 3,
-    "reasoning_output_tokens": 0,
-    "tokens_per_second": 35.10915764798229,
-    "time_to_first_token_seconds": 0.296
-  },
-  "response_id": "resp_ce67a81f5f12825ad85e85d8fbad7793f8ecf864afa4a16d"
-}
-"""
+    {
+      "model_instance_id": "mistralai_devstral-small-2-24b-instruct-2512-mlx",
+      "output": [
+        { "type": "message", "content": "pong" }
+      ],
+      "stats": {
+        "input_tokens": 9,
+        "total_output_tokens": 3,
+        "reasoning_output_tokens": 0,
+        "tokens_per_second": 35.10915764798229,
+        "time_to_first_token_seconds": 0.296
+      },
+      "response_id": "resp_ce67a81f5f12825ad85e85d8fbad7793f8ecf864afa4a16d"
+    }
+    """
 
 /// The model every capture above was answered by.
 private let capturedModel = "mistralai_devstral-small-2-24b-instruct-2512-mlx"
@@ -342,8 +342,8 @@ struct WireStandardRoundTripTests {
     @Test("a 200 with an error body surfaces the server's text", arguments: AIWireStandard.allCases)
     func errorBodyOn200(standard: AIWireStandard) async throws {
         let errorBody = """
-        {"error": {"message": "Invalid model identifier \\"no-such-model\\".", "type": "invalid_request"}}
-        """
+            {"error": {"message": "Invalid model identifier \\"no-such-model\\".", "type": "invalid_request"}}
+            """
 
         await #expect(throws: AIKitError.self) {
             _ = try await send(standard, answering: errorBody)
@@ -538,11 +538,13 @@ struct WireServerRootTests {
     /// with a 200 and an error body — "looks like a bad reply". BR-AIL-09 says
     /// the standard owns the path, so a root carrying one is refused at parse
     /// time, by name, and NOT silently stripped.
-    @Test("a root carrying a path is refused, naming the leftover", arguments: [
-        "http://127.0.0.1:1234/v1",
-        "http://127.0.0.1:1234/v1/",
-        "http://127.0.0.1:1234/api/v0",
-    ])
+    @Test(
+        "a root carrying a path is refused, naming the leftover",
+        arguments: [
+            "http://127.0.0.1:1234/v1",
+            "http://127.0.0.1:1234/v1/",
+            "http://127.0.0.1:1234/api/v0",
+        ])
     func rootWithAPathIsRefused(root: String) throws {
         do {
             _ = try AIWireServer(serverRoot: root)
