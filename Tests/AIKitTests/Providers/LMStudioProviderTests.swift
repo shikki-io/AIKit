@@ -1,7 +1,6 @@
 import Foundation
 import Testing
 @testable import AIKit
-import ShellKit
 
 // MARK: - Mock URLProtocol
 
@@ -208,7 +207,6 @@ struct LMStudioProviderTests {
             try provider.parseResponse(data)
         }
     }
-
 
     // MARK: - Additional: Invalid JSON response
 

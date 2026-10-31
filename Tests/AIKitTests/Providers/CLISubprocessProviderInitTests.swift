@@ -1,7 +1,15 @@
+// MARK: - Platform gate
+//
+// W1 of spec `ai-layer-aikit-core-2026-10-31` (BR-AIL-02). Mirrors the gate on
+// the code under test: `CLISubprocessProvider` and `CLISubprocessProviderConfig`
+// exist only where ShellKit can be imported (macOS), and so does this suite.
+// T-AIL-02 asserts the suite stays green on macOS — it is unchanged below.
+#if canImport(ShellKit)
+
 import Foundation
 import ShellKit
-@testable import AIKit
 import Testing
+@testable import AIKit
 
 // MARK: - CLISubprocessProvider Init & Config Parsing Tests
 //
@@ -338,3 +346,5 @@ struct CLISubprocessProviderInitTests {
         #expect(mock.calls[0].env?["CODEX_HOME"] == "/tmp/cx")
     }
 }
+
+#endif  // canImport(ShellKit)
