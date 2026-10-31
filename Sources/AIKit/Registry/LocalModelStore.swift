@@ -120,7 +120,7 @@ public final class LocalModelStore: @unchecked Sendable {
 
     private func fileSizeAt(_ url: URL) -> Int64 {
         guard let attrs = try? fileManager.attributesOfItem(atPath: url.path),
-              let size = attrs[.size] as? Int64
+            let size = attrs[.size] as? Int64
         else {
             return 0
         }

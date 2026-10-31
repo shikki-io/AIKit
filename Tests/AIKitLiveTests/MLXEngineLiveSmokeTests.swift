@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 // Needs a running mlx_lm.server, so it sits in its own target and scope:
@@ -28,30 +29,32 @@ struct MLXEngineLiveSmokeTests {
     // MARK: Gated live synthesis call
 
     #if canImport(Darwin) && arch(arm64)
-    @Test("live synthesis: loadModel + complete returns non-empty output via MLX")
-    func liveSynthesisOutputNonEmpty() async throws {
-        // This test requires mlx_lm.server running at MLX_LM_BASE_URL (default :8080).
-        // `shi doctor --check mlx-lm --fix` provisions it (W3).
-        let engine = MLXEngine()
-        let descriptor = smallLLMDescriptor()
+        @Test("live synthesis: loadModel + complete returns non-empty output via MLX")
+        func liveSynthesisOutputNonEmpty() async throws {
+            // This test requires mlx_lm.server running at MLX_LM_BASE_URL (default :8080).
+            // `shi doctor --check mlx-lm --fix` provisions it (W3).
+            let engine = MLXEngine()
+            let descriptor = smallLLMDescriptor()
 
-        let provider = try await engine.loadModel(descriptor)
+            let provider = try await engine.loadModel(descriptor)
 
-        let request = AIRequest(
-            messages: [AIMessage(role: .user, content: "Reply with one word: hello")],
-            maxTokens: 32,
-            model: descriptor.id
-        )
+            let request = AIRequest(
+                messages: [AIMessage(role: .user, content: "Reply with one word: hello")],
+                maxTokens: 32,
+                model: descriptor.id
+            )
 
-        let response = try await withTimeout(seconds: 60) {
-            try await provider.complete(request: request)
-        }
+            let response = try await withTimeout(seconds: 60) {
+                try await provider.complete(request: request)
+            }
 
-        #expect(!response.content.isEmpty,
+            #expect(
+                !response.content.isEmpty,
                 "Expected non-empty synthesis output from MLX provider")
-        #expect(response.model.isEmpty == false,
+            #expect(
+                response.model.isEmpty == false,
                 "Expected model name in response")
-    }
+        }
     #endif
 }
 
