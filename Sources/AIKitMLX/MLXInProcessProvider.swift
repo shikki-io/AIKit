@@ -24,14 +24,14 @@ public enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case let .insufficientRAM(model, required, available):
+        case .insufficientRAM(let model, let required, let available):
             String(
                 format: "Insufficient RAM to load %@: need %.1f GB, have %.1f GB available.",
                 model,
                 required,
                 available
             )
-        case let .unsupportedHardware(reason):
+        case .unsupportedHardware(let reason):
             "On-device MLX is unavailable: \(reason)"
         }
     }
@@ -59,10 +59,11 @@ public protocol MLXModelSession: Sendable {
 ///
 /// The second parameter is called with a 0…1 fraction while a multi-gigabyte
 /// download runs; that is what `AIProviderStatus.loading(progress:)` reports.
-public typealias MLXSessionLoader = @Sendable (
-    ModelDescriptor,
-    @Sendable @escaping (Double) -> Void
-) async throws -> any MLXModelSession
+public typealias MLXSessionLoader =
+    @Sendable (
+        ModelDescriptor,
+        @Sendable @escaping (Double) -> Void
+    ) async throws -> any MLXModelSession
 
 // MARK: - Provider
 
@@ -140,9 +141,10 @@ public actor MLXInProcessProvider: AIProvider {
         self.id = id ?? "mlx/\(model.id.modelId)"
         self.displayName = displayName ?? "Apple MLX — \(model.name)"
         self.capabilities = capabilities
-        self.loadSession = loadSession ?? { descriptor, progress in
-            try await MLXContainerSession.load(descriptor, progress: progress)
-        }
+        self.loadSession =
+            loadSession ?? { descriptor, progress in
+                try await MLXContainerSession.load(descriptor, progress: progress)
+            }
         // Reported before anything is asked of it, so a router can skip a
         // provider this device cannot serve instead of discovering it by
         // catching an error.
@@ -342,7 +344,7 @@ public struct MLXContainerSession: MLXModelSession {
                     parameters: parameters
                 ) {
                     switch event {
-                    case let .chunk(text):
+                    case .chunk(let text):
                         if !text.isEmpty {
                             continuation.yield(AIChunk(delta: text))
                         }
@@ -373,9 +375,9 @@ public struct MLXContainerSession: MLXModelSession {
     /// MLX evaluates on the Apple GPU; there is no Intel path.
     static var hasAppleSiliconGPU: Bool {
         #if arch(arm64)
-        true
+            true
         #else
-        false
+            false
         #endif
     }
 

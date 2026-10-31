@@ -1,7 +1,7 @@
 import Foundation
 
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #endif
 
 // MARK: - Device Class
@@ -121,32 +121,32 @@ public struct DeviceCapability: Sendable, Equatable {
 
     private static func availableRAMGigabytes(total: Double) -> Double {
         #if canImport(Darwin)
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(
-            MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
-        )
+            var info = mach_task_basic_info()
+            var count = mach_msg_type_number_t(
+                MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
+            )
 
-        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
-            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { reboundPtr in
-                task_info(
-                    mach_task_self_,
-                    task_flavor_t(MACH_TASK_BASIC_INFO),
-                    reboundPtr,
-                    &count
-                )
+            let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+                infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { reboundPtr in
+                    task_info(
+                        mach_task_self_,
+                        task_flavor_t(MACH_TASK_BASIC_INFO),
+                        reboundPtr,
+                        &count
+                    )
+                }
             }
-        }
 
-        if kerr == KERN_SUCCESS {
-            let usedBytes = Double(info.resident_size)
-            let usedGB = usedBytes / 1_073_741_824.0
-            // Reserve 15% for system processes. iOS jetsam kills at ~65-70%
-            // total usage, so 15% reserve leaves enough headroom while not
-            // blocking models that actually fit (e.g. Gemma 4 4B on 6GB devices).
-            let systemReserveGB = total * 0.15
-            let available = max(0.0, total - usedGB - systemReserveGB)
-            return available
-        }
+            if kerr == KERN_SUCCESS {
+                let usedBytes = Double(info.resident_size)
+                let usedGB = usedBytes / 1_073_741_824.0
+                // Reserve 15% for system processes. iOS jetsam kills at ~65-70%
+                // total usage, so 15% reserve leaves enough headroom while not
+                // blocking models that actually fit (e.g. Gemma 4 4B on 6GB devices).
+                let systemReserveGB = total * 0.15
+                let available = max(0.0, total - usedGB - systemReserveGB)
+                return available
+            }
         #endif
         // Fallback: assume 75% of total is available
         return total * 0.75
@@ -158,27 +158,27 @@ public struct DeviceCapability: Sendable, Equatable {
         let machine = machineIdentifier()
 
         #if os(iOS) || os(tvOS) || targetEnvironment(macCatalyst)
-        return iOSDeviceClass(machine: machine, totalRAMGB: totalRAMGB)
+            return iOSDeviceClass(machine: machine, totalRAMGB: totalRAMGB)
         #elseif os(macOS)
-        return macDeviceClass(machine: machine, totalRAMGB: totalRAMGB)
+            return macDeviceClass(machine: machine, totalRAMGB: totalRAMGB)
         #else
-        return .macM1
+            return .macM1
         #endif
     }
 
     /// `uname -m`-style machine identifier (e.g. `"iPhone15,2"`, `"Mac14,3"`).
     private static func machineIdentifier() -> String {
         #if canImport(Darwin)
-        var sysinfo = utsname()
-        uname(&sysinfo)
-        let machine = withUnsafePointer(to: &sysinfo.machine) { ptr in
-            ptr.withMemoryRebound(to: CChar.self, capacity: Int(_SYS_NAMELEN)) { cstr in
-                String(cString: cstr)
+            var sysinfo = utsname()
+            uname(&sysinfo)
+            let machine = withUnsafePointer(to: &sysinfo.machine) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: Int(_SYS_NAMELEN)) { cstr in
+                    String(cString: cstr)
+                }
             }
-        }
-        return machine
+            return machine
         #else
-        return ""
+            return ""
         #endif
     }
 
@@ -222,12 +222,9 @@ public struct DeviceCapability: Sendable, Equatable {
         if machine.hasPrefix("Mac16,") { return .macM4 }
         if machine.hasPrefix("Mac15,") { return .macM3 }
         if machine.hasPrefix("Mac14,") { return .macM2 }
-        if machine.hasPrefix("Mac13,") ||
-           machine.hasPrefix("MacBookAir10,") ||
-           machine.hasPrefix("MacBookPro17,") ||
-           machine.hasPrefix("MacBookPro18,") ||
-           machine.hasPrefix("Macmini9,") ||
-           machine.hasPrefix("iMac21,") {
+        if machine.hasPrefix("Mac13,") || machine.hasPrefix("MacBookAir10,") || machine.hasPrefix("MacBookPro17,")
+            || machine.hasPrefix("MacBookPro18,") || machine.hasPrefix("Macmini9,") || machine.hasPrefix("iMac21,")
+        {
             return .macM1
         }
         // Unknown — conservative default

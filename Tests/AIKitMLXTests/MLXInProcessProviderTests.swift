@@ -482,11 +482,11 @@ struct DeviceCapabilityTests {
     func currentDetectsMac() {
         let capability = DeviceCapability.current()
         #if os(macOS)
-        let macClasses: Set<DeviceClass> = [.macM1, .macM2, .macM3, .macM4, .macM5]
-        #expect(
-            macClasses.contains(capability.deviceClass),
-            "expected a macMx class on macOS, got \(capability.deviceClass.rawValue)"
-        )
+            let macClasses: Set<DeviceClass> = [.macM1, .macM2, .macM3, .macM4, .macM5]
+            #expect(
+                macClasses.contains(capability.deviceClass),
+                "expected a macMx class on macOS, got \(capability.deviceClass.rawValue)"
+            )
         #endif
     }
 
