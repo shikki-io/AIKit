@@ -1,6 +1,7 @@
 import AIKit
 import Foundation
 import MLX
+
 // MLXLLM is imported for its symbols AND linked for its side effect:
 // `loadModelContainer` finds a factory through
 // `NSClassFromString("MLXLLM.TrampolineModelFactory")`, so a build that drops
