@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 /// W2 of spec ai-layer-aikit-core-2026-10-31: a request carries media inputs
@@ -13,31 +14,31 @@ struct AIRequestInputTests {
     /// Exactly what the pre-W2 encoder wrote for a fully populated request:
     /// no `inputs` key, because the field did not exist.
     private let legacyRequestJSON = """
-    {
-      "messages": [
-        { "role": "system", "content": "You are helpful." },
-        { "role": "user", "content": "Hello" }
-      ],
-      "systemPrompt": "Be concise",
-      "temperature": 0.5,
-      "maxTokens": 256,
-      "model": { "provider": "openai", "modelId": "gpt-5" },
-      "tools": [
-        { "name": "search", "description": "Search the web", "parametersSchema": "{}" }
-      ],
-      "responseFormat": "json"
-    }
-    """
+        {
+          "messages": [
+            { "role": "system", "content": "You are helpful." },
+            { "role": "user", "content": "Hello" }
+          ],
+          "systemPrompt": "Be concise",
+          "temperature": 0.5,
+          "maxTokens": 256,
+          "model": { "provider": "openai", "modelId": "gpt-5" },
+          "tools": [
+            { "name": "search", "description": "Search the web", "parametersSchema": "{}" }
+          ],
+          "responseFormat": "json"
+        }
+        """
 
     /// The pre-W2 encoder's output for a response: no `providerID`, no `outputs`.
     private let legacyResponseJSON = """
-    {
-      "content": "Hello!",
-      "model": "gpt-5",
-      "tokensUsed": { "prompt": 10, "completion": 5, "total": 15 },
-      "latencyMs": 42
-    }
-    """
+        {
+          "content": "Hello!",
+          "model": "gpt-5",
+          "tokensUsed": { "prompt": 10, "completion": 5, "total": 15 },
+          "latencyMs": 42
+        }
+        """
 
     private func roundTrip<T: Codable>(_ value: T) throws -> T {
         let data = try JSONEncoder().encode(value)
@@ -69,8 +70,8 @@ struct AIRequestInputTests {
     @Test("A minimal old request — only the keys the old encoder always wrote")
     func decodesMinimalOldPayload() throws {
         let json = """
-        { "messages": [ { "role": "user", "content": "hi" } ], "temperature": 0.7, "maxTokens": 1024 }
-        """
+            { "messages": [ { "role": "user", "content": "hi" } ], "temperature": 0.7, "maxTokens": 1024 }
+            """
 
         let decoded = try JSONDecoder().decode(AIRequest.self, from: Data(json.utf8))
 
@@ -168,8 +169,8 @@ struct AIRequestInputTests {
     @Test("A media source carrying neither a url nor data is rejected, not guessed")
     func rejectsEmptyMediaSource() throws {
         let json = """
-        { "kind": "audio", "source": { } }
-        """
+            { "kind": "audio", "source": { } }
+            """
 
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(AIInput.self, from: Data(json.utf8))
