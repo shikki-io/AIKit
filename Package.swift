@@ -21,6 +21,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
         // ShellKit v0.1.0 — async subprocess primitives with a hard timeout
         // (TimedShellExecutor); CLISubprocessProvider runs every CLI through it.
+        //
+        // macOS ONLY (W1 of spec ai-layer-aikit-core-2026-10-31, BR-AIL-02).
+        // ShellKit declares `.macOS(.v14)` and builds on `Foundation.Process`,
+        // which does not exist in the iOS SDK: linking it unconditionally made
+        // `xcodebuild -scheme AIKit -destination 'generic/platform=iOS'` fail with
+        // `cannot find 'Process' in scope` inside ShellKit's TimedShellExecutor.
+        // The dependency is therefore conditioned per platform below, and the two
+        // source files that need it sit behind `#if canImport(ShellKit)`.
         .package(url: "https://github.com/obyw-one/ShellKit", from: "0.1.0"),
     ],
     targets: [
@@ -29,7 +37,7 @@ let package = Package(
             dependencies: [
                 .product(name: "NetKit", package: "NetKit"),
                 .product(name: "Logging", package: "swift-log"),
-                .product(name: "ShellKit", package: "ShellKit"),
+                .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS])),
             ]
         ),
         .testTarget(
@@ -38,7 +46,7 @@ let package = Package(
                 "AIKit",
                 .product(name: "NetKit", package: "NetKit"),
                 .product(name: "Logging", package: "swift-log"),
-                .product(name: "ShellKit", package: "ShellKit"),
+                .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS])),
             ]
         ),
     ]
