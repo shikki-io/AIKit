@@ -9,6 +9,7 @@
 .kagami/*.db-wal
 .kagami/*.write-lock
 .kagami/tmp/
+.kagami/runs/
 .DS_Store
 
 # Secrets — env files and every backup of them never belong in git.
