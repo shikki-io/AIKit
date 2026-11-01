@@ -104,7 +104,20 @@ enum OpenAIChatWireFamily: AIWireFamily {
             messages.append(.init(role: "system", content: systemPrompt))
         }
         for message in request.messages {
-            messages.append(.init(role: message.role.rawValue, content: message.content))
+            let wireToolCalls: [ChatCompletionRequest.ToolCallRequest]? = message.toolCalls?.map { tc in
+                .init(
+                    id: tc.id ?? UUID().uuidString,
+                    type: "function",
+                    function: .init(name: tc.name, arguments: tc.arguments)
+                )
+            }
+            let wireContent: String? = message.content.isEmpty ? nil : message.content
+            messages.append(.init(
+                role: message.role.rawValue,
+                content: wireContent,
+                toolCalls: wireToolCalls,
+                toolCallId: message.toolCallId
+            ))
         }
 
         let tools: [ChatCompletionRequest.ToolDefinition]? = request.tools?.map { tool in

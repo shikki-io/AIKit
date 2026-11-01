@@ -114,12 +114,33 @@ public struct AIOutput: Sendable, Codable, Equatable {
 
 /// A tool call returned by the model.
 public struct AIToolCall: Sendable, Codable, Equatable {
+    /// The server-assigned ID for this call.
+    ///
+    /// Required when the caller needs to send a tool result back: the tool
+    /// message's `toolCallId` must echo this value. `nil` only when read from
+    /// a payload written before the field existed.
+    public var id: String?
     public var name: String
     public var arguments: String
 
-    public init(name: String, arguments: String) {
+    public init(id: String? = nil, name: String, arguments: String) {
+        self.id = id
         self.name = name
         self.arguments = arguments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case arguments
+    }
+
+    /// Decodes a tool call, tolerating an absent `id` for backward-compat.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        arguments = try container.decode(String.self, forKey: .arguments)
     }
 }
 

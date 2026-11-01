@@ -89,7 +89,7 @@ public struct OpenAIProvider: AIProvider, Sendable {
         }
 
         let toolCalls = firstChoice.message.toolCalls?.map { call in
-            AIToolCall(name: call.function.name, arguments: call.function.arguments)
+            AIToolCall(id: call.id, name: call.function.name, arguments: call.function.arguments)
         }
 
         return AIResponse(
@@ -132,7 +132,23 @@ public struct OpenAIProvider: AIProvider, Sendable {
         }
 
         for msg in request.messages {
-            messages.append(.init(role: msg.role.rawValue, content: msg.content))
+            let wireToolCalls: [ChatCompletionRequest.ToolCallRequest]? = msg.toolCalls?.map { tc in
+                .init(
+                    id: tc.id ?? UUID().uuidString,
+                    type: "function",
+                    function: .init(name: tc.name, arguments: tc.arguments)
+                )
+            }
+            // A tool-call-only assistant message has empty content in AIMessage
+            // but requires nil (not an empty string) in the wire format so the
+            // server does not interpret it as a content-and-tool-calls message.
+            let wireContent: String? = msg.content.isEmpty ? nil : msg.content
+            messages.append(.init(
+                role: msg.role.rawValue,
+                content: wireContent,
+                toolCalls: wireToolCalls,
+                toolCallId: msg.toolCallId
+            ))
         }
 
         let tools: [ChatCompletionRequest.ToolDefinition]? = request.tools?.map { tool in
@@ -263,19 +279,23 @@ private final class SSEStreamDelegate: NSObject, URLSessionDataDelegate, @unchec
 /// exists to avoid. `createRequest(endPoint:)` is a `NetworkProtocol`
 /// requirement and not only an extension default, so the override here is the
 /// one the inherited `sendRequest` calls.
-struct TimeoutNetworkService: NetworkProtocol {
+///
+/// Public so callers outside AIKit can create an `OpenAIProvider` with a
+/// per-call timeout, which is needed for migrating any caller that passes a
+/// `timeout` parameter (e.g. `AgentProvider.LocalProvider.execute`).
+public struct TimeoutNetworkService: NetworkProtocol {
     /// Seconds a single request may take.
-    let timeoutInterval: TimeInterval
+    public let timeoutInterval: TimeInterval
     /// NetKit's own request builder, reached through a type that does not
     /// override it. Delegating keeps the URL, header and body construction in
     /// one place instead of copying it here to drift.
     private let base = NetworkService()
 
-    init(timeoutInterval: TimeInterval) {
+    public init(timeoutInterval: TimeInterval) {
         self.timeoutInterval = timeoutInterval
     }
 
-    func createRequest(endPoint: EndPoint) -> URLRequest {
+    public func createRequest(endPoint: EndPoint) -> URLRequest {
         var request = base.createRequest(endPoint: endPoint)
         request.timeoutInterval = timeoutInterval
         return request

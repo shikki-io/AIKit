@@ -162,13 +162,57 @@ public struct AIMessage: Sendable, Codable, Equatable {
     }
 
     public var role: Role
+    /// The text content of the message.
+    ///
+    /// Empty for an assistant message that carries only `toolCalls` and has no
+    /// parallel text. On the wire those messages need `"content": null`, so the
+    /// engine checks `content.isEmpty && toolCalls != nil` before deciding
+    /// whether to omit the field. Keeping the type `String` (not optional)
+    /// preserves backward-compat for every caller that builds a plain text
+    /// message and never thinks about tool loops.
     public var content: String
     public var images: [Data]?
+    /// Tool calls the assistant is requesting, when `role == .assistant`.
+    ///
+    /// Each call carries the `id` the server assigned: the tool result message
+    /// that follows must echo that same `id` in `toolCallId`.
+    public var toolCalls: [AIToolCall]?
+    /// Server-assigned ID of the tool call this message is responding to,
+    /// when `role == .tool`.
+    public var toolCallId: String?
 
-    public init(role: Role, content: String, images: [Data]? = nil) {
+    public init(
+        role: Role,
+        content: String,
+        images: [Data]? = nil,
+        toolCalls: [AIToolCall]? = nil,
+        toolCallId: String? = nil
+    ) {
         self.role = role
         self.content = content
         self.images = images
+        self.toolCalls = toolCalls
+        self.toolCallId = toolCallId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case content
+        case images
+        case toolCalls
+        case toolCallId
+    }
+
+    /// Decodes a message, including one written before `toolCalls` and
+    /// `toolCallId` existed. Stored conversations must still decode without
+    /// those keys.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(Role.self, forKey: .role)
+        content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        images = try container.decodeIfPresent([Data].self, forKey: .images)
+        toolCalls = try container.decodeIfPresent([AIToolCall].self, forKey: .toolCalls)
+        toolCallId = try container.decodeIfPresent(String.self, forKey: .toolCallId)
     }
 }
 
