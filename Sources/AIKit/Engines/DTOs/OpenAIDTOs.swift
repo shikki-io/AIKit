@@ -2,6 +2,21 @@ import Foundation
 
 // MARK: - Chat Completion Request
 
+// CodingKey for ChatCompletionRequest.ChatMessage fields.
+// Defined at file scope to avoid a 2-level nesting violation (SwiftLint `nesting`).
+private enum ChatMessageKey: String, CodingKey {
+    case role, content
+    case toolCalls = "tool_calls"
+    case toolCallId = "tool_call_id"
+}
+
+/// Function call details inside a ToolCallRequest.
+/// Defined at file scope to avoid a 2-level nesting violation (SwiftLint `nesting`).
+struct ToolCallFunctionRequest: Encodable, Sendable {
+    let name: String
+    let arguments: String
+}
+
 /// OpenAI-compatible chat completion request body.
 struct ChatCompletionRequest: Encodable, Sendable {
     let model: String
@@ -20,13 +35,45 @@ struct ChatCompletionRequest: Encodable, Sendable {
 
     struct ChatMessage: Encodable, Sendable {
         let role: String
-        let content: String
+        /// Nil for an assistant message that carries only `toolCalls`.
+        let content: String?
+        /// Tool calls the assistant is requesting (`role == "assistant"`).
+        let toolCalls: [ToolCallRequest]?
+        /// ID of the tool call being responded to (`role == "tool"`).
+        let toolCallId: String?
+
+        init(role: String, content: String?, toolCalls: [ToolCallRequest]? = nil, toolCallId: String? = nil) {
+            self.role = role
+            self.content = content
+            self.toolCalls = toolCalls
+            self.toolCallId = toolCallId
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: ChatMessageKey.self)
+            try container.encode(role, forKey: .role)
+            // Only encode content when present; omitting it produces the
+            // correct wire format for a tool-calls-only assistant message.
+            if let content {
+                try container.encode(content, forKey: .content)
+            }
+            try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
+            try container.encodeIfPresent(toolCallId, forKey: .toolCallId)
+        }
+    }
+
+    /// A tool call sent IN a request (assistant-turn replay).
+    struct ToolCallRequest: Encodable, Sendable {
+        let id: String
+        let type: String
+        let function: ToolCallFunctionRequest
     }
 
     struct ToolDefinition: Encodable, Sendable {
         let type: String
         let function: FunctionDef
 
+        // swiftlint:disable:next nesting
         struct FunctionDef: Encodable, Sendable {
             let name: String
             let description: String
@@ -44,6 +91,14 @@ struct ChatCompletionRequest: Encodable, Sendable {
 /// OpenAI-compatible chat completion response.
 struct ChatCompletionResponseDTO: Decodable, Sendable {
     let id: String
+    /// The model that actually answered.
+    ///
+    /// Optional because a reply is not required to echo it, and because this
+    /// type is decode-only — no call site builds it memberwise. Measured on LM
+    /// Studio 2026-10-31: this surface *ignores* an unknown `model` in the
+    /// request and answers with whatever is loaded, so the request's model name
+    /// is not evidence of who answered and the reply's value is (BR-AIL-06).
+    let model: String?
     let choices: [Choice]
     let usage: Usage?
 
@@ -52,6 +107,7 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
         let message: Message
         let finishReason: String?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case index, message
             case finishReason = "finish_reason"
@@ -63,6 +119,7 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
         let content: String?
         let toolCalls: [ToolCall]?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case role, content
             case toolCalls = "tool_calls"
@@ -74,6 +131,7 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
         let type: String?
         let function: FunctionCall
 
+        // swiftlint:disable:next nesting
         struct FunctionCall: Decodable, Sendable {
             let name: String
             let arguments: String
@@ -85,6 +143,7 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
         let completionTokens: Int
         let totalTokens: Int
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case promptTokens = "prompt_tokens"
             case completionTokens = "completion_tokens"
@@ -105,6 +164,7 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
         let delta: Delta
         let finishReason: String?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case index, delta
             case finishReason = "finish_reason"
@@ -116,6 +176,7 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
         let content: String?
         let toolCalls: [ToolCallDelta]?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case role, content
             case toolCalls = "tool_calls"
@@ -128,6 +189,7 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
         let type: String?
         let function: FunctionDelta?
 
+        // swiftlint:disable:next nesting
         struct FunctionDelta: Decodable, Sendable {
             let name: String?
             let arguments: String?
@@ -146,6 +208,7 @@ struct ModelsListResponseDTO: Decodable, Sendable {
         let ownedBy: String?
         let created: Int?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case id
             case ownedBy = "owned_by"
@@ -163,7 +226,7 @@ struct JSONFragment: Encodable, Sendable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         if let data = rawJSON.data(using: .utf8),
-           let object = try? JSONSerialization.jsonObject(with: data) {
+            let object = try? JSONSerialization.jsonObject(with: data) {
             // Re-serialize through the encoder to produce valid nested JSON.
             let reEncoded = try JSONSerialization.data(withJSONObject: object)
             let rawValue = try JSONDecoder().decode(AnyCodable.self, from: reEncoded)

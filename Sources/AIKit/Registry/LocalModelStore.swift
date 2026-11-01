@@ -27,15 +27,11 @@ public final class LocalModelStore: @unchecked Sendable {
     private let fileManager: FileManager
 
     public init(basePath: URL? = nil) {
-        #if os(macOS)
-        let defaultBase = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".aikit")
-            .appendingPathComponent("models")
-        #else
-        let defaultBase = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("aikit-models")
-        #endif
-        let base = basePath ?? defaultBase
+        // One definition of the root, in `ModelStore` (W13 of spec
+        // ai-layer-aikit-core-2026-10-31). The default used to be spelled out
+        // again here, and two spellings of "the cache root" is exactly how the
+        // same model came to sit in two directories at once.
+        let base = basePath ?? ModelStore.defaultRoot
         self.basePath = base
         self.manifestURL = base.appendingPathComponent("manifest.json")
         self.fileManager = FileManager.default
@@ -124,7 +120,8 @@ public final class LocalModelStore: @unchecked Sendable {
 
     private func fileSizeAt(_ url: URL) -> Int64 {
         guard let attrs = try? fileManager.attributesOfItem(atPath: url.path),
-              let size = attrs[.size] as? Int64 else {
+            let size = attrs[.size] as? Int64
+        else {
             return 0
         }
         return size

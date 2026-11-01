@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 @Suite("AIRequest and AIResponse")
@@ -43,7 +44,8 @@ struct AIRequestResponseTests {
             model: "gpt-5",
             tokensUsed: TokenUsage(prompt: 10, completion: 5),
             latencyMs: 42,
-            toolCalls: [AIToolCall(name: "search", arguments: "{\"q\": \"test\"}")]
+            toolCalls: [AIToolCall(name: "search", arguments: "{\"q\": \"test\"}")],
+            providerID: "openai"
         )
 
         let encoder = JSONEncoder()
@@ -91,5 +93,63 @@ struct AIRequestResponseTests {
             let decoded = try JSONDecoder().decode(AIMessage.self, from: data)
             #expect(decoded.role == role)
         }
+    }
+
+    // MARK: - AIMessage tool fields (W10 additions)
+
+    @Test("AIMessage Codable round-trip with toolCalls and toolCallId")
+    func messageToolFieldsRoundTrip() throws {
+        let toolMsg = AIMessage(
+            role: .tool,
+            content: "Paris",
+            toolCallId: "call_42"
+        )
+        let assistantMsg = AIMessage(
+            role: .assistant,
+            content: "",
+            toolCalls: [AIToolCall(id: "call_42", name: "get_capital", arguments: "{\"country\":\"France\"}")]
+        )
+
+        for original in [toolMsg, assistantMsg] {
+            let data = try JSONEncoder().encode(original)
+            let decoded = try JSONDecoder().decode(AIMessage.self, from: data)
+            #expect(decoded.role == original.role)
+            #expect(decoded.content == original.content)
+            #expect(decoded.toolCallId == original.toolCallId)
+            #expect(decoded.toolCalls?.count == original.toolCalls?.count)
+            #expect(decoded.toolCalls?.first?.id == original.toolCalls?.first?.id)
+        }
+    }
+
+    @Test("AIMessage backward-compatible decode without toolCalls")
+    func messageBackwardCompatDecode() throws {
+        let json = """
+        {"role":"user","content":"Hello"}
+        """
+        let decoded = try JSONDecoder().decode(AIMessage.self, from: Data(json.utf8))
+        #expect(decoded.role == .user)
+        #expect(decoded.content == "Hello")
+        #expect(decoded.toolCalls == nil)
+        #expect(decoded.toolCallId == nil)
+    }
+
+    @Test("AIToolCall carries id through Codable round-trip")
+    func toolCallIdRoundTrip() throws {
+        let call = AIToolCall(id: "call_abc", name: "search", arguments: "{\"q\":\"test\"}")
+        let data = try JSONEncoder().encode(call)
+        let decoded = try JSONDecoder().decode(AIToolCall.self, from: data)
+        #expect(decoded.id == "call_abc")
+        #expect(decoded.name == "search")
+        #expect(decoded.arguments == "{\"q\":\"test\"}")
+    }
+
+    @Test("AIToolCall backward-compatible decode without id")
+    func toolCallBackwardCompatDecode() throws {
+        let json = """
+        {"name":"search","arguments":"{}"}
+        """
+        let decoded = try JSONDecoder().decode(AIToolCall.self, from: Data(json.utf8))
+        #expect(decoded.id == nil)
+        #expect(decoded.name == "search")
     }
 }

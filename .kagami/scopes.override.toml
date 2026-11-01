@@ -15,9 +15,19 @@ name = "AIKitAll"
 language = "swift"
 package_path = "."
 type_patterns = ["Tests"]
-test_file_patterns = ["**/AIKitTests/*.swift"]
-timeout = 300
-expected_test_min = 14
+# Recurse: the target has suites in Tests/AIKitTests/Providers/ as well as at
+# the top level, and the old single-star glob described only the top level.
+test_file_patterns = ["**/AIKitTests/**/*.swift"]
+timeout_seconds = 300
+# Measured 2026-10-31 at the W13 commit of spec ai-layer-aikit-core-2026-10-31:
+# `kagami test --scope AIKitAll --strict` reported 413/413. The previous floor
+# was 257, measured at 046a8fb (W1) when the target held 258 tests with 1
+# skipped; W2-W7 took it to 395 and W13's ModelStoreTests adds 18.
+#
+# The floor is the number that actually executes, so a scope that silently
+# stops discovering its suites exits 2 instead of reporting success forever.
+# Raise this only with a measurement, never to make a red test pass.
+expected_test_min = 413
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -29,3 +39,50 @@ test_file_patterns = ["**/AIKitTests/Providers/*.swift"]
 timeout = 120
 expected_test_min = 106
 description = "Provider family relocated from shikki: catalog, alias map, args template, stream parsers, health check (S1) plus the CLI subprocess provider, fallback chain, LM Studio provider, budget ledger and provider-id vocabulary (S2). Run: kagami test --scope AIKitProviders"
+
+[[scopes]]
+name = "AIKitLive"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitLiveTests"
+pre_pr_default = false
+timeout_seconds = 120
+
+# W7 of spec ai-layer-aikit-core-2026-10-31. AIKitAll resolves to the
+# AIKitTests target alone, so the on-device provider's suite needs its own
+# scope or no gate ever runs it.
+#
+# pre_pr_default = false for the same reason AIKitLive carries it: the scope
+# needs something the machine may not have. AIKitMLXTests links mlx-swift,
+# whose Metal kernels are compiled from source on every Apple platform, so the
+# scope cannot build unless the SELECTED Xcode has its MetalToolchain component
+# installed. Check with `xcodebuild -showComponent MetalToolchain`; install with
+# `xcodebuild -downloadComponent MetalToolchain`. On 2026-10-31 the selected
+# Xcode 27.2 RC reported "uninstalled" while 27.0 and 26.6 reported
+# "installed", which is why this is opt-in rather than a pre-PR default.
+#
+# CORRECTION, later the same day (W13): the selected Xcode 27.2 (27B48) now
+# reports `Status: installed` for MetalToolchain 27B47, and this scope builds
+# and runs. `pre_pr_default` stays false all the same — the requirement is a
+# machine-level component, so a builder without it must not be told the scope
+# is red.
+[[scopes]]
+name = "AIKitMLX"
+# Measured 2026-10-31 at the W13 commit: 39/39. Was 29 at W7; W13's
+# MLXHubDownloaderTests adds 10.
+expected_test_min = 39
+language = "swift"
+package_path = "."
+test_target_name = "AIKitMLXTests"
+pre_pr_default = false
+timeout_seconds = 600
+description = "On-device MLX provider, extracted from shikki-client (W7). Needs the Metal toolchain. Run: kagami test --scope AIKitMLX"
+
+[[scopes]]
+name = "AIKitVoiceLive"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitLiveTests"
+type_patterns = ["VoiceLoopbackLiveTests"]
+pre_pr_default = false
+timeout_seconds = 180
