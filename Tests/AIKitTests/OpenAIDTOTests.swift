@@ -276,4 +276,99 @@ struct OpenAIDTOTests {
         #expect(toolDelta?.function?.name == "calc")
         #expect(toolDelta?.function?.arguments == "{\"x\":1}")
     }
+
+    // MARK: - ChatMessage tool_calls and tool_call_id (W10 additions)
+
+    @Test("ChatMessage encodes assistant message with tool_calls")
+    func assistantMessageEncodesToolCalls() throws {
+        let request = ChatCompletionRequest(
+            model: "m",
+            messages: [
+                .init(
+                    role: "assistant",
+                    content: nil,
+                    toolCalls: [
+                        .init(
+                            id: "call_001",
+                            type: "function",
+                            function: .init(name: "search", arguments: "{\"q\":\"swift\"}")
+                        ),
+                    ],
+                    toolCallId: nil
+                ),
+            ],
+            temperature: 0.7,
+            maxTokens: 256,
+            stream: false,
+            tools: nil,
+            responseFormat: nil
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let messages = dict["messages"] as! [[String: Any]]
+        let msg = messages[0]
+
+        // content omitted when nil
+        #expect(msg["content"] == nil)
+        #expect(msg["role"] as? String == "assistant")
+
+        let toolCalls = msg["tool_calls"] as! [[String: Any]]
+        #expect(toolCalls.count == 1)
+        #expect(toolCalls[0]["id"] as? String == "call_001")
+        #expect(toolCalls[0]["type"] as? String == "function")
+
+        let fn = toolCalls[0]["function"] as! [String: Any]
+        #expect(fn["name"] as? String == "search")
+        #expect(fn["arguments"] as? String == "{\"q\":\"swift\"}")
+    }
+
+    @Test("ChatMessage encodes tool result message with tool_call_id")
+    func toolMessageEncodesToolCallId() throws {
+        let request = ChatCompletionRequest(
+            model: "m",
+            messages: [
+                .init(role: "tool", content: "42°C", toolCalls: nil, toolCallId: "call_001"),
+            ],
+            temperature: 0.7,
+            maxTokens: 256,
+            stream: false,
+            tools: nil,
+            responseFormat: nil
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let messages = dict["messages"] as! [[String: Any]]
+        let msg = messages[0]
+
+        #expect(msg["role"] as? String == "tool")
+        #expect(msg["content"] as? String == "42°C")
+        #expect(msg["tool_call_id"] as? String == "call_001")
+        #expect(msg["tool_calls"] == nil)
+    }
+
+    @Test("ChatMessage omits content when empty and toolCalls present")
+    func assistantMessageOmitsEmptyContent() throws {
+        // When AIMessage.content is empty and the message has tool calls,
+        // the wire format must omit content (nil), not encode "".
+        let request = ChatCompletionRequest(
+            model: "m",
+            messages: [
+                .init(role: "assistant", content: nil, toolCalls: [
+                    .init(id: "x", type: "function", function: .init(name: "f", arguments: "{}"))
+                ], toolCallId: nil),
+            ],
+            temperature: 0.7,
+            maxTokens: 256,
+            stream: false,
+            tools: nil,
+            responseFormat: nil
+        )
+        let data = try JSONEncoder().encode(request)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let messages = dict["messages"] as! [[String: Any]]
+        // Nil content → key absent from dict (encodeIfPresent / encode(String?) omits nil)
+        #expect(messages[0]["content"] == nil)
+    }
 }
