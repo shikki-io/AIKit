@@ -173,9 +173,12 @@ struct MCPCallToolEndPoint: EndPoint {
     let port: Int?
     let scheme: String
     let requestBody: MCPCallToolRequest
-    /// Pre-encoded body. Computed once at init so encoding failures reach the
-    /// caller as a thrown error rather than silently producing a bodyless request.
-    private let _body: [String: Any]
+    /// JSON-encoded body, verified at init to be a JSON object.
+    ///
+    /// `Data` is `Sendable`; `[String: Any]` is not. The body is encoded once
+    /// here so encoding failures reach the caller as a thrown error rather than
+    /// silently producing a bodyless request.
+    private let _bodyData: Data
 
     /// - Throws: An encoding error when `requestBody` cannot be serialised to JSON.
     init(
@@ -189,13 +192,13 @@ struct MCPCallToolEndPoint: EndPoint {
         self.scheme = scheme
         self.requestBody = requestBody
         let data = try JSONEncoder().encode(requestBody)
-        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard try JSONSerialization.jsonObject(with: data) is [String: Any] else {
             throw EncodingError.invalidValue(
                 requestBody,
                 .init(codingPath: [], debugDescription: "MCPCallToolRequest did not encode to a JSON object")
             )
         }
-        self._body = obj
+        self._bodyData = data
     }
 
     var apiPath: String { "" }
@@ -204,5 +207,8 @@ struct MCPCallToolEndPoint: EndPoint {
     var method: RequestMethod { .POST }
     var header: [String: String]? { ["Content-Type": "application/json"] }
     var queryParams: [String: Any]? { nil }
-    var body: [String: Any]? { _body }
+    var body: [String: Any]? {
+        // Safety: _bodyData was verified to be a JSON object at init time.
+        (try? JSONSerialization.jsonObject(with: _bodyData)) as? [String: Any]
+    }
 }
