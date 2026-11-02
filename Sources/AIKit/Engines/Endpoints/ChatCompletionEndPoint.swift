@@ -11,9 +11,12 @@ struct OpenAIChatCompletionEndPoint: EndPoint {
     let scheme: String
     let apiKey: String?
     let requestBody: ChatCompletionRequest
-    /// Pre-encoded body. Computed once at init so encoding failures reach the
-    /// caller as a thrown error rather than silently producing a bodyless request.
-    private let _body: [String: Any]
+    /// JSON-encoded body, verified at init to be a JSON object.
+    ///
+    /// `Data` is `Sendable`; `[String: Any]` is not. The body is encoded once
+    /// here so encoding failures reach the caller as a thrown error rather than
+    /// silently producing a bodyless request.
+    private let _bodyData: Data
 
     /// - Throws: An encoding error when `requestBody` cannot be serialised to
     ///   JSON. The caller propagates this rather than sending a bodyless request.
@@ -30,13 +33,13 @@ struct OpenAIChatCompletionEndPoint: EndPoint {
         self.apiKey = apiKey
         self.requestBody = requestBody
         let data = try JSONEncoder().encode(requestBody)
-        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard try JSONSerialization.jsonObject(with: data) is [String: Any] else {
             throw EncodingError.invalidValue(
                 requestBody,
                 .init(codingPath: [], debugDescription: "ChatCompletionRequest did not encode to a JSON object")
             )
         }
-        self._body = obj
+        self._bodyData = data
     }
 
     var apiPath: String { "" }
@@ -58,7 +61,10 @@ struct OpenAIChatCompletionEndPoint: EndPoint {
 
     var queryParams: [String: Any]? { nil }
 
-    var body: [String: Any]? { _body }
+    var body: [String: Any]? {
+        // Safety: _bodyData was verified to be a JSON object at init time.
+        (try? JSONSerialization.jsonObject(with: _bodyData)) as? [String: Any]
+    }
 }
 
 // MARK: - Reply
