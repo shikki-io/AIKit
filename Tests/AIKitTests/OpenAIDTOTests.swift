@@ -371,4 +371,24 @@ struct OpenAIDTOTests {
         // Nil content → key absent from dict (encodeIfPresent / encode(String?) omits nil)
         #expect(messages[0]["content"] == nil)
     }
+
+    // MARK: - JSONFragment error handling
+
+    @Test("JSONFragment throws on invalid JSON instead of encoding as plain string")
+    func jsonFragmentThrowsOnInvalidJSON() {
+        let fragment = JSONFragment(rawJSON: "not-valid-json{")
+        #expect(throws: (any Error).self) {
+            // The pre-review code silently encoded this as a plain string.
+            // After fix it must throw so the caller sees the malformed fragment.
+            try JSONEncoder().encode(fragment)
+        }
+    }
+
+    @Test("JSONFragment encodes valid JSON as a nested object")
+    func jsonFragmentEncodesValidJSON() throws {
+        let fragment = JSONFragment(rawJSON: "{\"type\":\"object\",\"properties\":{}}")
+        let data = try JSONEncoder().encode(fragment)
+        let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(decoded?["type"] as? String == "object")
+    }
 }

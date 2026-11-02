@@ -1,5 +1,8 @@
 import Foundation
+import Logging
 import NetKit
+
+private let providerLogger = Logger(label: "aikit.engines.openai-provider")
 
 /// AIProvider that talks to any OpenAI-compatible API.
 ///
@@ -254,10 +257,15 @@ private final class SSEStreamDelegate: NSObject, URLSessionDataDelegate, @unchec
             return
         }
 
-        guard let data = payload.data(using: .utf8),
-            let chunk = try? JSONDecoder().decode(ChatCompletionChunkDTO.self, from: data),
-            let firstChoice = chunk.choices.first
-        else { return }
+        guard let data = payload.data(using: .utf8) else { return }
+        let chunk: ChatCompletionChunkDTO
+        do {
+            chunk = try JSONDecoder().decode(ChatCompletionChunkDTO.self, from: data)
+        } catch {
+            providerLogger.error("SSEStreamDelegate: chunk decode failed — \(error) — payload: \(payload)")
+            return
+        }
+        guard let firstChoice = chunk.choices.first else { return }
 
         let delta = firstChoice.delta.content ?? ""
         let isComplete = firstChoice.finishReason != nil

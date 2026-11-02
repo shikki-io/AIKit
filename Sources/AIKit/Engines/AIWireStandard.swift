@@ -1,5 +1,8 @@
 import Foundation
+import Logging
 import NetKit
+
+private let endpointLogger = Logger(label: "aikit.endpoints.wire-standard")
 
 // MARK: - AIWireStandard
 
@@ -210,10 +213,13 @@ struct AIWireEndPoint<Body: Encodable & Sendable>: EndPoint {
     var queryParams: [String: Any]? { nil }
 
     var body: [String: Any]? {
-        guard let data = try? JSONEncoder().encode(requestBody),
-            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return dict
+        do {
+            let data = try JSONEncoder().encode(requestBody)
+            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        } catch {
+            endpointLogger.error("AIWireEndPoint.body: serialisation failed (\(standard.rawValue)) — \(error)")
+            return nil
+        }
     }
 }
 
