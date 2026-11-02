@@ -183,6 +183,36 @@ struct AIWireEndPoint<Body: Encodable & Sendable>: EndPoint {
     /// Anthropic's `anthropic-version`.
     let standardHeaders: [String: String]
     let requestBody: Body
+    /// Pre-encoded body. Computed once at init so encoding failures reach the
+    /// caller as a thrown error rather than silently producing a bodyless request.
+    private let _body: [String: Any]
+
+    /// - Throws: An encoding error when `requestBody` cannot be serialised to
+    ///   JSON. The caller propagates this rather than sending a bodyless request.
+    init(
+        server: AIWireServer,
+        standard: AIWireStandard,
+        apiKey: String?,
+        standardHeaders: [String: String],
+        requestBody: Body
+    ) throws {
+        self.server = server
+        self.standard = standard
+        self.apiKey = apiKey
+        self.standardHeaders = standardHeaders
+        self.requestBody = requestBody
+        let data = try JSONEncoder().encode(requestBody)
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                requestBody,
+                .init(
+                    codingPath: [],
+                    debugDescription: "Request body for \(standard.rawValue) did not encode to a JSON object"
+                )
+            )
+        }
+        self._body = obj
+    }
 
     var host: String { server.host }
     var port: Int? { server.port }
@@ -212,15 +242,7 @@ struct AIWireEndPoint<Body: Encodable & Sendable>: EndPoint {
 
     var queryParams: [String: Any]? { nil }
 
-    var body: [String: Any]? {
-        do {
-            let data = try JSONEncoder().encode(requestBody)
-            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        } catch {
-            endpointLogger.error("AIWireEndPoint.body: serialisation failed (\(standard.rawValue)) — \(error)")
-            return nil
-        }
-    }
+    var body: [String: Any]? { _body }
 }
 
 // MARK: - AIWireFamily
@@ -269,16 +291,20 @@ extension AIWireStandard {
     /// Returned erased because the four families carry four different body
     /// types; a caller that only needs a `URLRequest` — `shi providers
     /// discover`, a test asserting a path — does not care which.
-    func endPoint(target: AIWireTarget, request: AIRequest, stream: Bool) -> any EndPoint {
+    ///
+    /// - Throws: An encoding error when the request body cannot be serialised.
+    ///   The caller must propagate this rather than silently sending a bodyless
+    ///   request.
+    func endPoint(target: AIWireTarget, request: AIRequest, stream: Bool) throws -> any EndPoint {
         switch self {
         case .openAIChat:
-            Self.endPoint(OpenAIChatWireFamily.self, target, request, stream)
+            try Self.endPoint(OpenAIChatWireFamily.self, target, request, stream)
         case .openAIResponses:
-            Self.endPoint(OpenAIResponsesWireFamily.self, target, request, stream)
+            try Self.endPoint(OpenAIResponsesWireFamily.self, target, request, stream)
         case .anthropicMessages:
-            Self.endPoint(AnthropicMessagesWireFamily.self, target, request, stream)
+            try Self.endPoint(AnthropicMessagesWireFamily.self, target, request, stream)
         case .lmStudioNative:
-            Self.endPoint(LMStudioNativeWireFamily.self, target, request, stream)
+            try Self.endPoint(LMStudioNativeWireFamily.self, target, request, stream)
         }
     }
 
@@ -313,8 +339,8 @@ extension AIWireStandard {
         _ target: AIWireTarget,
         _ request: AIRequest,
         _ stream: Bool
-    ) -> AIWireEndPoint<Family.RequestBody> {
-        AIWireEndPoint(
+    ) throws -> AIWireEndPoint<Family.RequestBody> {
+        try AIWireEndPoint(
             server: target.server,
             standard: Family.standard,
             apiKey: target.apiKey,
@@ -331,7 +357,7 @@ extension AIWireStandard {
         _ networkService: any NetworkProtocol
     ) async throws -> AIResponse {
         let start = ContinuousClock.now
-        let endpoint = endPoint(family, target, request, false)
+        let endpoint = try endPoint(family, target, request, false)
         let reply: Family.Reply = try await networkService.sendRequest(endpoint: endpoint)
         let elapsed = start.duration(to: .now)
         let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)

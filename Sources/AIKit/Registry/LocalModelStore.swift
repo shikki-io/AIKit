@@ -3,6 +3,16 @@ import Logging
 
 private let storeLogger = Logger(label: "aikit.registry.local-model-store")
 
+/// Errors the manifest layer throws.
+public enum LocalModelStoreError: Error, Equatable {
+    /// The manifest file exists but could not be decoded.
+    ///
+    /// A corrupt manifest must not be silently treated as empty: returning `[]`
+    /// would let the next write overwrite every recorded model. The caller must
+    /// decide whether to surface the error or recover.
+    case corruptManifest
+}
+
 /// A single model stored on disk.
 public struct LocalModel: Sendable, Codable, Equatable {
     public let descriptor: ModelDescriptor
@@ -41,8 +51,12 @@ public final class LocalModelStore: @unchecked Sendable {
     }
 
     /// List all locally downloaded models.
-    public func listLocal() -> [LocalModel] {
-        loadManifest()
+    ///
+    /// - Throws: `LocalModelStoreError.corruptManifest` when the manifest file
+    ///   exists but cannot be decoded. A missing manifest is not an error; it
+    ///   means the store is fresh and the result is `[]`.
+    public func listLocal() throws -> [LocalModel] {
+        try loadManifest()
     }
 
     /// Get the expected local path for a model.
@@ -53,14 +67,17 @@ public final class LocalModelStore: @unchecked Sendable {
     }
 
     /// Check if a model is downloaded.
-    public func isDownloaded(_ id: ModelIdentifier) -> Bool {
-        loadManifest().contains { $0.descriptor.id == id }
+    ///
+    /// - Throws: `LocalModelStoreError.corruptManifest` when the manifest exists
+    ///   but cannot be decoded.
+    public func isDownloaded(_ id: ModelIdentifier) throws -> Bool {
+        try loadManifest().contains { $0.descriptor.id == id }
     }
 
     /// Record a downloaded model in the manifest.
     public func register(_ descriptor: ModelDescriptor, at path: URL) throws {
         ensureDirectoryExists()
-        var models = loadManifest()
+        var models = try loadManifest()
 
         // Replace if already present
         models.removeAll { $0.descriptor.id == descriptor.id }
@@ -78,7 +95,7 @@ public final class LocalModelStore: @unchecked Sendable {
 
     /// Delete a local model from disk and manifest.
     public func delete(_ id: ModelIdentifier) throws {
-        var models = loadManifest()
+        var models = try loadManifest()
         guard let index = models.firstIndex(where: { $0.descriptor.id == id }) else {
             throw AIKitError.modelNotFound(id)
         }
@@ -93,8 +110,11 @@ public final class LocalModelStore: @unchecked Sendable {
     }
 
     /// Total disk usage of all downloaded models.
-    public func totalSizeBytes() -> Int64 {
-        loadManifest().reduce(0) { $0 + $1.sizeOnDisk }
+    ///
+    /// - Throws: `LocalModelStoreError.corruptManifest` when the manifest exists
+    ///   but cannot be decoded.
+    public func totalSizeBytes() throws -> Int64 {
+        try loadManifest().reduce(0) { $0 + $1.sizeOnDisk }
     }
 
     // MARK: - Private
@@ -105,15 +125,22 @@ public final class LocalModelStore: @unchecked Sendable {
         }
     }
 
-    private func loadManifest() -> [LocalModel] {
-        guard let data = try? Data(contentsOf: manifestURL) else { return [] }
+    private func loadManifest() throws -> [LocalModel] {
+        let data: Data
+        do {
+            data = try Data(contentsOf: manifestURL)
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
+            return []
+        } catch {
+            throw LocalModelStoreError.corruptManifest
+        }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
             return try decoder.decode([LocalModel].self, from: data)
         } catch {
             storeLogger.error("LocalModelStore: manifest decode failed — \(error)")
-            return []
+            throw LocalModelStoreError.corruptManifest
         }
     }
 

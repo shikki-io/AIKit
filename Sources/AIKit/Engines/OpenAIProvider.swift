@@ -64,7 +64,7 @@ public struct OpenAIProvider: AIProvider, Sendable {
         let startTime = ContinuousClock.now
 
         let chatRequest = buildChatRequest(from: request, stream: false)
-        let endpoint = makeEndpoint(for: chatRequest)
+        let endpoint = try makeEndpoint(for: chatRequest)
 
         // A transport failure travels as the type it was thrown as — `URLError`,
         // `NetKit.NetworkError` — because a caller deciding whether to fall back
@@ -110,7 +110,7 @@ public struct OpenAIProvider: AIProvider, Sendable {
 
     public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
         let chatRequest = buildChatRequest(from: request, stream: true)
-        let endpoint = makeEndpoint(for: chatRequest)
+        let endpoint = try makeEndpoint(for: chatRequest)
         let urlRequest = networkService.createRequest(endPoint: endpoint)
 
         return AsyncThrowingStream { continuation in
@@ -187,9 +187,9 @@ public struct OpenAIProvider: AIProvider, Sendable {
             ?? "\(baseURL)\(endpoint.path)"
     }
 
-    private func makeEndpoint(for chatRequest: ChatCompletionRequest) -> OpenAIChatCompletionEndPoint {
+    private func makeEndpoint(for chatRequest: ChatCompletionRequest) throws -> OpenAIChatCompletionEndPoint {
         let parsed = URLComponents(string: baseURL)
-        return OpenAIChatCompletionEndPoint(
+        return try OpenAIChatCompletionEndPoint(
             host: parsed?.host ?? "127.0.0.1",
             port: parsed?.port,
             scheme: parsed?.scheme ?? "http",
@@ -257,12 +257,20 @@ private final class SSEStreamDelegate: NSObject, URLSessionDataDelegate, @unchec
             return
         }
 
-        guard let data = payload.data(using: .utf8) else { return }
+        guard let data = payload.data(using: .utf8) else {
+            continuation.finish(throwing: AIKitError.requestFailed("SSE chunk is not valid UTF-8"))
+            return
+        }
         let chunk: ChatCompletionChunkDTO
         do {
             chunk = try JSONDecoder().decode(ChatCompletionChunkDTO.self, from: data)
         } catch {
-            providerLogger.error("SSEStreamDelegate: chunk decode failed — \(error) — payload: \(payload)")
+            // keep-alive and [DONE] were already handled above; a remaining
+            // decode failure is genuinely malformed — finish the stream with an
+            // error so the caller learns about it instead of seeing a silent gap.
+            continuation.finish(
+                throwing: AIKitError.requestFailed("SSE chunk decode failed: \(error.localizedDescription)")
+            )
             return
         }
         guard let firstChoice = chunk.choices.first else { return }
