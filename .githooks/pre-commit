@@ -202,7 +202,11 @@ if [ -n "$NOTICES" ]; then
     printf '  addressed by: %s\n' "$NOTICE_REFS"
 fi
 if [ "${#INCLUDED[@]}" -gt 0 ]; then
-    NOTICE_TOTAL=$(grep -rnE "$NOTICE_RE" --include='*.swift' -- "${INCLUDED[@]}" 2>/dev/null | wc -l | tr -d ' ')
+    NOTICE_TOTAL=$({
+        rc=0
+        grep -rnE "$NOTICE_RE" --include='*.swift' -- "${INCLUDED[@]}" || rc=$?
+        [ "$rc" -le 1 ] || exit "$rc"
+    } | wc -l | tr -d ' ')
     if [ "$NOTICE_TOTAL" -gt 0 ]; then
         printf '%b[pre-commit] notice:%b repository total: %s referenced pending marker(s) under %s\n' "${CYAN}${BOLD}" "${RESET}" "$NOTICE_TOTAL" "${INCLUDED[*]}"
     fi
