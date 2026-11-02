@@ -129,7 +129,9 @@ public final class LocalModelStore: @unchecked Sendable {
         let data: Data
         do {
             data = try Data(contentsOf: manifestURL)
-        } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
+        } catch let cocoaError as CocoaError
+            where cocoaError.code == .fileReadNoSuchFile || cocoaError.code == .fileNoSuchFile {
+            // Missing manifest means fresh store, not corruption.
             return []
         } catch {
             throw LocalModelStoreError.corruptManifest
