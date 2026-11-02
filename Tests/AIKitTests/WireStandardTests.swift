@@ -467,7 +467,7 @@ struct WireStandardSelectionTests {
     /// where the drift would show.
     @Test("the chat path is written once, and both readers read it")
     func chatPathHasOneSourceOfTruth() throws {
-        let legacy = OpenAIChatCompletionEndPoint(
+        let legacy = try OpenAIChatCompletionEndPoint(
             host: "h",
             port: 1,
             scheme: "http",
@@ -492,7 +492,7 @@ struct WireStandardSelectionTests {
     @Test("the endpoint a standard builds declares that same standard", arguments: AIWireStandard.allCases)
     func familyMatchesItsStandard(standard: AIWireStandard) async throws {
         let request = makeRequest()
-        let endpoint = standard.endPoint(
+        let endpoint = try standard.endPoint(
             target: try AIWireTarget(server: try makeServer(), model: "m", providerID: "p"),
             request: request,
             stream: false

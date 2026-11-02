@@ -11,6 +11,33 @@ struct OpenAIChatCompletionEndPoint: EndPoint {
     let scheme: String
     let apiKey: String?
     let requestBody: ChatCompletionRequest
+    /// Pre-encoded body. Computed once at init so encoding failures reach the
+    /// caller as a thrown error rather than silently producing a bodyless request.
+    private let _body: [String: Any]
+
+    /// - Throws: An encoding error when `requestBody` cannot be serialised to
+    ///   JSON. The caller propagates this rather than sending a bodyless request.
+    init(
+        host: String,
+        port: Int?,
+        scheme: String,
+        apiKey: String?,
+        requestBody: ChatCompletionRequest
+    ) throws {
+        self.host = host
+        self.port = port
+        self.scheme = scheme
+        self.apiKey = apiKey
+        self.requestBody = requestBody
+        let data = try JSONEncoder().encode(requestBody)
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                requestBody,
+                .init(codingPath: [], debugDescription: "ChatCompletionRequest did not encode to a JSON object")
+            )
+        }
+        self._body = obj
+    }
 
     var apiPath: String { "" }
     var apiFilePath: String { "" }
@@ -31,15 +58,7 @@ struct OpenAIChatCompletionEndPoint: EndPoint {
 
     var queryParams: [String: Any]? { nil }
 
-    var body: [String: Any]? {
-        do {
-            let data = try JSONEncoder().encode(requestBody)
-            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        } catch {
-            endpointLogger.error("OpenAIChatCompletionEndPoint.body: serialisation failed — \(error)")
-            return nil
-        }
-    }
+    var body: [String: Any]? { _body }
 }
 
 // MARK: - Reply
@@ -71,7 +90,7 @@ enum ChatCompletionReply: Decodable, Sendable {
             {
                 message = text
                 return
-            }
+            } catch {}
             let container = try decoder.container(keyedBy: ChatCompletionReplyKey.self)
             message = try container.decode(String.self, forKey: .message)
         }
@@ -83,7 +102,7 @@ enum ChatCompletionReply: Decodable, Sendable {
         {
             self = .serverError(message: body.message)
             return
-        }
+        } catch {}
         self = .completion(try ChatCompletionResponseDTO(from: decoder))
     }
 }

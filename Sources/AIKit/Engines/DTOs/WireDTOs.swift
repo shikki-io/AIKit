@@ -37,10 +37,13 @@ struct WireErrorBody: Decodable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        if let single = try? decoder.singleValueContainer(), let text = try? single.decode(String.self) {
-            message = text
+        // Try the bare-string form first. If the container or decode fails,
+        // fall through; the keyed-container error is what surfaces if both fail.
+        do {
+            let single = try decoder.singleValueContainer()
+            message = try single.decode(String.self)
             return
-        }
+        } catch {}
         let container = try decoder.container(keyedBy: Key.self)
         message = try container.decode(String.self, forKey: .message)
     }
@@ -58,10 +61,13 @@ enum WireErrorEnvelopeKey: String, CodingKey {
 /// key's presence would turn every good answer into a failure; testing whether
 /// an error *object* decodes is what distinguishes them.
 func wireErrorMessage(in decoder: Decoder) -> String? {
-    guard let container = try? decoder.container(keyedBy: WireErrorEnvelopeKey.self),
-        let body = try? container.decode(WireErrorBody.self, forKey: .error)
-    else { return nil }
-    return body.message
+    do {
+        let container = try decoder.container(keyedBy: WireErrorEnvelopeKey.self)
+        let body = try container.decode(WireErrorBody.self, forKey: .error)
+        return body.message
+    } catch {
+        return nil
+    }
 }
 
 // MARK: - OpenAI responses — /v1/responses

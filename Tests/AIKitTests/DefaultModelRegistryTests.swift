@@ -154,9 +154,9 @@ struct DefaultModelRegistryTests {
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
 
-        #expect(store.isDownloaded(descriptor.id))
+        #expect(try store.isDownloaded(descriptor.id))
         try await registry.deleteLocal(id: descriptor.id)
-        #expect(!store.isDownloaded(descriptor.id))
+        #expect(!(try store.isDownloaded(descriptor.id)))
     }
 
     @Test("search delegates to HuggingFace client")

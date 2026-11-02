@@ -49,7 +49,7 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
     public func callTool(name: String, arguments: [String: String]) async throws -> MCPToolResult {
         let parsed = URLComponents(string: baseURL)
         let body = MCPCallToolRequest(name: name, arguments: arguments)
-        let endpoint = MCPCallToolEndPoint(
+        let endpoint = try MCPCallToolEndPoint(
             host: parsed?.host ?? "127.0.0.1",
             port: parsed?.port,
             scheme: parsed?.scheme ?? "http",
@@ -173,6 +173,30 @@ struct MCPCallToolEndPoint: EndPoint {
     let port: Int?
     let scheme: String
     let requestBody: MCPCallToolRequest
+    /// Pre-encoded body. Computed once at init so encoding failures reach the
+    /// caller as a thrown error rather than silently producing a bodyless request.
+    private let _body: [String: Any]
+
+    /// - Throws: An encoding error when `requestBody` cannot be serialised to JSON.
+    init(
+        host: String,
+        port: Int?,
+        scheme: String,
+        requestBody: MCPCallToolRequest
+    ) throws {
+        self.host = host
+        self.port = port
+        self.scheme = scheme
+        self.requestBody = requestBody
+        let data = try JSONEncoder().encode(requestBody)
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                requestBody,
+                .init(codingPath: [], debugDescription: "MCPCallToolRequest did not encode to a JSON object")
+            )
+        }
+        self._body = obj
+    }
 
     var apiPath: String { "" }
     var apiFilePath: String { "" }
@@ -180,14 +204,5 @@ struct MCPCallToolEndPoint: EndPoint {
     var method: RequestMethod { .POST }
     var header: [String: String]? { ["Content-Type": "application/json"] }
     var queryParams: [String: Any]? { nil }
-
-    var body: [String: Any]? {
-        do {
-            let data = try JSONEncoder().encode(requestBody)
-            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        } catch {
-            endpointLogger.error("MCPCallToolEndPoint.body: serialisation failed — \(error)")
-            return nil
-        }
-    }
+    var body: [String: Any]? { _body }
 }
