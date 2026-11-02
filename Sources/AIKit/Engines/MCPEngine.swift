@@ -1,5 +1,8 @@
 import Foundation
+import Logging
 import NetKit
+
+private let endpointLogger = Logger(label: "aikit.endpoints.mcp")
 
 /// Generic MCP (Model Context Protocol) client engine.
 /// Connects to any MCP server exposing tools — Koharu, LM Studio MCP, custom servers.
@@ -179,9 +182,12 @@ struct MCPCallToolEndPoint: EndPoint {
     var queryParams: [String: Any]? { nil }
 
     var body: [String: Any]? {
-        guard let data = try? JSONEncoder().encode(requestBody),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return dict
+        do {
+            let data = try JSONEncoder().encode(requestBody)
+            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        } catch {
+            endpointLogger.error("MCPCallToolEndPoint.body: serialisation failed — \(error)")
+            return nil
+        }
     }
 }

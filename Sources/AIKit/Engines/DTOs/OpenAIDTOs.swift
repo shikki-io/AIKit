@@ -225,16 +225,21 @@ struct JSONFragment: Encodable, Sendable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        if let data = rawJSON.data(using: .utf8),
-            let object = try? JSONSerialization.jsonObject(with: data) {
-            // Re-serialize through the encoder to produce valid nested JSON.
-            let reEncoded = try JSONSerialization.data(withJSONObject: object)
-            let rawValue = try JSONDecoder().decode(AnyCodable.self, from: reEncoded)
-            try container.encode(rawValue)
-        } else {
-            // Fallback: encode as a plain string.
-            try container.encode(rawJSON)
+        guard let data = rawJSON.data(using: .utf8) else {
+            throw EncodingError.invalidValue(
+                rawJSON,
+                EncodingError.Context(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "JSONFragment: rawJSON is not valid UTF-8"
+                )
+            )
         }
+        // Throws on invalid JSON rather than silently encoding a raw string.
+        // A malformed fragment is a programming error and must surface.
+        let object = try JSONSerialization.jsonObject(with: data)
+        let reEncoded = try JSONSerialization.data(withJSONObject: object)
+        let rawValue = try JSONDecoder().decode(AnyCodable.self, from: reEncoded)
+        try container.encode(rawValue)
     }
 }
 

@@ -1,4 +1,7 @@
 import Foundation
+import Logging
+
+private let storeLogger = Logger(label: "aikit.registry.local-model-store")
 
 /// A single model stored on disk.
 public struct LocalModel: Sendable, Codable, Equatable {
@@ -106,7 +109,12 @@ public final class LocalModelStore: @unchecked Sendable {
         guard let data = try? Data(contentsOf: manifestURL) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([LocalModel].self, from: data)) ?? []
+        do {
+            return try decoder.decode([LocalModel].self, from: data)
+        } catch {
+            storeLogger.error("LocalModelStore: manifest decode failed — \(error)")
+            return []
+        }
     }
 
     private func saveManifest(_ models: [LocalModel]) throws {
