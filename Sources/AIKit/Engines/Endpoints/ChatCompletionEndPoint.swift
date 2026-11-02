@@ -91,10 +91,9 @@ enum ChatCompletionReply: Decodable, Sendable {
         let message: String
 
         init(from decoder: Decoder) throws {
-            if let single = try? decoder.singleValueContainer(),
-                let text = try? single.decode(String.self)
-            {
-                message = text
+            do {
+                let single = try decoder.singleValueContainer()
+                message = try single.decode(String.self)
                 return
             } catch {}
             let container = try decoder.container(keyedBy: ChatCompletionReplyKey.self)
@@ -103,9 +102,9 @@ enum ChatCompletionReply: Decodable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: ChatCompletionReplyKey.self),
-            let body = try? container.decode(ErrorBody.self, forKey: .error)
-        {
+        do {
+            let container = try decoder.container(keyedBy: ChatCompletionReplyKey.self)
+            let body = try container.decode(ErrorBody.self, forKey: .error)
             self = .serverError(message: body.message)
             return
         } catch {}
