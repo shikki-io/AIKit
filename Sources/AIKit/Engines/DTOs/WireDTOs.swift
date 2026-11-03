@@ -37,13 +37,19 @@ struct WireErrorBody: Decodable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        // Try the bare-string form first. If the container or decode fails,
-        // fall through; the keyed-container error is what surfaces if both fail.
+        // Shape discovery, nothing more: a bare string decodes as a string, an
+        // object does not. Only that `typeMismatch` means "this is the keyed
+        // form"; any other error (corrupt data, a missing value) is a real
+        // failure and propagates with its key path instead of being swallowed.
+        // If the keyed arm then fails too, its own `DecodingError` is what the
+        // caller gets.
         do {
             let single = try decoder.singleValueContainer()
             message = try single.decode(String.self)
             return
-        } catch {}
+        } catch DecodingError.typeMismatch {
+            // Not a string: fall through to the keyed form.
+        }
         let container = try decoder.container(keyedBy: Key.self)
         message = try container.decode(String.self, forKey: .message)
     }
@@ -56,18 +62,17 @@ enum WireErrorEnvelopeKey: String, CodingKey {
 
 /// Reads an error body out of a reply envelope, or nil when there is none.
 ///
-/// Nil covers both "no `error` key" and "`error` is null" — the second being
-/// the trap `/v1/responses` sets on every SUCCESSFUL reply. Testing for the
-/// key's presence would turn every good answer into a failure; testing whether
-/// an error *object* decodes is what distinguishes them.
-func wireErrorMessage(in decoder: Decoder) -> String? {
-    do {
-        let container = try decoder.container(keyedBy: WireErrorEnvelopeKey.self)
-        let body = try container.decode(WireErrorBody.self, forKey: .error)
-        return body.message
-    } catch {
+/// Nil covers exactly two measured cases: no `error` key, and `"error": null`
+/// — the trap `/v1/responses` sets on every SUCCESSFUL reply. Both are tested
+/// explicitly. An `error` value that is present, non-null and undecodable is
+/// NOT nil: it throws the `DecodingError` with its key path, so a malformed
+/// error body reads as what it is instead of silently becoming a success.
+func wireErrorMessage(in decoder: Decoder) throws -> String? {
+    let container = try decoder.container(keyedBy: WireErrorEnvelopeKey.self)
+    guard container.contains(.error), try !container.decodeNil(forKey: .error) else {
         return nil
     }
+    return try container.decode(WireErrorBody.self, forKey: .error).message
 }
 
 // MARK: - OpenAI responses — /v1/responses
@@ -104,7 +109,7 @@ enum ResponsesReply: Decodable, Sendable {
     case serverError(message: String)
 
     init(from decoder: Decoder) throws {
-        if let message = wireErrorMessage(in: decoder) {
+        if let message = try wireErrorMessage(in: decoder) {
             self = .serverError(message: message)
             return
         }
@@ -201,7 +206,7 @@ enum AnthropicMessagesReply: Decodable, Sendable {
     case serverError(message: String)
 
     init(from decoder: Decoder) throws {
-        if let message = wireErrorMessage(in: decoder) {
+        if let message = try wireErrorMessage(in: decoder) {
             self = .serverError(message: message)
             return
         }
@@ -291,7 +296,7 @@ enum LMStudioNativeReply: Decodable, Sendable {
     case serverError(message: String)
 
     init(from decoder: Decoder) throws {
-        if let message = wireErrorMessage(in: decoder) {
+        if let message = try wireErrorMessage(in: decoder) {
             self = .serverError(message: message)
             return
         }

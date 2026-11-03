@@ -58,8 +58,8 @@ enum AnthropicMessagesWireFamily: AIWireFamily {
             content: text,
             model: message.model ?? requestedModel,
             tokensUsed: TokenUsage(
-                prompt: message.usage?.inputTokens ?? 0,
-                completion: message.usage?.outputTokens ?? 0
+                prompt: message.usage?.inputTokens,
+                completion: message.usage?.outputTokens
             ),
             latencyMs: latencyMs,
             providerID: providerID

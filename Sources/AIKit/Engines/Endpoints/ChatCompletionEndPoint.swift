@@ -85,38 +85,16 @@ enum ChatCompletionReply: Decodable, Sendable {
     /// The server answered 200 and named what went wrong.
     case serverError(message: String)
 
-    /// An error body in either form seen in the wild: `{"error": {"message": "…"}}`
-    /// and the bare `{"error": "…"}`.
-    private struct ErrorBody: Decodable {
-        let message: String
-
-        init(from decoder: Decoder) throws {
-            do {
-                let single = try decoder.singleValueContainer()
-                message = try single.decode(String.self)
-                return
-            } catch {}
-            let container = try decoder.container(keyedBy: ChatCompletionReplyKey.self)
-            message = try container.decode(String.self, forKey: .message)
-        }
-    }
-
+    /// Error bodies are read by the shared `wireErrorMessage`, which tests for
+    /// an absent or null `error` explicitly and throws on a malformed one, so
+    /// a decode failure is never mistaken for "no error, so a completion".
     init(from decoder: Decoder) throws {
-        do {
-            let container = try decoder.container(keyedBy: ChatCompletionReplyKey.self)
-            let body = try container.decode(ErrorBody.self, forKey: .error)
-            self = .serverError(message: body.message)
+        if let message = try wireErrorMessage(in: decoder) {
+            self = .serverError(message: message)
             return
-        } catch {}
+        }
         self = .completion(try ChatCompletionResponseDTO(from: decoder))
     }
-}
-
-/// The two keys the reply envelope reads: the error object on the body, and the
-/// text inside it.
-private enum ChatCompletionReplyKey: String, CodingKey {
-    case error
-    case message
 }
 
 // MARK: - Wire family
@@ -201,8 +179,8 @@ enum OpenAIChatWireFamily: AIWireFamily {
             // unknown model and answer with whatever is loaded (BR-AIL-06).
             model: completion.model ?? requestedModel,
             tokensUsed: TokenUsage(
-                prompt: completion.usage?.promptTokens ?? 0,
-                completion: completion.usage?.completionTokens ?? 0
+                prompt: completion.usage?.promptTokens,
+                completion: completion.usage?.completionTokens
             ),
             latencyMs: latencyMs,
             toolCalls: choice.message.toolCalls?.map {

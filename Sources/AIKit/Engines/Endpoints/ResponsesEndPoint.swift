@@ -53,8 +53,8 @@ enum OpenAIResponsesWireFamily: AIWireFamily {
             content: text,
             model: response.model ?? requestedModel,
             tokensUsed: TokenUsage(
-                prompt: response.usage?.inputTokens ?? 0,
-                completion: response.usage?.outputTokens ?? 0
+                prompt: response.usage?.inputTokens,
+                completion: response.usage?.outputTokens
             ),
             latencyMs: latencyMs,
             providerID: providerID

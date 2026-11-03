@@ -139,9 +139,9 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
     }
 
     struct Usage: Decodable, Sendable {
-        let promptTokens: Int
-        let completionTokens: Int
-        let totalTokens: Int
+        let promptTokens: Int?
+        let completionTokens: Int?
+        let totalTokens: Int?
 
         // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
