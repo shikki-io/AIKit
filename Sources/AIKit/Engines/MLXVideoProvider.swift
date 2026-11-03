@@ -1,3 +1,8 @@
+// STATUS: unproven and not wired. Built and unit-tested at the helper level only;
+// NO caller in AIKit or the fleet constructs it, and it has NOT been run on real
+// weights / real inference (needs a mlx-video install the tests never exercise).
+// Whether to keep it is the operator's call (W6 deliverable of ai-layer spec 8badc87f).
+
 #if os(macOS)
     import Foundation
 
@@ -78,7 +83,7 @@
             return AIResponse(
                 content: outputPath,
                 model: modelName,
-                tokensUsed: TokenUsage(prompt: 0, completion: 0),
+                tokensUsed: TokenUsage(prompt: nil, completion: nil),
                 latencyMs: latencyMs,
                 providerID: id,
                 outputs: [AIOutput(kind: .video, url: URL(fileURLWithPath: outputPath))]

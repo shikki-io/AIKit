@@ -180,9 +180,9 @@ public actor MLXInProcessProvider: AIProvider {
             content: content,
             model: modelName,
             // MLX reports token counts in its `.info` event, which the chunk
-            // stream does not carry. 0 means "not reported", as it does for an
-            // OpenAI-compatible server that omits `usage` — never "zero tokens".
-            tokensUsed: TokenUsage(prompt: 0, completion: 0),
+            // stream does not carry. nil means "not reported", as it does for an
+            // OpenAI-compatible server that omits `usage` - never "zero tokens".
+            tokensUsed: TokenUsage(prompt: nil, completion: nil),
             latencyMs: latencyMs,
             providerID: id
         )

@@ -23,6 +23,25 @@ struct CoreMLEngineTests {
         #expect(engine.isAvailable)
     }
 
+    @Test("availableModelIDs lists the .mlmodelc bundles, sorted, ignoring other entries")
+    func availableModelIDsListsBundles() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("aikit-coreml-discover-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for name in ["whisper-small.mlmodelc", "ocr.mlmodelc", "notes.txt", "other.mlpackage"] {
+            try FileManager.default.createDirectory(
+                at: dir.appendingPathComponent(name), withIntermediateDirectories: true)
+        }
+        let engine = CoreMLEngine(modelsDirectory: dir)
+        #expect(engine.availableModelIDs() == ["ocr", "whisper-small"])
+    }
+
+    @Test("availableModelIDs is empty when the directory is missing")
+    func availableModelIDsMissingDirectory() {
+        let missing = Self.directory.appendingPathComponent("does-not-exist-\(UUID().uuidString)")
+        #expect(CoreMLEngine(modelsDirectory: missing).availableModelIDs().isEmpty)
+    }
+
     @Test("Custom models directory is respected")
     func customModelsDirectory() {
         let customDir = URL(fileURLWithPath: "/tmp/custom-coreml-models")
