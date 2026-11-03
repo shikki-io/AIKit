@@ -56,7 +56,7 @@ public struct MCPProvider: AIProvider, Sendable {
         return AIResponse(
             content: content,
             model: id,
-            tokensUsed: TokenUsage(prompt: 0, completion: 0),
+            tokensUsed: TokenUsage(prompt: nil, completion: nil),
             latencyMs: latencyMs,
             providerID: id
         )

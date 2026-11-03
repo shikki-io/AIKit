@@ -69,7 +69,7 @@ struct AgentProviderAdapterTests {
         #expect(response.providerID == "claude-code")
         #expect(response.model == "claude-opus-5")
         #expect(response.toolCalls == nil)
-        #expect(response.tokensUsed.total == 0)
+        #expect(response.tokensUsed.total == nil)
         #expect(response.latencyMs >= 0)
 
         // And the other direction for a failure: the backend's own error type

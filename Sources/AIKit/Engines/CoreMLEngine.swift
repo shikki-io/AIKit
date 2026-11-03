@@ -1,3 +1,8 @@
+// STATUS: unproven and not wired. Built and unit-tested at the helper level only;
+// NO caller in AIKit or the fleet constructs it, and it has NOT been run on real
+// weights / real inference. The running path is WhisperCLIProvider.
+// Whether to keep it is the operator's call (W6 deliverable of ai-layer spec 8badc87f).
+
 #if canImport(CoreML)
     import AVFoundation
     import CoreML
@@ -128,6 +133,19 @@
             "whisper-base.mlpackage",
         ]
 
+        /// Ids of the compiled models installed in ``modelsDirectory``: each
+        /// `<id>.mlmodelc` bundle's name minus the extension, sorted. Empty when
+        /// the directory is missing. An id returned here resolves through
+        /// ``loadModel(_:)`` as `<modelsDirectory>/<id>.mlmodelc`.
+        public func availableModelIDs() -> [String] {
+            let entries = (try? FileManager.default.contentsOfDirectory(
+                at: modelsDirectory, includingPropertiesForKeys: nil)) ?? []
+            return entries
+                .filter { $0.pathExtension == "mlmodelc" }
+                .map { $0.deletingPathExtension().lastPathComponent }
+                .sorted()
+        }
+
         /// The most preferred voice weights present in ``modelsDirectory``, or
         /// `nil` when none are installed.
         ///
@@ -201,7 +219,7 @@
             return AIResponse(
                 content: resultText,
                 model: id,
-                tokensUsed: TokenUsage(prompt: 0, completion: 0),
+                tokensUsed: TokenUsage(prompt: nil, completion: nil),
                 latencyMs: latencyMs,
                 providerID: id
             )
@@ -292,7 +310,7 @@
             return AIResponse(
                 content: transcript,
                 model: modelName,
-                tokensUsed: TokenUsage(prompt: 0, completion: 0),
+                tokensUsed: TokenUsage(prompt: nil, completion: nil),
                 latencyMs: latencyMs,
                 providerID: id
             )
@@ -581,6 +599,8 @@
         }
 
         public func loadedModels() -> [ModelIdentifier] { [] }
+
+        public func availableModelIDs() -> [String] { [] }
     }
 
 #endif

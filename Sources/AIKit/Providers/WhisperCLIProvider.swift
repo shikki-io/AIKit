@@ -335,7 +335,7 @@ extension AIRequest {
             return AIResponse(
                 content: transcript,
                 model: URL(fileURLWithPath: weights).lastPathComponent,
-                tokensUsed: TokenUsage(prompt: 0, completion: 0),
+                tokensUsed: TokenUsage(prompt: nil, completion: nil),
                 latencyMs: latencyMs,
                 providerID: id
             )

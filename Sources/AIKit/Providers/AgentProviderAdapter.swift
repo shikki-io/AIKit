@@ -82,9 +82,9 @@ public struct AgentProviderAdapter: AIProvider, Sendable {
         return AIResponse(
             content: text,
             model: modelName,
-            // A prompt backend reports no usage. Zero is the honest value;
-            // a guess from character counts would read as measured.
-            tokensUsed: TokenUsage(prompt: 0, completion: 0),
+            // A prompt backend reports no usage: nil says "not reported".
+            // Zero would read as measured, and so would a character-count guess.
+            tokensUsed: TokenUsage(prompt: nil, completion: nil),
             latencyMs: latencyMs,
             toolCalls: nil,
             providerID: id
