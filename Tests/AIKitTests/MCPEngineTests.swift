@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 import NetKit
+import Testing
 @testable import AIKit
 
 @Suite("MCPEngine")
@@ -132,5 +132,32 @@ struct MCPEngineTests {
 
         let emptyResult = MCPToolResult(content: [])
         #expect(emptyResult.text == nil)
+    }
+
+    // MARK: - MCPEndPoint
+
+    @Test("MCPEndPoint.toolsList is a bodyless GET on /tools/list at the server")
+    func endPointToolsList() {
+        let endpoint = MCPEndPoint.toolsList(server: AIWireServer(scheme: "http", host: "127.0.0.1", port: 9999))
+        #expect(endpoint.method == .GET)
+        #expect(endpoint.path == "/tools/list")
+        #expect(endpoint.host == "127.0.0.1")
+        #expect(endpoint.port == 9999)
+        #expect(endpoint.scheme == "http")
+        #expect(endpoint.body == nil)
+    }
+
+    @Test("MCPEndPoint.callTool is a POST on /tools/call carrying name and arguments")
+    func endPointCallTool() throws {
+        let endpoint = MCPEndPoint.callTool(
+            server: AIWireServer(scheme: "http", host: "127.0.0.1", port: 9999),
+            name: "ocr",
+            arguments: ["page": "1"]
+        )
+        #expect(endpoint.method == .POST)
+        #expect(endpoint.path == "/tools/call")
+        let body = try #require(endpoint.body)
+        #expect(body["name"] as? String == "ocr")
+        #expect(body["arguments"] as? [String: String] == ["page": "1"])
     }
 }
