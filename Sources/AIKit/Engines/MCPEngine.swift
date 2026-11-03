@@ -18,12 +18,12 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
         id: String = "mcp",
         displayName: String = "MCP Server",
         baseURL: String,
-        networkService: (any NetworkProtocol)? = nil
+        networkService: any NetworkProtocol = NetworkService()
     ) {
         self.id = id
         self.displayName = displayName
         self.baseURL = baseURL
-        self.networkService = networkService ?? NetworkService()
+        self.networkService = networkService
     }
 
     public var isAvailable: Bool {
@@ -33,29 +33,29 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
 
     // MARK: - MCP Tool Discovery
 
+    /// The configured server as an `AIWireServer`; scheme and host default as before.
+    private var server: AIWireServer {
+        let parsed = URLComponents(string: baseURL)
+        return AIWireServer(
+            scheme: parsed?.scheme ?? "http",
+            host: parsed?.host ?? "127.0.0.1",
+            port: parsed?.port
+        )
+    }
+
     /// Discover tools from the MCP server.
     public func discoverTools() async throws -> [MCPTool] {
-        let parsed = URLComponents(string: baseURL)
-        let endpoint = MCPToolsListEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http"
+        let response: MCPToolsListResponse = try await networkService.sendRequest(
+            endpoint: MCPEndPoint.toolsList(server: server)
         )
-        let response: MCPToolsListResponse = try await networkService.sendRequest(endpoint: endpoint)
         return response.tools
     }
 
     /// Call an MCP tool by name with arguments.
     public func callTool(name: String, arguments: [String: String]) async throws -> MCPToolResult {
-        let parsed = URLComponents(string: baseURL)
-        let body = MCPCallToolRequest(name: name, arguments: arguments)
-        let endpoint = try MCPCallToolEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http",
-            requestBody: body
+        try await networkService.sendRequest(
+            endpoint: MCPEndPoint.callTool(server: server, name: name, arguments: arguments)
         )
-        return try await networkService.sendRequest(endpoint: endpoint)
     }
 
     // MARK: - RuntimeEngine
@@ -147,68 +147,51 @@ struct MCPToolsListResponse: Sendable, Codable {
     let tools: [MCPTool]
 }
 
-struct MCPCallToolRequest: Sendable, Codable {
-    let name: String
-    let arguments: [String: String]
-}
+// MARK: - MCPEndPoint
 
-// MARK: - MCP Endpoints
+/// Every call this engine makes to an MCP server, one case each — the same
+/// shape as NetKit's `UmamiEndPoint`: the server travels with the case, so the
+/// endpoint holds no state.
+enum MCPEndPoint: EndPoint {
+    /// `GET /tools/list` — discover the tools a server exposes.
+    case toolsList(server: AIWireServer)
+    /// `POST /tools/call` — run one tool with string arguments.
+    case callTool(server: AIWireServer, name: String, arguments: [String: String])
 
-struct MCPToolsListEndPoint: EndPoint {
-    let host: String
-    let port: Int?
-    let scheme: String
-
-    var apiPath: String { "" }
-    var apiFilePath: String { "" }
-    var path: String { "/tools/list" }
-    var method: RequestMethod { .GET }
-    var header: [String: String]? { ["Content-Type": "application/json"] }
-    var body: [String: Any]? { nil }
-    var queryParams: [String: Any]? { nil }
-}
-
-struct MCPCallToolEndPoint: EndPoint {
-    let host: String
-    let port: Int?
-    let scheme: String
-    let requestBody: MCPCallToolRequest
-    /// JSON-encoded body, verified at init to be a JSON object.
-    ///
-    /// `Data` is `Sendable`; `[String: Any]` is not. The body is encoded once
-    /// here so encoding failures reach the caller as a thrown error rather than
-    /// silently producing a bodyless request.
-    private let _bodyData: Data
-
-    /// - Throws: An encoding error when `requestBody` cannot be serialised to JSON.
-    init(
-        host: String,
-        port: Int?,
-        scheme: String,
-        requestBody: MCPCallToolRequest
-    ) throws {
-        self.host = host
-        self.port = port
-        self.scheme = scheme
-        self.requestBody = requestBody
-        let data = try JSONEncoder().encode(requestBody)
-        guard try JSONSerialization.jsonObject(with: data) is [String: Any] else {
-            throw EncodingError.invalidValue(
-                requestBody,
-                .init(codingPath: [], debugDescription: "MCPCallToolRequest did not encode to a JSON object")
-            )
+    private var server: AIWireServer {
+        switch self {
+        case .toolsList(let server): server
+        case .callTool(let server, _, _): server
         }
-        self._bodyData = data
     }
 
+    var scheme: String { server.scheme }
+    var host: String { server.host }
+    var port: Int? { server.port }
     var apiPath: String { "" }
     var apiFilePath: String { "" }
-    var path: String { "/tools/call" }
-    var method: RequestMethod { .POST }
+
+    var path: String {
+        switch self {
+        case .toolsList: "/tools/list"
+        case .callTool: "/tools/call"
+        }
+    }
+
+    var method: RequestMethod {
+        switch self {
+        case .toolsList: .GET
+        case .callTool: .POST
+        }
+    }
+
     var header: [String: String]? { ["Content-Type": "application/json"] }
     var queryParams: [String: Any]? { nil }
+
     var body: [String: Any]? {
-        // Safety: _bodyData was verified to be a JSON object at init time.
-        (try? JSONSerialization.jsonObject(with: _bodyData)) as? [String: Any]
+        switch self {
+        case .toolsList: nil
+        case .callTool(_, let name, let arguments): ["name": name, "arguments": arguments]
+        }
     }
 }

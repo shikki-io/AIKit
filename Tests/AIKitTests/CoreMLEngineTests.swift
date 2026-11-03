@@ -5,9 +5,12 @@ import Testing
 @Suite("CoreMLEngine")
 struct CoreMLEngineTests {
 
+    private static let directory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        .appendingPathComponent("aikit-coreml-engine-tests", isDirectory: true)
+
     @Test("CoreML engine has correct id and formats")
     func engineIdentity() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(engine.id == "coreml")
         #expect(engine.displayName == "Apple CoreML")
         #expect(engine.supportedFormats == [.coreml])
@@ -16,16 +19,8 @@ struct CoreMLEngineTests {
     #if canImport(CoreML)
     @Test("isAvailable returns true on Apple platforms")
     func availableOnApple() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(engine.isAvailable)
-    }
-
-    @Test("Default models directory is ~/.aikit/coreml-models/")
-    func defaultModelsDirectory() {
-        let engine = CoreMLEngine()
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let expected = home.appendingPathComponent(".aikit/coreml-models", isDirectory: true)
-        #expect(engine.modelsDirectory == expected)
     }
 
     @Test("Custom models directory is respected")
@@ -37,14 +32,14 @@ struct CoreMLEngineTests {
     #else
     @Test("isAvailable returns false off Apple platforms")
     func unavailableOffPlatform() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(!engine.isAvailable)
     }
     #endif
 
     @Test("Loaded models starts empty")
     func loadedModelsEmpty() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(engine.loadedModels().isEmpty)
     }
 

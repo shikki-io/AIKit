@@ -4,7 +4,7 @@ public extension MCPEngine {
     /// Pre-configured for Koharu manga translator MCP server.
     static func koharu(
         port: Int = 9999,
-        networkService: (any NetworkProtocol)? = nil
+        networkService: any NetworkProtocol = NetworkService()
     ) -> MCPEngine {
         MCPEngine(
             id: "koharu",
@@ -17,7 +17,7 @@ public extension MCPEngine {
     /// Pre-configured for LM Studio MCP server.
     static func lmStudioMCP(
         port: Int = 1234,
-        networkService: (any NetworkProtocol)? = nil
+        networkService: any NetworkProtocol = NetworkService()
     ) -> MCPEngine {
         MCPEngine(
             id: "lmstudio-mcp",

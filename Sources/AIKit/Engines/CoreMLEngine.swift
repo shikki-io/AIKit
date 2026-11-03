@@ -22,18 +22,11 @@
         /// Currently loaded model identifiers.
         private var _loadedModels: [ModelIdentifier] = []
 
-        public init(modelsDirectory: URL? = nil) {
-            if let dir = modelsDirectory {
-                self.modelsDirectory = dir
-            } else {
-                #if os(macOS)
-                    let home = FileManager.default.homeDirectoryForCurrentUser
-                    self.modelsDirectory = home.appendingPathComponent(".aikit/coreml-models", isDirectory: true)
-                #else
-                    let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                    self.modelsDirectory = docs.appendingPathComponent("aikit-coreml-models")
-                #endif
-            }
+        /// - Parameter modelsDirectory: Where compiled models live. Injected, never
+        ///   defaulted: the directory is the caller's to decide from the Shikki
+        ///   path layer, so AIKit owns no home-relative folder of its own.
+        public init(modelsDirectory: URL) {
+            self.modelsDirectory = modelsDirectory
         }
 
         public var isAvailable: Bool {
@@ -575,7 +568,7 @@
         public let displayName = "Apple CoreML"
         public let supportedFormats: [ModelFormat] = [.coreml]
 
-        public init(modelsDirectory: URL? = nil) {}
+        public init(modelsDirectory: URL) {}
 
         public var isAvailable: Bool { false }
 
