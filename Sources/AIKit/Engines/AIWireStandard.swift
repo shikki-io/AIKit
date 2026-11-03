@@ -1,8 +1,5 @@
 import Foundation
-import Logging
 import NetKit
-
-private let endpointLogger = Logger(label: "aikit.endpoints.wire-standard")
 
 // MARK: - AIWireStandard
 
@@ -166,136 +163,13 @@ public struct AIWireTarget: Sendable {
     }
 }
 
-// MARK: - AIWireEndPoint
-
-/// The one declaration shape every wire standard is built from.
-///
-/// A standard contributes a path, a method, its headers and a request body; the
-/// transport concerns — where the server is, how a bearer token is attached,
-/// how a body becomes JSON — are written once, here. Adding a standard is a
-/// family plus a case, never another `EndPoint` conformance that re-decides
-/// what a header is.
-struct AIWireEndPoint<Body: Encodable & Sendable>: EndPoint {
-    let server: AIWireServer
-    let standard: AIWireStandard
-    let apiKey: String?
-    /// Headers the standard needs beyond the shared ones, for example
-    /// Anthropic's `anthropic-version`.
-    let standardHeaders: [String: String]
-    let requestBody: Body
-    /// JSON-encoded body, verified at init to be a JSON object.
-    ///
-    /// `Data` is `Sendable`; `[String: Any]` is not. The body is encoded once
-    /// here so encoding failures reach the caller as a thrown error rather than
-    /// silently producing a bodyless request.
-    private let _bodyData: Data
-
-    /// - Throws: An encoding error when `requestBody` cannot be serialised to
-    ///   JSON. The caller propagates this rather than sending a bodyless request.
-    init(
-        server: AIWireServer,
-        standard: AIWireStandard,
-        apiKey: String?,
-        standardHeaders: [String: String],
-        requestBody: Body
-    ) throws {
-        self.server = server
-        self.standard = standard
-        self.apiKey = apiKey
-        self.standardHeaders = standardHeaders
-        self.requestBody = requestBody
-        let data = try JSONEncoder().encode(requestBody)
-        guard try JSONSerialization.jsonObject(with: data) is [String: Any] else {
-            throw EncodingError.invalidValue(
-                requestBody,
-                .init(
-                    codingPath: [],
-                    debugDescription: "Request body for \(standard.rawValue) did not encode to a JSON object"
-                )
-            )
-        }
-        self._bodyData = data
-    }
-
-    var host: String { server.host }
-    var port: Int? { server.port }
-    var scheme: String { server.scheme }
-    var apiPath: String { "" }
-    var apiFilePath: String { "" }
-    var path: String { standard.path }
-    var method: RequestMethod { .POST }
-
-    var header: [String: String]? {
-        var headers = ["Content-Type": "application/json"]
-        for (name, value) in standardHeaders {
-            headers[name] = value
-        }
-        if let apiKey, !apiKey.isEmpty {
-            // Anthropic reads the key from `x-api-key`; everything else reads a
-            // bearer token. The standard says which, so this stays a lookup.
-            switch standard {
-            case .anthropicMessages:
-                headers["x-api-key"] = apiKey
-            case .openAIChat, .openAIResponses, .lmStudioNative:
-                headers["Authorization"] = "Bearer \(apiKey)"
-            }
-        }
-        return headers
-    }
-
-    var queryParams: [String: Any]? { nil }
-
-    var body: [String: Any]? {
-        // Safety: _bodyData was verified to be a JSON object at init time.
-        (try? JSONSerialization.jsonObject(with: _bodyData)) as? [String: Any]
-    }
-}
-
-// MARK: - AIWireFamily
-
-/// What one wire standard has to supply: a request body built from an
-/// `AIRequest`, and an `AIResponse` read back out of its reply.
-///
-/// Two directions, both declared, which is what lets a test pin a captured
-/// reply both ways (T-AIL-17) instead of asserting that a hand-built dictionary
-/// matches a hand-built expectation.
-protocol AIWireFamily {
-    associatedtype RequestBody: Encodable & Sendable
-    associatedtype Reply: Decodable & Sendable
-
-    /// The standard this family implements.
-    static var standard: AIWireStandard { get }
-    /// Headers this standard needs beyond `Content-Type` and the key.
-    static var standardHeaders: [String: String] { get }
-
-    /// Renders a typed request onto this standard's request shape.
-    static func requestBody(for request: AIRequest, model: String, stream: Bool) -> RequestBody
-
-    /// Reads this standard's reply back into the typed response.
-    /// - Parameters:
-    ///   - requestedModel: What the caller asked for, used only when the reply
-    ///     does not name a model itself.
-    ///   - target: The URL the reply came from, for an error that must name it.
-    static func response(
-        from reply: Reply,
-        requestedModel: String,
-        providerID: String,
-        latencyMs: Int,
-        requestURL: String
-    ) throws -> AIResponse
-}
-
-extension AIWireFamily {
-    static var standardHeaders: [String: String] { [:] }
-}
-
 // MARK: - Dispatch
 
 extension AIWireStandard {
     /// Builds the endpoint this standard declares for one request.
     ///
-    /// Returned erased because the four families carry four different body
-    /// types; a caller that only needs a `URLRequest` — `shi providers
+    /// Returned erased because the standards are three different `EndPoint`
+    /// enums; a caller that only needs a `URLRequest` — `shi providers
     /// discover`, a test asserting a path — does not care which.
     ///
     /// - Throws: An encoding error when the request body cannot be serialised.
@@ -304,13 +178,43 @@ extension AIWireStandard {
     func endPoint(target: AIWireTarget, request: AIRequest, stream: Bool) throws -> any EndPoint {
         switch self {
         case .openAIChat:
-            try Self.endPoint(OpenAIChatWireFamily.self, target, request, stream)
+            let endpoint = OpenAIEndPoint.chat(
+                server: target.server,
+                apiKey: target.apiKey,
+                body: ChatCompletionRequest(request: request, model: target.model, stream: stream)
+            )
+            _ = try endpoint.bodyObject()
+            return endpoint
         case .openAIResponses:
-            try Self.endPoint(OpenAIResponsesWireFamily.self, target, request, stream)
+            let endpoint = OpenAIEndPoint.responses(
+                server: target.server,
+                apiKey: target.apiKey,
+                model: target.model,
+                request: request,
+                stream: stream
+            )
+            _ = try endpoint.bodyObject()
+            return endpoint
         case .anthropicMessages:
-            try Self.endPoint(AnthropicMessagesWireFamily.self, target, request, stream)
+            let endpoint = AnthropicEndPoint.messages(
+                server: target.server,
+                apiKey: target.apiKey,
+                model: target.model,
+                request: request,
+                stream: stream
+            )
+            _ = try endpoint.bodyObject()
+            return endpoint
         case .lmStudioNative:
-            try Self.endPoint(LMStudioNativeWireFamily.self, target, request, stream)
+            let endpoint = LMStudioEndPoint.chat(
+                server: target.server,
+                apiKey: target.apiKey,
+                model: target.model,
+                request: request,
+                stream: stream
+            )
+            _ = try endpoint.bodyObject()
+            return endpoint
         }
     }
 
@@ -325,59 +229,45 @@ extension AIWireStandard {
         target: AIWireTarget,
         networkService: any NetworkProtocol
     ) async throws -> AIResponse {
+        let start = ContinuousClock.now
+        let endpoint = try endPoint(target: target, request: request, stream: false)
+        let map: (Int, String) throws -> AIResponse
         switch self {
         case .openAIChat:
-            try await Self.send(OpenAIChatWireFamily.self, request, target, networkService)
+            let reply: ChatCompletionReply = try await networkService.sendRequest(endpoint: endpoint)
+            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
         case .openAIResponses:
-            try await Self.send(OpenAIResponsesWireFamily.self, request, target, networkService)
+            let reply: ResponsesReply = try await networkService.sendRequest(endpoint: endpoint)
+            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
         case .anthropicMessages:
-            try await Self.send(AnthropicMessagesWireFamily.self, request, target, networkService)
+            let reply: AnthropicMessagesReply = try await networkService.sendRequest(endpoint: endpoint)
+            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
         case .lmStudioNative:
-            try await Self.send(LMStudioNativeWireFamily.self, request, target, networkService)
+            let reply: LMStudioNativeReply = try await networkService.sendRequest(endpoint: endpoint)
+            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
         }
-    }
-
-    // MARK: - Private
-
-    /// The one endpoint builder every family goes through.
-    private static func endPoint<Family: AIWireFamily>(
-        _ family: Family.Type,
-        _ target: AIWireTarget,
-        _ request: AIRequest,
-        _ stream: Bool
-    ) throws -> AIWireEndPoint<Family.RequestBody> {
-        try AIWireEndPoint(
-            server: target.server,
-            standard: Family.standard,
-            apiKey: target.apiKey,
-            standardHeaders: Family.standardHeaders,
-            requestBody: Family.requestBody(for: request, model: target.model, stream: stream)
-        )
-    }
-
-    /// The one send-and-map path every family goes through.
-    private static func send<Family: AIWireFamily>(
-        _ family: Family.Type,
-        _ request: AIRequest,
-        _ target: AIWireTarget,
-        _ networkService: any NetworkProtocol
-    ) async throws -> AIResponse {
-        let start = ContinuousClock.now
-        let endpoint = try endPoint(family, target, request, false)
-        let reply: Family.Reply = try await networkService.sendRequest(endpoint: endpoint)
         let elapsed = start.duration(to: .now)
         let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
         let requestURL =
             networkService.createRequest(endPoint: endpoint).url?.absoluteString
-            ?? "\(target.server.description)\(Family.standard.path)"
-        return try Family.response(
-            from: reply,
-            requestedModel: target.model,
-            providerID: target.providerID,
-            latencyMs: latencyMs,
-            requestURL: requestURL
+            ?? "\(target.server.description)\(path)"
+        return try map(latencyMs, requestURL)
+    }
+}
+
+// MARK: - Body encoding
+
+/// Encodes a request body to a JSON object, once, so an encoding failure
+/// reaches the caller as a thrown error rather than a bodyless request.
+func encodeWireJSONObject<Body: Encodable>(_ body: Body, label: String) throws -> [String: Any] {
+    let data = try JSONEncoder().encode(body)
+    guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        throw EncodingError.invalidValue(
+            body,
+            .init(codingPath: [], debugDescription: "Request body for \(label) did not encode to a JSON object")
         )
     }
+    return object
 }
 
 // MARK: - Shared mapping helpers

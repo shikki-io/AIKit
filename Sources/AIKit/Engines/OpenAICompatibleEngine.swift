@@ -34,10 +34,12 @@ public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
     /// Discover models from /v1/models endpoint.
     public func discoverModels() async throws -> [ModelDescriptor] {
         let parsed = URLComponents(string: baseURL)
-        let endpoint = OpenAIModelsListEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http",
+        let endpoint = OpenAIEndPoint.models(
+            server: AIWireServer(
+                scheme: parsed?.scheme ?? "http",
+                host: parsed?.host ?? "127.0.0.1",
+                port: parsed?.port
+            ),
             apiKey: apiKey
         )
 

@@ -182,20 +182,25 @@ public struct OpenAIProvider: AIProvider, Sendable {
 
     /// The URL a request to `endpoint` actually goes to, for an error message
     /// that has to name where it came from.
-    private func requestTarget(_ endpoint: OpenAIChatCompletionEndPoint) -> String {
+    private func requestTarget(_ endpoint: OpenAIEndPoint) -> String {
         networkService.createRequest(endPoint: endpoint).url?.absoluteString
             ?? "\(baseURL)\(endpoint.path)"
     }
 
-    private func makeEndpoint(for chatRequest: ChatCompletionRequest) throws -> OpenAIChatCompletionEndPoint {
+    private func makeEndpoint(for chatRequest: ChatCompletionRequest) throws -> OpenAIEndPoint {
         let parsed = URLComponents(string: baseURL)
-        return try OpenAIChatCompletionEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http",
+        let endpoint = OpenAIEndPoint.chat(
+            server: AIWireServer(
+                scheme: parsed?.scheme ?? "http",
+                host: parsed?.host ?? "127.0.0.1",
+                port: parsed?.port
+            ),
             apiKey: apiKey,
-            requestBody: chatRequest
+            body: chatRequest
         )
+        // Throws here, not at send time, when the body cannot be encoded.
+        _ = try endpoint.bodyObject()
+        return endpoint
     }
 }
 

@@ -461,18 +461,16 @@ struct WireStandardSelectionTests {
     }
 
     /// BR-EC-02: the generator and the enforcer share one code path, and the
-    /// agreement is asserted rather than assumed. `OpenAIChatCompletionEndPoint`
+    /// agreement is asserted rather than assumed. `OpenAIEndPoint.chat`
     /// is what `OpenAIProvider` still sends through, and the chat family
     /// declares the same standard — if the path were written twice, this is
     /// where the drift would show.
     @Test("the chat path is written once, and both readers read it")
     func chatPathHasOneSourceOfTruth() throws {
-        let legacy = try OpenAIChatCompletionEndPoint(
-            host: "h",
-            port: 1,
-            scheme: "http",
+        let legacy = OpenAIEndPoint.chat(
+            server: AIWireServer(scheme: "http", host: "h", port: 1),
             apiKey: nil,
-            requestBody: ChatCompletionRequest(
+            body: ChatCompletionRequest(
                 model: "m",
                 messages: [],
                 temperature: 0,
@@ -483,7 +481,6 @@ struct WireStandardSelectionTests {
             )
         )
         #expect(legacy.path == AIWireStandard.openAIChat.path)
-        #expect(OpenAIChatWireFamily.standard == .openAIChat)
     }
 
     /// Each family declares the standard it is registered under — the switch in
