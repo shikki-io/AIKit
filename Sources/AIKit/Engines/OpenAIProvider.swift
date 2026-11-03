@@ -99,8 +99,8 @@ public struct OpenAIProvider: AIProvider, Sendable {
             content: firstChoice.message.content ?? "",
             model: modelName,
             tokensUsed: TokenUsage(
-                prompt: response.usage?.promptTokens ?? 0,
-                completion: response.usage?.completionTokens ?? 0
+                prompt: response.usage?.promptTokens,
+                completion: response.usage?.completionTokens
             ),
             latencyMs: latencyMs,
             toolCalls: toolCalls,

@@ -145,12 +145,21 @@ public struct AIToolCall: Sendable, Codable, Equatable {
 }
 
 /// Token usage statistics.
+///
+/// A count is `nil` when the provider did not report it. It is never 0 by
+/// default: a missing count read as zero silently under-charges a budget and
+/// passes a limit check, so a consumer that needs a number decides explicitly
+/// how to treat `nil`.
 public struct TokenUsage: Sendable, Codable, Equatable {
-    public var prompt: Int
-    public var completion: Int
-    public var total: Int { prompt + completion }
+    public var prompt: Int?
+    public var completion: Int?
+    /// The sum, or `nil` when either side is unknown: half a sum is not a total.
+    public var total: Int? {
+        guard let prompt, let completion else { return nil }
+        return prompt + completion
+    }
 
-    public init(prompt: Int, completion: Int) {
+    public init(prompt: Int?, completion: Int?) {
         self.prompt = prompt
         self.completion = completion
     }
@@ -163,16 +172,16 @@ public struct TokenUsage: Sendable, Codable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        prompt = try container.decode(Int.self, forKey: .prompt)
-        completion = try container.decode(Int.self, forKey: .completion)
+        prompt = try container.decodeIfPresent(Int.self, forKey: .prompt)
+        completion = try container.decodeIfPresent(Int.self, forKey: .completion)
         // total is computed, ignore decoded value
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(prompt, forKey: .prompt)
-        try container.encode(completion, forKey: .completion)
-        try container.encode(total, forKey: .total)
+        try container.encodeIfPresent(prompt, forKey: .prompt)
+        try container.encodeIfPresent(completion, forKey: .completion)
+        try container.encodeIfPresent(total, forKey: .total)
     }
 }
 

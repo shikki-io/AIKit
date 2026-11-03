@@ -56,8 +56,8 @@ enum LMStudioNativeWireFamily: AIWireFamily {
             // This standard names the loaded instance rather than a model id.
             model: response.modelInstanceId ?? requestedModel,
             tokensUsed: TokenUsage(
-                prompt: response.stats?.inputTokens ?? 0,
-                completion: response.stats?.totalOutputTokens ?? 0
+                prompt: response.stats?.inputTokens,
+                completion: response.stats?.totalOutputTokens
             ),
             latencyMs: latencyMs,
             providerID: providerID
