@@ -127,12 +127,10 @@ struct LMStudioProviderTests {
         let capped = try #require(provider.provider(timeout: 900).networkService as? TimeoutNetworkService)
         #expect(capped.timeoutInterval == 300, "requestTimeout is the ceiling")
 
-        let endpoint = try OpenAIChatCompletionEndPoint(
-            host: "127.0.0.1",
-            port: 1234,
-            scheme: "http",
+        let endpoint = OpenAIEndPoint.chat(
+            server: AIWireServer(scheme: "http", host: "127.0.0.1", port: 1234),
             apiKey: nil,
-            requestBody: ChatCompletionRequest(
+            body: ChatCompletionRequest(
                 model: "m",
                 messages: [],
                 temperature: 0.7,
