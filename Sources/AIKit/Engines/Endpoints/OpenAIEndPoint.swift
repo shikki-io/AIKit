@@ -213,7 +213,7 @@ enum ChatCompletionReply: Decodable, Sendable {
             ),
             latencyMs: latencyMs,
             toolCalls: choice.message.toolCalls?.map {
-                AIToolCall(name: $0.function.name, arguments: $0.function.arguments)
+                AIToolCall(id: $0.id, name: $0.function.name, arguments: $0.function.arguments)
             },
             providerID: providerID
         )
