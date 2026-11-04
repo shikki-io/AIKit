@@ -20,13 +20,6 @@ public struct OpenAIProvider: AIProvider, Sendable {
     let apiKey: String?
     let networkService: any NetworkProtocol
 
-    /// The message `complete` throws when a 200 reply carries no choices.
-    ///
-    /// `LMStudioProvider` matches on this exact value to keep its own
-    /// `.emptyContent` case, so thrower and matcher read one constant instead
-    /// of two copies of a sentence that could drift apart.
-    static let emptyReplyMessage = "Empty response — no choices returned"
-
     /// Create a provider for one model on one OpenAI-compatible server.
     /// - Parameters:
     ///   - id: The `AIProvider.id` this provider reports, and the value every
@@ -61,56 +54,20 @@ public struct OpenAIProvider: AIProvider, Sendable {
     }
 
     public func complete(request: AIRequest) async throws -> AIResponse {
-        let startTime = ContinuousClock.now
-
-        let chatRequest = buildChatRequest(from: request, stream: false)
-        let endpoint = try makeEndpoint(for: chatRequest)
-
-        // A transport failure travels as the type it was thrown as — `URLError`,
-        // `NetKit.NetworkError` — because a caller deciding whether to fall back
-        // needs to tell a refused connection from a server that answered
-        // (BR-AIL-07, W5). Flattening it into a string here would erase that.
-        let reply: ChatCompletionReply = try await networkService.sendRequest(endpoint: endpoint)
-
-        let response: ChatCompletionResponseDTO
-        switch reply {
-        case .completion(let completion):
-            response = completion
-        case .serverError(let message):
-            // BR-AIL-10: the server answered 200 and said why it could not
-            // serve the request. Its own words travel, with the URL they came
-            // from — a `/v1` left in a server root reads as a bad reply
-            // otherwise, and the URL is what names that mistake.
-            throw AIKitError.requestFailed("\(message) — from \(requestTarget(endpoint))")
-        }
-
-        let elapsed = startTime.duration(to: .now)
-        let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
-
-        guard let firstChoice = response.choices.first else {
-            throw AIKitError.requestFailed(Self.emptyReplyMessage)
-        }
-
-        let toolCalls = firstChoice.message.toolCalls?.map { call in
-            AIToolCall(id: call.id, name: call.function.name, arguments: call.function.arguments)
-        }
-
-        return AIResponse(
-            content: firstChoice.message.content ?? "",
-            model: modelName,
-            tokensUsed: TokenUsage(
-                prompt: response.usage?.promptTokens,
-                completion: response.usage?.completionTokens
-            ),
-            latencyMs: latencyMs,
-            toolCalls: toolCalls,
-            providerID: id
+        // One system for OpenAI: the same request builder, endpoint and reply
+        // mapper the wire-standard dispatch uses. A transport failure travels
+        // as the type it was thrown as — `URLError`, `NetKit.NetworkError` —
+        // because a caller deciding whether to fall back needs to tell a
+        // refused connection from a server that answered (BR-AIL-07, W5).
+        try await AIWireStandard.openAIChat.complete(
+            request: request,
+            target: target,
+            networkService: networkService
         )
     }
 
     public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
-        let chatRequest = buildChatRequest(from: request, stream: true)
-        let endpoint = try makeEndpoint(for: chatRequest)
+        let endpoint = try AIWireStandard.openAIChat.endPoint(target: target, request: request, stream: true)
         let urlRequest = networkService.createRequest(endPoint: endpoint)
 
         return AsyncThrowingStream { continuation in
@@ -127,80 +84,20 @@ public struct OpenAIProvider: AIProvider, Sendable {
 
     // MARK: - Private
 
-    private func buildChatRequest(from request: AIRequest, stream: Bool) -> ChatCompletionRequest {
-        var messages: [ChatCompletionRequest.ChatMessage] = []
-
-        if let systemPrompt = request.systemPrompt {
-            messages.append(.init(role: "system", content: systemPrompt))
-        }
-
-        for msg in request.messages {
-            let wireToolCalls: [ChatCompletionRequest.ToolCallRequest]? = msg.toolCalls?.map { tc in
-                .init(
-                    id: tc.id ?? UUID().uuidString,
-                    type: "function",
-                    function: .init(name: tc.name, arguments: tc.arguments)
-                )
-            }
-            // A tool-call-only assistant message has empty content in AIMessage
-            // but requires nil (not an empty string) in the wire format so the
-            // server does not interpret it as a content-and-tool-calls message.
-            let wireContent: String? = msg.content.isEmpty ? nil : msg.content
-            messages.append(.init(
-                role: msg.role.rawValue,
-                content: wireContent,
-                toolCalls: wireToolCalls,
-                toolCallId: msg.toolCallId
-            ))
-        }
-
-        let tools: [ChatCompletionRequest.ToolDefinition]? = request.tools?.map { tool in
-            .init(
-                type: "function",
-                function: .init(
-                    name: tool.name,
-                    description: tool.description,
-                    parameters: JSONFragment(rawJSON: tool.parametersSchema)
-                )
-            )
-        }
-
-        let responseFormat: ChatCompletionRequest.ResponseFormatDTO? = request.responseFormat.map { fmt in
-            .init(type: fmt.rawValue == "json" ? "json_object" : "text")
-        }
-
-        return ChatCompletionRequest(
-            model: modelName,
-            messages: messages,
-            temperature: request.temperature,
-            maxTokens: request.maxTokens,
-            stream: stream,
-            tools: tools,
-            responseFormat: responseFormat
-        )
-    }
-
-    /// The URL a request to `endpoint` actually goes to, for an error message
-    /// that has to name where it came from.
-    private func requestTarget(_ endpoint: OpenAIEndPoint) -> String {
-        networkService.createRequest(endPoint: endpoint).url?.absoluteString
-            ?? "\(baseURL)\(endpoint.path)"
-    }
-
-    private func makeEndpoint(for chatRequest: ChatCompletionRequest) throws -> OpenAIEndPoint {
+    /// Where this provider's requests go. The root is parsed leniently — a
+    /// scheme and host that are missing default — exactly as before.
+    private var target: AIWireTarget {
         let parsed = URLComponents(string: baseURL)
-        let endpoint = OpenAIEndPoint.chat(
+        return AIWireTarget(
             server: AIWireServer(
                 scheme: parsed?.scheme ?? "http",
                 host: parsed?.host ?? "127.0.0.1",
                 port: parsed?.port
             ),
             apiKey: apiKey,
-            body: chatRequest
+            model: modelName,
+            providerID: id
         )
-        // Throws here, not at send time, when the body cannot be encoded.
-        _ = try endpoint.bodyObject()
-        return endpoint
     }
 }
 

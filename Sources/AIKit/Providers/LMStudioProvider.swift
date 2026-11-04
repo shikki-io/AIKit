@@ -147,7 +147,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 
     private func mapped(aiKitError: AIKitError) -> LMStudioError {
         switch aiKitError {
-        case .requestFailed(let message) where message == OpenAIProvider.emptyReplyMessage:
+        case .requestFailed(let message) where message.hasPrefix(AIWireStandard.emptyReplyPrefix(.openAIChat)):
             return .emptyContent
         case .requestFailed(let message):
             // A 200 reply carrying an error body: the server's own words
