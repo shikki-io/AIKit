@@ -1,5 +1,8 @@
 import Foundation
+import Logging
 import NetKit
+
+private let endpointLogger = Logger(label: "aikit.endpoints.mcp")
 
 /// Generic MCP (Model Context Protocol) client engine.
 /// Connects to any MCP server exposing tools — Koharu, LM Studio MCP, custom servers.
@@ -15,12 +18,12 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
         id: String = "mcp",
         displayName: String = "MCP Server",
         baseURL: String,
-        networkService: (any NetworkProtocol)? = nil
+        networkService: any NetworkProtocol = NetworkService()
     ) {
         self.id = id
         self.displayName = displayName
         self.baseURL = baseURL
-        self.networkService = networkService ?? NetworkService()
+        self.networkService = networkService
     }
 
     public var isAvailable: Bool {
@@ -30,29 +33,29 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
 
     // MARK: - MCP Tool Discovery
 
+    /// The configured server as an `AIWireServer`; scheme and host default as before.
+    private var server: AIWireServer {
+        let parsed = URLComponents(string: baseURL)
+        return AIWireServer(
+            scheme: parsed?.scheme ?? "http",
+            host: parsed?.host ?? "127.0.0.1",
+            port: parsed?.port
+        )
+    }
+
     /// Discover tools from the MCP server.
     public func discoverTools() async throws -> [MCPTool] {
-        let parsed = URLComponents(string: baseURL)
-        let endpoint = MCPToolsListEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http"
+        let response: MCPToolsListResponse = try await networkService.sendRequest(
+            endpoint: MCPEndPoint.toolsList(server: server)
         )
-        let response: MCPToolsListResponse = try await networkService.sendRequest(endpoint: endpoint)
         return response.tools
     }
 
     /// Call an MCP tool by name with arguments.
     public func callTool(name: String, arguments: [String: String]) async throws -> MCPToolResult {
-        let parsed = URLComponents(string: baseURL)
-        let body = MCPCallToolRequest(name: name, arguments: arguments)
-        let endpoint = MCPCallToolEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http",
-            requestBody: body
+        try await networkService.sendRequest(
+            endpoint: MCPEndPoint.callTool(server: server, name: name, arguments: arguments)
         )
-        return try await networkService.sendRequest(endpoint: endpoint)
     }
 
     // MARK: - RuntimeEngine
@@ -144,44 +147,66 @@ struct MCPToolsListResponse: Sendable, Codable {
     let tools: [MCPTool]
 }
 
-struct MCPCallToolRequest: Sendable, Codable {
+/// Body of `POST /tools/call`.
+struct MCPCallToolRequest: Codable, Sendable, Equatable {
     let name: String
     let arguments: [String: String]
 }
 
-// MARK: - MCP Endpoints
+// MARK: - MCPEndPoint
 
-struct MCPToolsListEndPoint: EndPoint {
-    let host: String
-    let port: Int?
-    let scheme: String
+/// Every call this engine makes to an MCP server, one case each — the same
+/// shape as NetKit's `UmamiEndPoint`: the server travels with the case, so the
+/// endpoint holds no state.
+enum MCPEndPoint: EndPoint {
+    /// `GET /tools/list` — discover the tools a server exposes.
+    case toolsList(server: AIWireServer)
+    /// `POST /tools/call` — run one tool with string arguments.
+    case callTool(server: AIWireServer, name: String, arguments: [String: String])
 
+    private var server: AIWireServer {
+        switch self {
+        case .toolsList(let server): server
+        case .callTool(let server, _, _): server
+        }
+    }
+
+    var scheme: String { server.scheme }
+    var host: String { server.host }
+    var port: Int? { server.port }
     var apiPath: String { "" }
     var apiFilePath: String { "" }
-    var path: String { "/tools/list" }
-    var method: RequestMethod { .GET }
-    var header: [String: String]? { ["Content-Type": "application/json"] }
-    var body: [String: Any]? { nil }
-    var queryParams: [String: Any]? { nil }
-}
 
-struct MCPCallToolEndPoint: EndPoint {
-    let host: String
-    let port: Int?
-    let scheme: String
-    let requestBody: MCPCallToolRequest
+    var path: String {
+        switch self {
+        case .toolsList: "/tools/list"
+        case .callTool: "/tools/call"
+        }
+    }
 
-    var apiPath: String { "" }
-    var apiFilePath: String { "" }
-    var path: String { "/tools/call" }
-    var method: RequestMethod { .POST }
+    var method: RequestMethod {
+        switch self {
+        case .toolsList: .GET
+        case .callTool: .POST
+        }
+    }
+
     var header: [String: String]? { ["Content-Type": "application/json"] }
     var queryParams: [String: Any]? { nil }
 
     var body: [String: Any]? {
-        guard let data = try? JSONEncoder().encode(requestBody),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return dict
+        // Safety: `bodyObject()` only fails when the DTO cannot encode, and a
+        // name plus string arguments always can; engines call it directly.
+        (try? bodyObject())
+    }
+
+    /// The request body as a JSON object; nil for a call that has none.
+    func bodyObject() throws -> [String: Any]? {
+        switch self {
+        case .toolsList:
+            return nil
+        case .callTool(_, let name, let arguments):
+            return try encodeWireJSONObject(MCPCallToolRequest(name: name, arguments: arguments), label: "MCPCallToolRequest")
+        }
     }
 }

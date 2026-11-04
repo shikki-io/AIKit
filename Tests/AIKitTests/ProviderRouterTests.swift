@@ -1,4 +1,5 @@
 import Testing
+
 @testable import AIKit
 
 @Suite("ProviderRouter")
@@ -53,7 +54,8 @@ struct ProviderRouterTests {
             content: "success",
             model: "m",
             tokensUsed: TokenUsage(prompt: 1, completion: 1),
-            latencyMs: 1
+            latencyMs: 1,
+            providerID: "work"
         )
         let working = MockAIProvider(
             id: "work", capabilities: .textGeneration, responses: [expected]
@@ -83,7 +85,13 @@ struct ProviderRouterTests {
             _ = try await router.routeWithFallback(request: request, providers: [a, b])
             Issue.record("Expected allProvidersFailed error")
         } catch let error as AIKitError {
-            #expect(error == .allProvidersFailed)
+            #expect(
+                error
+                    == .allProvidersFailed([
+                        AIProviderAttempt(providerID: "a", cause: "Request failed: err"),
+                        AIProviderAttempt(providerID: "b", cause: "Request failed: err"),
+                    ])
+            )
         } catch {
             Issue.record("Unexpected error type: \(error)")
         }

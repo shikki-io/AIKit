@@ -37,11 +37,11 @@ struct LocalModelStoreTests {
     }
 
     @Test("List returns empty on fresh store")
-    func listEmpty() {
+    func listEmpty() throws {
         let (store, dir) = makeTempStore()
         defer { cleanup(dir) }
 
-        let models = store.listLocal()
+        let models = try store.listLocal()
         #expect(models.isEmpty)
     }
 
@@ -56,7 +56,7 @@ struct LocalModelStoreTests {
 
         try store.register(descriptor, at: fakePath)
 
-        let models = store.listLocal()
+        let models = try store.listLocal()
         #expect(models.count == 1)
         #expect(models[0].descriptor.id == descriptor.id)
         #expect(models[0].descriptor.name == "model-7b")
@@ -72,11 +72,11 @@ struct LocalModelStoreTests {
         let fakePath = dir.appendingPathComponent("fake.gguf")
         FileManager.default.createFile(atPath: fakePath.path, contents: Data(count: 512))
 
-        #expect(!store.isDownloaded(id))
+        #expect(!(try store.isDownloaded(id)))
 
         try store.register(descriptor, at: fakePath)
 
-        #expect(store.isDownloaded(id))
+        #expect(try store.isDownloaded(id))
     }
 
     @Test("Delete removes model")
@@ -89,11 +89,11 @@ struct LocalModelStoreTests {
         FileManager.default.createFile(atPath: fakePath.path, contents: Data(count: 256))
 
         try store.register(descriptor, at: fakePath)
-        #expect(store.listLocal().count == 1)
+        #expect(try store.listLocal().count == 1)
 
         try store.delete(descriptor.id)
-        #expect(store.listLocal().isEmpty)
-        #expect(!store.isDownloaded(descriptor.id))
+        #expect(try store.listLocal().isEmpty)
+        #expect(!(try store.isDownloaded(descriptor.id)))
     }
 
     @Test("Delete throws for unknown model")
@@ -126,8 +126,41 @@ struct LocalModelStoreTests {
         try store.register(desc1, at: path1)
         try store.register(desc2, at: path2)
 
-        let total = store.totalSizeBytes()
+        let total = try store.totalSizeBytes()
         #expect(total == 2048 + 4096)
+    }
+
+    /// A corrupt manifest must throw `LocalModelStoreError.corruptManifest`.
+    ///
+    /// Returning `[]` was the previous behaviour: silent empty hides the
+    /// corruption and, worse, the next write would overwrite all recorded models
+    /// with an empty list. The caller must see the error and decide.
+    @Test("Corrupt manifest throws corruptManifest, not empty")
+    func corruptManifestThrows() throws {
+        let (store, dir) = makeTempStore()
+        defer { cleanup(dir) }
+
+        // Write syntactically invalid JSON at the manifest path.
+        let manifestURL = dir.appendingPathComponent("manifest.json")
+        try Data("not valid json {{{{".utf8).write(to: manifestURL)
+
+        #expect(throws: LocalModelStoreError.corruptManifest) {
+            try store.listLocal()
+        }
+        #expect(throws: LocalModelStoreError.corruptManifest) {
+            try store.totalSizeBytes()
+        }
+    }
+
+    /// A missing manifest is NOT an error — fresh store, no file yet.
+    @Test("Missing manifest returns empty, does not throw")
+    func missingManifestIsEmpty() throws {
+        let (store, dir) = makeTempStore()
+        defer { cleanup(dir) }
+
+        // No manifest written — the store directory exists but no manifest.json.
+        let models = try store.listLocal()
+        #expect(models.isEmpty)
     }
 
     @Test("modelPath returns provider-scoped path")

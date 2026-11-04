@@ -17,7 +17,7 @@ public final class DefaultModelRegistry: ModelRegistry, @unchecked Sendable {
     }
 
     public func listModels(filter: ModelFilter?) async throws -> [ModelDescriptor] {
-        let localModels = localStore.listLocal().map { $0.descriptor }
+        let localModels = try localStore.listLocal().map { $0.descriptor }
 
         guard let filter else { return localModels }
         return localModels.filter { filter.matches($0) }
@@ -25,7 +25,7 @@ public final class DefaultModelRegistry: ModelRegistry, @unchecked Sendable {
 
     public func getModel(id: ModelIdentifier) async throws -> ModelDescriptor {
         // Check local first
-        if let local = localStore.listLocal().first(where: { $0.descriptor.id == id }) {
+        if let local = try localStore.listLocal().first(where: { $0.descriptor.id == id }) {
             return local.descriptor
         }
 
