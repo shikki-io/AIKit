@@ -433,7 +433,12 @@ struct OpenAIProviderTests {
             )
             Issue.record("Expected a thrown error")
         } catch {
-            #expect(error as? AIKitError == .requestFailed(OpenAIProvider.emptyReplyMessage))
+            guard case .requestFailed(let message) = error as? AIKitError else {
+                Issue.record("Expected AIKitError.requestFailed, got \(error)")
+                return
+            }
+            #expect(message.hasPrefix(AIWireStandard.emptyReplyPrefix(.openAIChat)))
+            #expect(message.contains("http://127.0.0.1:1234/v1/chat/completions"))
             #expect(LMStudioProvider(model: "qwen").mapped(error) == .emptyContent)
         }
     }

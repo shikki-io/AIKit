@@ -11,10 +11,10 @@ enum OpenAIEndPoint: EndPoint {
 
     // MARK: - End points declaration
 
-    /// `/v1/chat/completions`. Carries the typed body because `OpenAIProvider`
-    /// renders its own request (streaming, tool-call ids) and sends it through
-    /// the same door; the wire standard renders one from an `AIRequest` with
-    /// `ChatCompletionRequest(request:model:stream:)`.
+    /// `/v1/chat/completions`. Carries the typed body. The one place a
+    /// body is rendered from an `AIRequest` is
+    /// `ChatCompletionRequest(request:model:stream:)`; `OpenAIProvider` and the
+    /// wire-standard dispatch both reach it through `AIWireStandard.endPoint`.
     case chat(server: AIWireServer, apiKey: String?, body: ChatCompletionRequest)
     /// `/v1/responses`: the prompt is `input`, the system prompt `instructions`.
     case responses(server: AIWireServer, apiKey: String?, model: String, request: AIRequest, stream: Bool)

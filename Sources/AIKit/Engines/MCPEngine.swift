@@ -147,6 +147,12 @@ struct MCPToolsListResponse: Sendable, Codable {
     let tools: [MCPTool]
 }
 
+/// Body of `POST /tools/call`.
+struct MCPCallToolRequest: Codable, Sendable, Equatable {
+    let name: String
+    let arguments: [String: String]
+}
+
 // MARK: - MCPEndPoint
 
 /// Every call this engine makes to an MCP server, one case each — the same
@@ -189,9 +195,18 @@ enum MCPEndPoint: EndPoint {
     var queryParams: [String: Any]? { nil }
 
     var body: [String: Any]? {
+        // Safety: `bodyObject()` only fails when the DTO cannot encode, and a
+        // name plus string arguments always can; engines call it directly.
+        (try? bodyObject())
+    }
+
+    /// The request body as a JSON object; nil for a call that has none.
+    func bodyObject() throws -> [String: Any]? {
         switch self {
-        case .toolsList: nil
-        case .callTool(_, let name, let arguments): ["name": name, "arguments": arguments]
+        case .toolsList:
+            return nil
+        case .callTool(_, let name, let arguments):
+            return try encodeWireJSONObject(MCPCallToolRequest(name: name, arguments: arguments), label: "MCPCallToolRequest")
         }
     }
 }

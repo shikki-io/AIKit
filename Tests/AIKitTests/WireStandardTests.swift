@@ -402,6 +402,27 @@ struct WireStandardSelectionTests {
         #expect(sent.url?.absoluteString == "http://h:1/v1/chat/completions")
     }
 
+    /// The EU provider must dispatch: a Mistral kind resolves and posts to the
+    /// chat-completions path with a bearer token, like any OpenAI-shaped server.
+    @Test("mistral kinds resolve and dispatch on chat completions", arguments: ["mistral", "mistral-la-plateforme"])
+    func mistralDispatches(kind: String) async throws {
+        let standard = try #require(AIWireStandard(kind: kind))
+        let network = MockNetworkService()
+        network.resultData = Data(chatCompletionsReply.utf8)
+        let target = try AIWireTarget(
+            serverRoot: "https://api.mistral.ai", apiKey: "key", model: "mistral-small-latest", providerID: kind
+        )
+        let response = try await standard.complete(
+            request: AIRequest(messages: [AIMessage(role: .user, content: "hi")]),
+            target: target,
+            networkService: network
+        )
+        let sent = try #require(network.capturedRequests.first)
+        #expect(sent.url?.absoluteString == "https://api.mistral.ai/v1/chat/completions")
+        #expect(sent.value(forHTTPHeaderField: "Authorization") == "Bearer key")
+        #expect(response.providerID == kind)
+    }
+
     /// T-AIL-06, per standard: each one owns its whole path.
     @Test("each standard owns its whole path", arguments: wireFixtures)
     func eachStandardOwnsItsPath(fixture: WireFixture) async throws {
@@ -450,6 +471,9 @@ struct WireStandardSelectionTests {
         #expect(AIWireStandard(kind: "lmstudio") == .openAIChat)
         #expect(AIWireStandard(kind: "ollama") == .openAIChat)
         #expect(AIWireStandard(kind: "anthropic") == .anthropicMessages)
+        #expect(AIWireStandard(kind: "mistral") == .openAIChat)
+        #expect(AIWireStandard(kind: "mistral-la-plateforme") == .openAIChat)
+        #expect(AIWireStandard(kind: "mistralrs-local") == .openAIChat)
 
         // Every declared standard is reachable by its own raw value.
         for standard in AIWireStandard.allCases {

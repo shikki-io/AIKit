@@ -160,4 +160,20 @@ struct MCPEngineTests {
         #expect(body["name"] as? String == "ocr")
         #expect(body["arguments"] as? [String: String] == ["page": "1"])
     }
+
+    @Test("MCPCallToolRequest encodes the exact bytes the hand-written literal did")
+    func callToolBodyByteParity() throws {
+        let arguments = ["page": "1", "lang": "fr"]
+        let legacy: [String: Any] = ["name": "ocr", "arguments": arguments]
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy, options: [.sortedKeys])
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let dtoData = try encoder.encode(MCPCallToolRequest(name: "ocr", arguments: arguments))
+        #expect(dtoData == legacyData)
+
+        // And the other way: the legacy bytes decode into the DTO.
+        let decoded = try JSONDecoder().decode(MCPCallToolRequest.self, from: legacyData)
+        #expect(decoded == MCPCallToolRequest(name: "ocr", arguments: arguments))
+    }
 }

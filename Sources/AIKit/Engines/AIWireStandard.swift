@@ -57,10 +57,17 @@ public enum AIWireStandard: String, Sendable, Codable, CaseIterable {
     /// written when nothing read `kind` at all. It means the chat-completions
     /// standard, which is what those profiles have always talked to, so it maps
     /// there rather than failing a config that was valid yesterday.
+    ///
+    /// Mistral (La Plateforme, and a local mistral.rs server) speaks the same
+    /// chat-completions standard — `POST /v1/chat/completions`, bearer auth,
+    /// the same request and reply shapes — so `mistral` and the two
+    /// `AIProviderID` spellings map to `.openAIChat` instead of a fifth family
+    /// that would duplicate it.
     public init?(kind: String) {
         let normalised = kind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         switch normalised {
-        case "openai-compatible", "openai", "lmstudio", "ollama":
+        case "openai-compatible", "openai", "lmstudio", "ollama",
+            "mistral", AIProviderID.mistralLaPlateforme.rawValue, AIProviderID.mistralRsLocal.rawValue:
             self = .openAIChat
         case "anthropic":
             self = .anthropicMessages
@@ -278,7 +285,16 @@ extension AIWireStandard {
     /// One constant rather than four sentences that drift apart; the suites
     /// match on this value, so thrower and matcher read the same code path.
     static func emptyReplyMessage(_ standard: AIWireStandard, requestURL: String) -> String {
-        "\(standard.displayName) answered with no content — from \(requestURL)"
+        "\(emptyReplyPrefix(standard)) — from \(requestURL)"
+    }
+
+    /// The part of the empty-reply message that does not depend on the URL.
+    ///
+    /// A caller that has to recognise the failure (`LMStudioProvider` keeps its
+    /// own `.emptyContent` case) matches this, so thrower and matcher still read
+    /// one definition even though the message also names the request URL.
+    static func emptyReplyPrefix(_ standard: AIWireStandard) -> String {
+        "\(standard.displayName) answered with no content"
     }
 }
 
