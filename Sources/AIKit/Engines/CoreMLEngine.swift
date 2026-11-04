@@ -1,7 +1,10 @@
-// STATUS: unproven and not wired. Built and unit-tested at the helper level only;
-// NO caller in AIKit or the fleet constructs it, and it has NOT been run on real
-// weights / real inference. The running path is WhisperCLIProvider.
-// Whether to keep it is the operator's call (W6 deliverable of ai-layer spec 8badc87f).
+// STATUS: the planned on-device (iOS / mobile) engine — operator decided to KEEP it
+// (2026-11-04), to be wired and used soon on mobile (CoreML preferred over MLX for iOS).
+// Today it is built and unit-tested at the helper level only: NO production caller
+// constructs it (only tests do), and it has NOT yet been run on real weights / real
+// inference. The mobile consumer will inject `modelsDirectory` from the settings/path
+// SSoT. On macOS the path that actually runs is WhisperCLIProvider.
+// (W6 deliverable of ai-layer spec 8badc87f.)
 
 #if canImport(CoreML)
     import AVFoundation
