@@ -83,6 +83,27 @@ let mlxProducts: [Product] =
             name: "AIKitMLX",
             targets: ["AIKitMLX"]
         ),
+        // Vision embeddings (DINOv2, V-JEPA 2, embedding store, battle arena),
+        // moved from Irori's `IroriVision`. A THIRD product, not a target inside
+        // `AIKitMLX`: it needs only `mlx-swift` (MLX, MLXNN, MLXRandom), so an app
+        // that wants on-device LLMs does not link vision code, and one that wants
+        // vision does not link mlx-swift-lm or swift-transformers. It does not
+        // depend on `AIKit` either, which keeps `AIKit` MLX-free (BR-AIL-14).
+        //
+        // DECLARED IN THE MLX BLOCK, not beside `AIKit`, and this moved in the
+        // restack onto W30's manifest. The original commit put it in the
+        // unconditional `products:` list, which was correct against the manifest
+        // it was written on — W30 had not yet made the MLX half host-conditional.
+        // It is not correct here: this product's target names `mlx-swift`
+        // products, and on a non-Apple host `mlxDependencies` is empty, so the
+        // package would declare a product whose target depends on a package that
+        // is not in the graph. SwiftPM fails to load such a manifest, which would
+        // have broken W30's Linux job — the one thing this epic added to prove
+        // AIKit builds there.
+        .library(
+            name: "AIKitVision",
+            targets: ["AIKitVision"]
+        ),
     ]
     : []
 
@@ -115,6 +136,27 @@ let mlxTargets: [Target] =
                 .product(name: "CoreKitTestSupport", package: "CoreKit"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ]
+        ),
+        // `MLXVisionBackend` is compiled only under `#if canImport(MLX)`; where
+        // MLX is unavailable `VJEPAInference` routes to `ReferenceVisionBackend`
+        // (BR-17), so the target's SOURCES build everywhere AIKit does.
+        //
+        // Its DECLARATION still cannot: it names three `mlx-swift` products, and
+        // mlx-swift is in the graph only on an Apple host (see the block at the
+        // top of this file). `#if canImport(MLX)` guards a compile; it cannot
+        // guard a manifest. So the target sits here with the rest of the MLX
+        // half, and the Linux job resolves a graph without it.
+        .target(
+            name: "AIKitVision",
+            dependencies: [
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXRandom", package: "mlx-swift"),
+            ]
+        ),
+        .testTarget(
+            name: "AIKitVisionTests",
+            dependencies: ["AIKitVision"]
         ),
     ]
     : []

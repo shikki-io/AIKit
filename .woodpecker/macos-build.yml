@@ -110,14 +110,19 @@ steps:
   # the allowlist holds AIKitMLX's symbols — so this job is the only place they
   # can run.
   #
-  # `AIKitMLX` carries `pre_pr_default = false` because it needs the selected
-  # Xcode's MetalToolchain component, which a laptop may not have. A CI agent
-  # that can run `AIKitPublicSurface` can run this, because that scope builds
-  # the same target; if the component is missing both fail together, naming it.
+  # `AIKitMLX` and `AIKitVision` carry `pre_pr_default = false` because they
+  # need the selected Xcode's MetalToolchain component, which a laptop may not
+  # have. A CI agent that can run `AIKitPublicSurface` can run them, because
+  # that scope builds AIKitMLX too; if the component is missing they fail
+  # together, naming it.
+  #
+  # `AIKitVision` joins this step rather than `kagami-gate`: it links mlx-swift
+  # (MLX, MLXNN, MLXRandom), so it shares the Metal compile the other two pay
+  # for instead of forcing a second one in the cheap lane.
   kagami-mlx:
     platform: darwin/arm64
     image: bash
     commands:
       - export PATH="${CI_WORKSPACE}/bin:$PATH"
-      - kagami test --scope AIKitMLX,AIKitPublicSurface --strict
+      - kagami test --scope AIKitMLX,AIKitVision,AIKitPublicSurface --strict
     depends_on: [kagami-gate]

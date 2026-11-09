@@ -293,3 +293,26 @@ timeout_seconds = 600
 # reason to move into this target's expensive lane.
 expected_test_min = 4
 description = "BR-AIL-21: the exported symbol graph equals AIKitPublicAPI.txt, no provider API is public, AIKitMLX exports one registration. Run: kagami test --scope AIKitPublicSurface"
+
+# Moved from Irori's `IroriVision` (2026-11-09). Links mlx-swift, so like
+# AIKitMLX it needs the Metal toolchain and stays out of the pre-PR default.
+# `MLXVisionBackend` tests that need a real device skip themselves.
+# The video fixture awaits AVAssetWriter.finishWriting instead of blocking a
+# cooperative thread on a semaphore: the blocking form hung the whole suite at
+# 0% CPU (it hangs identically in Irori at main).
+[[scopes]]
+name = "AIKitVision"
+# Measured 2026-11-09: 111/115 executed (4 skipped by their own guards).
+expected_test_min = 111
+language = "swift"
+package_path = "."
+test_target_name = "AIKitVisionTests"
+# `module_patterns` beside `test_target_name` for the reason the AIKitLive and
+# AIKitMLX blocks above state: the RUNNER resolves this scope from the target
+# name alone, but `kagami validate-scopes` requires a Swift scope to carry one
+# of modulePatterns / typePatterns / testFilePatterns, and without it this
+# repository's registry fails its own validator.
+module_patterns = ["AIKitVisionTests"]
+pre_pr_default = false
+timeout_seconds = 600
+description = "Vision embeddings (DINOv2, V-JEPA 2, embedding store, battle arena), moved from Irori. Run: kagami test --scope AIKitVision"
