@@ -17,14 +17,15 @@ import Tokenizers
 ///   `mlx-community/Mistral-7B-Instruct-v0.3-4bit`'s `model.safetensors` sits
 ///   in BOTH, 4077480215 bytes each, inodes 939711379 and 939711382, both
 ///   hashing to `d7182d88…503d`. 4 GB spent twice for one model. Everything
-///   here writes under `ModelStore.root` and nowhere else.
+///   here writes under the `models` node of the injected path layer and
+///   nowhere else.
 /// - **a verified download.** `HubApi` compared a local hash to the expected
 ///   one in offline mode only, so a normal download was accepted on its HTTP
 ///   status. Every file that lands here is hashed against the digest the hub
 ///   published, and a mismatch is deleted rather than loaded.
 ///
-/// Reuse comes first and costs nothing: a file already present under a
-/// configured extra root — `~/.lmstudio/models` on a Mac — is verified and
+/// Reuse comes first and costs nothing: a file already present in an injected
+/// external library — LM Studio's, on a Mac — is verified and
 /// **hard-linked**, so a model the operator already downloaded through LM
 /// Studio is not downloaded again and takes no second space.
 ///
@@ -45,7 +46,7 @@ public struct MLXHubDownloader: Downloader {
             _ repository: String,
             _ revision: String,
             _ path: String,
-            _ destination: URL,
+            _ destination: ModelFileDestination,
             _ onBytes: @Sendable @escaping (Int64, Int64) -> Void
         ) async throws -> Void
 
@@ -62,13 +63,16 @@ public struct MLXHubDownloader: Downloader {
     private let onHashProgress: HashProgress?
 
     /// - Parameters:
-    ///   - store: the one root to write under and the roots to reuse from.
+    ///   - store: where to write and which external libraries to reuse from.
+    ///     Injected with no default: W23 of spec
+    ///     ai-layer-aikit-core-2026-10-31 removed `ModelStore`'s own idea of a
+    ///     root, so there is nothing for a default to name.
     ///   - index: how to list a repository's files. Defaults to
     ///     `HuggingFaceClient.files(repoId:revision:)`.
     ///   - transfer: how to fetch one file. Defaults to `ModelDownloader`.
     ///   - onHashProgress: told how far a verification has read.
     public init(
-        store: ModelStore = ModelStore(),
+        store: ModelStore,
         index: FileIndex? = nil,
         transfer: FileTransfer? = nil,
         onHashProgress: HashProgress? = nil
@@ -109,7 +113,7 @@ public struct MLXHubDownloader: Downloader {
         progressHandler: @Sendable @escaping (Progress) -> Void
     ) async throws -> URL {
         let revision = revision ?? "main"
-        let directory = store.directory(forRepository: id)
+        let directory = try store.directory(forRepository: id)
 
         let files = try await selectedFiles(
             id: id,
@@ -120,12 +124,12 @@ public struct MLXHubDownloader: Downloader {
 
         // Already complete: return without moving a byte. This is the second
         // load of the same model, and it is the point of having one root.
-        if !useLatest, store.holdsVerified(files, ofRepository: id) {
+        if !useLatest, try store.holdsVerified(files, ofRepository: id) {
             report(progressHandler, completed: files.totalBytes, total: files.totalBytes)
             return directory
         }
 
-        let held = store.heldPaths(among: files, ofRepository: id)
+        let held = try store.heldPaths(among: files, ofRepository: id)
         let pending = files.filter { !held.contains($0.path) }
         // The unit is BYTES, not a count of files: nine small JSON files and
         // one 4 GB weights file is not "90% done" after the JSON.
@@ -134,13 +138,13 @@ public struct MLXHubDownloader: Downloader {
         report(progressHandler, completed: 0, total: totalBytes)
 
         for file in pending {
-            // The path came from a remote listing, so where it resolves to is
-            // checked rather than trusted.
-            guard let destination = store.destination(for: file, ofRepository: id) else {
-                throw ModelStoreError.pathEscapesStore(file.path)
-            }
+            // The path came from a remote listing, so it is RESOLVED by the
+            // path layer rather than appended: a component that is not a name
+            // is refused there, and `.pathEscapesStore` names it.
+            let destination = try store.destination(for: file, ofRepository: id)
 
-            if let existing = store.locate(file, ofRepository: id, onProgress: hashReporter(file)) {
+            if let existing = try store.locate(
+                file, ofRepository: id, onProgress: hashReporter(file)) {
                 // Verified somewhere else on this machine. A link, so the
                 // bytes are not spent twice.
                 try store.adopt(existing, as: destination)
@@ -185,10 +189,10 @@ public struct MLXHubDownloader: Downloader {
         do {
             return try await index(id, revision).filter { Self.matches($0.path, patterns) }
         } catch {
-            let held = store.receipt(forRepository: id).heldFiles
+            let held = try store.receipt(forRepository: id).heldFiles
             guard !useLatest, !held.isEmpty else { throw error }
             let selected = held.filter { Self.matches($0.path, patterns) }
-            guard store.holdsVerified(selected, ofRepository: id) else { throw error }
+            guard try store.holdsVerified(selected, ofRepository: id) else { throw error }
             return selected
         }
     }
