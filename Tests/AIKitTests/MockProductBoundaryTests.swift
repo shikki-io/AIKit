@@ -1,6 +1,7 @@
 import AIKitTestSupport
 import Foundation
 import Testing
+
 @testable import AIKit
 
 /// T-AIL-51, W26 of spec ai-layer-aikit-core-2026-10-31: the test doubles are
@@ -168,7 +169,8 @@ struct MockProductBoundaryTests {
     func configDeclaresNoBaseline() throws {
         let config = try String(
             contentsOf: Self.packageRoot.appending(path: ".swiftlint.yml"), encoding: .utf8)
-        let declaresBaseline = config
+        let declaresBaseline =
+            config
             .split(separator: "\n")
             .contains { $0.hasPrefix("baseline:") }
         #expect(

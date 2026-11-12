@@ -1,6 +1,7 @@
 import AIKitTestSupport
 import Foundation
 import Testing
+
 @testable import AIKit
 
 @Suite("MLXEngine")
@@ -15,17 +16,17 @@ struct MLXEngineTests {
     }
 
     #if canImport(Darwin) && arch(arm64)
-    @Test("isAvailable returns true on Apple Silicon")
-    func availableOnAppleSilicon() {
-        let engine = MLXEngine()
-        #expect(engine.isAvailable)
-    }
+        @Test("isAvailable returns true on Apple Silicon")
+        func availableOnAppleSilicon() {
+            let engine = MLXEngine()
+            #expect(engine.isAvailable)
+        }
     #else
-    @Test("isAvailable returns false on non-Apple-Silicon")
-    func unavailableOffPlatform() {
-        let engine = MLXEngine()
-        #expect(!engine.isAvailable)
-    }
+        @Test("isAvailable returns false on non-Apple-Silicon")
+        func unavailableOffPlatform() {
+            let engine = MLXEngine()
+            #expect(!engine.isAvailable)
+        }
     #endif
 
     @Test("VideoGenerationOptions defaults are sensible")
@@ -73,34 +74,34 @@ struct MLXEngineTests {
     @Test("Video model catalog has expected entries")
     func videoModelCatalog() {
         #if canImport(Darwin)
-        let catalog = MLXEngine.videoModelCatalog
-        #expect(catalog.count == 4)
+            let catalog = MLXEngine.videoModelCatalog
+            #expect(catalog.count == 4)
 
-        let ids = catalog.map(\.id.modelId)
-        #expect(ids.contains("wan2.1-t2v-1.3b"))
-        #expect(ids.contains("wan2.1-t2v-14b"))
-        #expect(ids.contains("ltx-2"))
-        #expect(ids.contains("wan2.1-i2v-14b"))
+            let ids = catalog.map(\.id.modelId)
+            #expect(ids.contains("wan2.1-t2v-1.3b"))
+            #expect(ids.contains("wan2.1-t2v-14b"))
+            #expect(ids.contains("ltx-2"))
+            #expect(ids.contains("wan2.1-i2v-14b"))
 
-        // All video models should have video domain.
-        for model in catalog {
-            #expect(model.domain == .video)
-            #expect(model.capabilities.contains(.videoGeneration))
-        }
+            // All video models should have video domain.
+            for model in catalog {
+                #expect(model.domain == .video)
+                #expect(model.capabilities.contains(.videoGeneration))
+            }
         #endif
     }
 
     @Test("MLXVideoProvider capabilities include videoGeneration")
     func mlxVideoProviderCapabilities() {
         #if canImport(Darwin)
-        let provider = MLXVideoProvider(
-            id: "test",
-            displayName: "Test Video",
-            pythonPath: "/usr/bin/python3",
-            modelName: "wan2.1-t2v-1.3b"
-        )
-        #expect(provider.capabilities.contains(.videoGeneration))
-        #expect(provider.capabilities.contains(.vision))
+            let provider = MLXVideoProvider(
+                id: "test",
+                displayName: "Test Video",
+                pythonPath: "/usr/bin/python3",
+                modelName: "wan2.1-t2v-1.3b"
+            )
+            #expect(provider.capabilities.contains(.videoGeneration))
+            #expect(provider.capabilities.contains(.vision))
         #endif
     }
 
@@ -127,39 +128,39 @@ struct MLXEngineTests {
     // MARK: - W2: MLXEngine LLM loadModel
 
     #if canImport(Darwin) && arch(arm64)
-    @Test("loadModel LLM domain returns provider advertising synthesis")
-    func loadModelLLMDomain() async throws {
-        let engine = MLXEngine()
-        let descriptor = ModelDescriptor(
-            id: ModelIdentifier(provider: "mlx", modelId: "llama-3.2-3b-instruct-4bit"),
-            name: "Llama 3.2 3B Instruct 4bit",
-            author: "mlx-community",
-            description: "Test LLM model",
-            capabilities: [.textGeneration, .synthesis],
-            format: .mlx,
-            parameters: "3B",
-            sizeBytes: 2_000_000_000 as Int64,
-            architecture: "llama",
-            domain: .llm,
-            huggingFaceId: "mlx-community/Llama-3.2-3B-Instruct-4bit",
-            tags: ["llm", "mlx"]
-        )
+        @Test("loadModel LLM domain returns provider advertising synthesis")
+        func loadModelLLMDomain() async throws {
+            let engine = MLXEngine()
+            let descriptor = ModelDescriptor(
+                id: ModelIdentifier(provider: "mlx", modelId: "llama-3.2-3b-instruct-4bit"),
+                name: "Llama 3.2 3B Instruct 4bit",
+                author: "mlx-community",
+                description: "Test LLM model",
+                capabilities: [.textGeneration, .synthesis],
+                format: .mlx,
+                parameters: "3B",
+                sizeBytes: 2_000_000_000 as Int64,
+                architecture: "llama",
+                domain: .llm,
+                huggingFaceId: "mlx-community/Llama-3.2-3B-Instruct-4bit",
+                tags: ["llm", "mlx"]
+            )
 
-        let provider = try await engine.loadModel(descriptor)
-        #expect(provider.capabilities.contains(.synthesis))
-        #expect(provider.capabilities.contains(.textGeneration))
-        #expect(engine.loadedModels().count == 1)
-    }
-
-    @Test("detectCapabilities includes synthesis on arm64")
-    func detectCapabilitiesIncludesSynthesis() {
-        let engine = MLXEngine()
-        let caps = engine.detectCapabilities()
-        // On arm64 with python3 available, synthesis is advertised.
-        if ShellRunner.commandExists("python3") {
-            #expect(caps.contains(.synthesis))
+            let provider = try await engine.loadModel(descriptor)
+            #expect(provider.capabilities.contains(.synthesis))
+            #expect(provider.capabilities.contains(.textGeneration))
+            #expect(engine.loadedModels().count == 1)
         }
-    }
+
+        @Test("detectCapabilities includes synthesis on arm64")
+        func detectCapabilitiesIncludesSynthesis() {
+            let engine = MLXEngine()
+            let caps = engine.detectCapabilities()
+            // On arm64 with python3 available, synthesis is advertised.
+            if ShellRunner.commandExists("python3") {
+                #expect(caps.contains(.synthesis))
+            }
+        }
     #endif
 
     // MARK: - W2: ProviderRouter synthesis fast-path
