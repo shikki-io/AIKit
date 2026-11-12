@@ -38,10 +38,21 @@ public final class MLXEngine: RuntimeEngine, @unchecked Sendable {
         #endif
     }
 
-    /// Base URL for the mlx_lm.server HTTP endpoint.
-    /// Resolved from: env MLX_LM_BASE_URL → http://localhost:8080/v1
+    /// Server ROOT for the mlx_lm.server HTTP endpoint.
+    ///
+    /// The `/v1` this used to carry is gone: the route belongs to
+    /// ``OpenAIEndPoint``, and an address that carried `/v1` would have been
+    /// posted to as `/v1/v1/chat/completions` — the mistake BR-AIL-09 exists
+    /// to forbid, and the one ``AIServerAddress`` now refuses outright
+    /// (AIKit#18, panel finding on `MLXEngine.swift:44`).
+    ///
+    /// FIXME(spec 8badc87f-e9e0-4bfd-913f-a52f52ba70fc W22): the environment read stays for now. BR-AIL-20 forbids a
+    /// library initializer reading one, and W22 of spec
+    /// ai-layer-aikit-core-2026-10-31 deletes `MLX_LM_BASE_URL` here along with
+    /// `LMSTUDIO_URL` and `LMSTUDIO_MODEL`, replacing all three with a settings
+    /// entry injected through CoreKit DI.
     private static var mlxLMBaseURL: String {
-        ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"] ?? "http://localhost:8080/v1"
+        ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"] ?? "http://localhost:8080"
     }
 
     /// Detect installed MLX models/capabilities.
@@ -85,16 +96,16 @@ public final class MLXEngine: RuntimeEngine, @unchecked Sendable {
                     || descriptor.capabilities.contains(.synthesis) {
             // LLM domain — HTTP-server mode via mlx_lm.server OpenAI-compat endpoint.
             // In-process (MLX Swift bindings) is a future enhancement (spec OQ2).
-            let baseURL = Self.mlxLMBaseURL
             let llmCaps: AICapabilities = [.textGeneration, .synthesis]
-            provider = OpenAIProvider(
-                id: "\(id)/\(descriptor.id.modelId)",
+            provider = try HTTPAIProvider(
+                entry: AIProviderEntry(
+                    id: "\(id)/\(descriptor.id.modelId)",
+                    family: .openAIChat,
+                    address: Self.mlxLMBaseURL,
+                    model: descriptor.huggingFaceId ?? descriptor.id.modelId
+                ),
                 displayName: "\(displayName) — \(descriptor.name)",
-                capabilities: llmCaps,
-                baseURL: baseURL,
-                modelName: descriptor.huggingFaceId ?? descriptor.id.modelId,
-                apiKey: nil,
-                networkService: NetworkService()
+                capabilities: llmCaps
             )
         } else {
             throw AIKitError.engineUnavailable(

@@ -33,20 +33,27 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
 
     // MARK: - MCP Tool Discovery
 
-    /// The configured server as an `AIWireServer`; scheme and host default as before.
-    private var server: AIWireServer {
-        let parsed = URLComponents(string: baseURL)
-        return AIWireServer(
-            scheme: parsed?.scheme ?? "http",
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port
-        )
+    /// The configured server, validated.
+    ///
+    /// Throwing on purpose. What this replaces defaulted a missing scheme to
+    /// `http` and a missing host to `127.0.0.1`, so a misconfigured MCP server
+    /// address sent its call to the local machine instead of reporting the
+    /// mistake (AIKit#18, panel finding on `MCPEngine.swift:37-41`).
+    ///
+    /// NOT an ``AIServerAddress``: an MCP server is addressed WITH its mount
+    /// path (`http://127.0.0.1:9999/mcp`), and `/tools/list` hangs off that
+    /// mount. BR-AIL-18 governs the four AI wire families, whose routes are
+    /// absolute and whose addresses are therefore roots; folding MCP into that
+    /// rule would reject every real MCP URL. The mount travels as the
+    /// endpoint's `apiPath`, which is what that `EndPoint` member is for.
+    private func server() throws(AIKitError) -> MCPServerLocation {
+        try MCPServerLocation(validating: baseURL)
     }
 
     /// Discover tools from the MCP server.
     public func discoverTools() async throws -> [MCPTool] {
         let response: MCPToolsListResponse = try await networkService.sendRequest(
-            endpoint: MCPEndPoint.toolsList(server: server)
+            endpoint: MCPEndPoint.toolsList(server: try server())
         )
         return response.tools
     }
@@ -54,7 +61,7 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
     /// Call an MCP tool by name with arguments.
     public func callTool(name: String, arguments: [String: String]) async throws -> MCPToolResult {
         try await networkService.sendRequest(
-            endpoint: MCPEndPoint.callTool(server: server, name: name, arguments: arguments)
+            endpoint: MCPEndPoint.callTool(server: try server(), name: name, arguments: arguments)
         )
     }
 
@@ -153,6 +160,55 @@ struct MCPCallToolRequest: Codable, Sendable, Equatable {
     let arguments: [String: String]
 }
 
+// MARK: - MCPServerLocation
+
+/// Where an MCP server is mounted: scheme, host, port, and the mount path its
+/// tool routes hang off.
+///
+/// Validated once, with nothing defaulted — the point of the type. A missing
+/// scheme or host is an error naming the value, rather than a quiet rewrite to
+/// `http://127.0.0.1`.
+public struct MCPServerLocation: Sendable, Equatable {
+    public let scheme: String
+    public let host: String
+    public let port: Int?
+    /// The mount path, with no trailing slash. Empty when the server is
+    /// mounted at the root.
+    public let mountPath: String
+
+    /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)``.
+    public init(validating text: String) throws(AIKitError) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw .invalidServerAddress(value: text, reason: "it is empty")
+        }
+        guard let components = URLComponents(string: trimmed) else {
+            throw .invalidServerAddress(value: trimmed, reason: "it is not a URL")
+        }
+        guard let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            throw .invalidServerAddress(
+                value: trimmed,
+                reason: "it names no http or https scheme — write http:// in front of the host"
+            )
+        }
+        guard let host = components.host, !host.isEmpty else {
+            throw .invalidServerAddress(value: trimmed, reason: "it names no host")
+        }
+        self.scheme = scheme
+        self.host = host
+        self.port = components.port
+        var path = components.path
+        while path.hasSuffix("/") { path.removeLast() }
+        self.mountPath = path
+    }
+
+    public var description: String {
+        var text = "\(scheme)://\(host)"
+        if let port { text += ":\(port)" }
+        return text + mountPath
+    }
+}
+
 // MARK: - MCPEndPoint
 
 /// Every call this engine makes to an MCP server, one case each — the same
@@ -160,11 +216,11 @@ struct MCPCallToolRequest: Codable, Sendable, Equatable {
 /// endpoint holds no state.
 enum MCPEndPoint: EndPoint {
     /// `GET /tools/list` — discover the tools a server exposes.
-    case toolsList(server: AIWireServer)
+    case toolsList(server: MCPServerLocation)
     /// `POST /tools/call` — run one tool with string arguments.
-    case callTool(server: AIWireServer, name: String, arguments: [String: String])
+    case callTool(server: MCPServerLocation, name: String, arguments: [String: String])
 
-    private var server: AIWireServer {
+    private var server: MCPServerLocation {
         switch self {
         case .toolsList(let server): server
         case .callTool(let server, _, _): server
@@ -174,7 +230,9 @@ enum MCPEndPoint: EndPoint {
     var scheme: String { server.scheme }
     var host: String { server.host }
     var port: Int? { server.port }
-    var apiPath: String { "" }
+    /// The server's mount path. The tool routes below hang off it, so a server
+    /// at `http://host:9999/mcp` is called at `/mcp/tools/list`.
+    var apiPath: String { server.mountPath }
     var apiFilePath: String { "" }
 
     var path: String {

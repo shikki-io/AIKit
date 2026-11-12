@@ -122,11 +122,20 @@ struct HuggingFaceClientTests {
     }
 
     @Test("Download URL format is correct")
-    func downloadURLFormat() {
+    func downloadURLFormat() throws {
+        // Built by `HuggingFaceEndPoint.resolveFile` now, not interpolated —
+        // and no longer force-unwrapped (AIKit#18 r4500469694).
         let client = HuggingFaceClient(networkService: MockNetworkService())
-        let url = client.downloadURL(repoId: "nvidia/nemotron-3-nano-4b", filename: "model.gguf")
+        let url = try client.downloadURL(repoId: "nvidia/nemotron-3-nano-4b", filename: "model.gguf")
 
         #expect(url.absoluteString == "https://huggingface.co/nvidia/nemotron-3-nano-4b/resolve/main/model.gguf")
+    }
+
+    @Test("a download URL honours an explicit revision")
+    func downloadURLHonoursARevision() throws {
+        let client = HuggingFaceClient(networkService: MockNetworkService())
+        let url = try client.downloadURL(repoId: "a/b", filename: "model.safetensors", revision: "v2.1")
+        #expect(url.absoluteString == "https://huggingface.co/a/b/resolve/v2.1/model.safetensors")
     }
 
     @Test("Search with filter builds request")

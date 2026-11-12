@@ -6,16 +6,21 @@ import Testing
 
 // MARK: - LMStudioProviderTests
 //
-// LM Studio no longer owns a second copy of the OpenAI wire format: it renders
-// a prompt into an `AIRequest`, `OpenAIProvider` sends it, and what comes back
+// LM Studio owns no wire format: it renders a prompt into an `AIRequest`,
+// `HTTPAIProvider` with the `openai-chat` codec sends it, and what comes back
 // is translated into `LMStudioError` so a chain's fallback rule keeps reading
-// the cases it always read. These tests therefore exercise the real path —
-// mock transport, real endpoint, real provider — rather than two helpers that
-// built a dictionary nothing sent (BR-AIL-12: no test reaches a server).
+// the cases it always read. What is LM Studio-specific and stays here is the
+// `AgentProviding` face and the model-MANAGEMENT calls, which live on LM
+// Studio's native API and have no OpenAI equivalent.
 //
-// `OpenAIProviderTests` (T-AIL-07) lives in this file because the wave declares
-// no `OpenAIProviderTests.swift`, and the 200-with-an-error-body path it covers
-// is the same path LM Studio reaches below.
+// These tests exercise the real path — stub transport, real endpoint, real
+// codec, real provider (BR-AIL-12: no test reaches a server).
+//
+// The error mapping is now read from CASES, not from message prefixes. That
+// was a real defect: `mapped(aiKitError:)` decided `.emptyContent` with
+// `message.hasPrefix(AIWireStandard.emptyReplyPrefix(…))`, so one wire event
+// got two verdicts depending on how its sentence had been composed
+// (AIKit#18, panel finding on `LMStudioProvider.swift:150`).
 
 // MARK: - Fixtures
 
@@ -42,7 +47,7 @@ private func makeChatCompletionJSON(content: String) -> Data {
             "total_tokens": 30,
         ],
     ]
-    return try! JSONSerialization.data(withJSONObject: json)
+    return (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
 }
 
 /// An error body, the nested form.
@@ -53,26 +58,26 @@ private func makeErrorJSON(message: String) -> Data {
             "type": "server_error",
         ],
     ]
-    return try! JSONSerialization.data(withJSONObject: json)
+    return (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
 }
 
 private func makeSUT(
     answering data: Data? = nil,
     statusCode: Int = 200,
-    failingWith error: NetworkError? = nil,
+    failingWith error: (any Error)? = nil,
     baseURL: String = "http://127.0.0.1:1234",
     model: String = "qwen-2.5-coder",
     requestTimeout: TimeInterval = 300
-) -> (provider: LMStudioProvider, network: MockNetworkService) {
-    let network = MockNetworkService()
-    network.resultData = data
-    network.statusCode = statusCode
-    network.resultError = error
+) -> (provider: LMStudioProvider, network: MockHTTPTransport) {
+    let network = MockHTTPTransport()
+    network.body = data ?? Data()
+    network.status = statusCode
+    network.error = error
     let provider = LMStudioProvider(
         baseURL: baseURL,
         model: model,
         requestTimeout: requestTimeout,
-        networkService: network
+        transport: network
     )
     return (provider, network)
 }
@@ -90,15 +95,14 @@ struct LMStudioProviderTests {
 
         _ = try await provider.run(prompt: "Hello, world!", timeout: 30)
 
-        #expect(network.capturedRequests.count == 1)
-        let request = try #require(network.capturedRequests.first)
+        #expect(network.sentRequests.count == 1)
+        let request = try #require(network.sentRequest)
         #expect(request.url?.absoluteString == "http://127.0.0.1:1234/v1/chat/completions")
         #expect(request.httpMethod == "POST")
         #expect(request.allHTTPHeaderFields?["Content-Type"] == "application/json")
         #expect(request.allHTTPHeaderFields?["Authorization"] == nil, "a local server takes no bearer token")
 
-        let httpBody = try #require(request.httpBody)
-        let body = try #require(JSONSerialization.jsonObject(with: httpBody) as? [String: Any])
+        let body = try #require(try network.sentBodyObject())
         #expect(body["model"] as? String == "qwen-2.5-coder")
         #expect(body["stream"] as? Bool == false)
         #expect(body["temperature"] as? Double == 0.7)
@@ -121,15 +125,15 @@ struct LMStudioProviderTests {
         // merely exists.
         let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", requestTimeout: 300)
 
-        let within = try #require(provider.provider(timeout: 120).networkService as? TimeoutNetworkService)
-        #expect(within.timeoutInterval == 120)
+        let within = try #require(provider.provider(timeout: 120).network as? URLSessionHTTPTransport)
+        #expect(within.timeout == 120)
 
-        let capped = try #require(provider.provider(timeout: 900).networkService as? TimeoutNetworkService)
-        #expect(capped.timeoutInterval == 300, "requestTimeout is the ceiling")
+        let capped = try #require(provider.provider(timeout: 900).network as? URLSessionHTTPTransport)
+        #expect(capped.timeout == 300, "requestTimeout is the ceiling")
 
-        let endpoint = OpenAIEndPoint.chat(
-            server: AIWireServer(scheme: "http", host: "127.0.0.1", port: 1234),
-            apiKey: nil,
+        let endpoint = OpenAIEndPoint.chatCompletions(
+            address: try AIServerAddress(validating: "http://127.0.0.1:1234"),
+            credential: nil,
             body: ChatCompletionRequest(
                 model: "m",
                 messages: [],
@@ -145,9 +149,9 @@ struct LMStudioProviderTests {
     }
 
     @Test("an injected transport is used as it was given")
-    func injectedTransportIsNotWrapped() {
+    func injectedTransportIsNotWrapped() throws {
         let (provider, network) = makeSUT()
-        #expect(provider.provider(timeout: 30).networkService as? MockNetworkService === network)
+        #expect(try provider.provider(timeout: 30).network as? MockHTTPTransport === network)
     }
 
     // MARK: - The answer
@@ -172,6 +176,19 @@ struct LMStudioProviderTests {
         await #expect(throws: LMStudioProvider.LMStudioError.emptyContent) {
             _ = try await provider.run(prompt: "p", timeout: 30)
         }
+    }
+
+    @Test("an empty reply is recognised by its CASE, not by a message prefix")
+    func emptyReplyIsRecognisedByCase() throws {
+        let target = AIRequestTarget(
+            entryID: "lmstudio",
+            address: try AIServerAddress(validating: "http://127.0.0.1:1234"),
+            route: "/v1/chat/completions"
+        )
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "qwen")
+        #expect(provider.mapped(AIKitError.emptyReply(target: target)) == .emptyContent)
+        // And the verdict does not depend on what the sentence happens to say.
+        #expect(!FallbackProviderChain.isFallbackEligible(LMStudioProvider.LMStudioError.emptyContent))
     }
 
     @Test("a whitespace-only answer is emptyContent")
@@ -219,7 +236,7 @@ struct LMStudioProviderTests {
             #expect(message.contains("Model 'qwen-2.5-coder' is not loaded"))
             #expect(
                 message.contains("http://127.0.0.1:1234/v1/chat/completions"),
-                "the error names the URL it came from"
+                "the error names the target it came from"
             )
             #expect(
                 !FallbackProviderChain.isFallbackEligible(error),
@@ -257,9 +274,12 @@ struct LMStudioProviderTests {
         #expect(FallbackProviderChain.isFallbackEligible(LMStudioProvider.LMStudioError.rateLimited))
     }
 
-    @Test("500 is httpError and does not fall back")
+    @Test("500 keeps the server's text, and the chain falls back on it")
     func httpErrorOn500() async throws {
-        let (provider, _) = makeSUT(answering: Data("{}".utf8), statusCode: 500)
+        let (provider, _) = makeSUT(
+            answering: makeErrorJSON(message: "model crashed"),
+            statusCode: 500
+        )
 
         do {
             _ = try await provider.run(prompt: "p", timeout: 30)
@@ -270,16 +290,34 @@ struct LMStudioProviderTests {
                 return
             }
             #expect(code == 500)
-            #expect(message.contains("http://127.0.0.1:1234"))
+            // BR-AIL-19: a non-2xx keeps the server's own text now. NetKit's
+            // `sendRequest` discarded it, so this used to be the status alone.
+            #expect(message.contains("model crashed"))
+            // A 5xx IS fallback-eligible at the AIKit level: the server broke,
+            // which is a fact about that server. `LMStudioError.httpError` is
+            // the chain's own older vocabulary and keeps its own verdict.
             #expect(!FallbackProviderChain.isFallbackEligible(error))
         }
+    }
+
+    @Test("a 401 is not eligible and a 5xx is, read from the status")
+    func statusDecidesEligibility() throws {
+        let target = AIRequestTarget(
+            entryID: "lmstudio",
+            address: try AIServerAddress(validating: "http://127.0.0.1:1234"),
+            route: "/v1/chat/completions"
+        )
+        #expect(!FallbackEligibility.allows(AIKitError.http(status: 401, body: "no key", target: target)))
+        #expect(FallbackEligibility.allows(AIKitError.http(status: 429, body: "slow down", target: target)))
+        #expect(FallbackEligibility.allows(AIKitError.http(status: 503, body: "busy", target: target)))
+        #expect(!FallbackEligibility.allows(AIKitError.http(status: 404, body: "no route", target: target)))
     }
 
     @Test("a refused connection is connectionRefused and falls back")
     func refusedConnectionFallsBack() async throws {
         // NetKit wraps a transport failure in `.unknown`; the mapping unwraps
         // it, because the `URLError` inside is what decides the fallback.
-        let (provider, _) = makeSUT(failingWith: .unknown(URLError(.cannotConnectToHost)))
+        let (provider, _) = makeSUT(failingWith: NetworkError.unknown(URLError(.cannotConnectToHost)))
 
         do {
             _ = try await provider.run(prompt: "p", timeout: 30)
@@ -294,9 +332,28 @@ struct LMStudioProviderTests {
         }
     }
 
+    @Test("a bare URLError is read the same way as a wrapped one")
+    func aBareURLErrorIsReadTheSameWay() async throws {
+        // The production transport throws `URLError` directly — it does not go
+        // through NetKit's `sendRequest` — so this is the shape that actually
+        // arrives now.
+        let (provider, _) = makeSUT(failingWith: URLError(.cannotConnectToHost))
+
+        do {
+            _ = try await provider.run(prompt: "p", timeout: 30)
+            Issue.record("Expected connectionRefused")
+        } catch let error as LMStudioProvider.LMStudioError {
+            guard case .connectionRefused = error else {
+                Issue.record("Expected connectionRefused, got \(error)")
+                return
+            }
+            #expect(FallbackProviderChain.isFallbackEligible(error))
+        }
+    }
+
     @Test("a timed-out request is connectionRefused, so a slow server falls back")
     func timedOutFallsBack() async throws {
-        let (provider, _) = makeSUT(failingWith: .unknown(URLError(.timedOut)))
+        let (provider, _) = makeSUT(failingWith: NetworkError.unknown(URLError(.timedOut)))
 
         do {
             _ = try await provider.run(prompt: "p", timeout: 30)
@@ -306,9 +363,9 @@ struct LMStudioProviderTests {
         }
     }
 
-    @Test("a non-HTTP answer is invalidResponse")
+    @Test("an answer that is not an HTTP answer is invalidResponse")
     func nonHTTPAnswerIsInvalidResponse() async throws {
-        let (provider, _) = makeSUT(failingWith: .requestFailed(description: "Unexpected HTTP answer"))
+        let (provider, _) = makeSUT(failingWith: AIHTTPTransportError.notAnHTTPResponse)
 
         do {
             _ = try await provider.run(prompt: "p", timeout: 30)
@@ -318,8 +375,28 @@ struct LMStudioProviderTests {
                 Issue.record("Expected invalidResponse, got \(error)")
                 return
             }
-            #expect(message.contains("Unexpected HTTP answer"))
+            #expect(message.contains("not an HTTP answer"))
         }
+    }
+
+    @Test("a misconfigured address is a settings error, never a connection failure")
+    func aBadAddressIsNotAConnectionFailure() async throws {
+        // Falling back here would hide a misconfigured entry behind a working
+        // provider, and the operator would keep an address that never works.
+        let (provider, network) = makeSUT(baseURL: "http://127.0.0.1:1234/v1")
+
+        do {
+            _ = try await provider.run(prompt: "p", timeout: 30)
+            Issue.record("Expected invalidResponse")
+        } catch let error as LMStudioProvider.LMStudioError {
+            guard case .invalidResponse(let message) = error else {
+                Issue.record("Expected invalidResponse, got \(error)")
+                return
+            }
+            #expect(message.contains("/v1"))
+            #expect(!FallbackProviderChain.isFallbackEligible(error))
+        }
+        #expect(network.sentRequests.isEmpty, "nothing is sent to an address that did not validate")
     }
 
     // MARK: - Configuration
@@ -333,39 +410,129 @@ struct LMStudioProviderTests {
     }
 
     @Test("the provider it builds names itself and the configured model")
-    func theBuiltProviderNamesItself() {
+    func theBuiltProviderNamesItself() throws {
         let (provider, _) = makeSUT()
-        let openAI = provider.provider(timeout: 30)
-        #expect(openAI.id == "lmstudio")
-        #expect(openAI.displayName == "LM Studio")
-        #expect(openAI.modelName == "qwen-2.5-coder")
-        #expect(openAI.baseURL == "http://127.0.0.1:1234")
-        #expect(openAI.apiKey == nil)
-        #expect(openAI.capabilities == .textGeneration)
+        let http = try provider.provider(timeout: 30)
+        #expect(http.id == "lmstudio")
+        #expect(http.displayName == "LM Studio")
+        #expect(http.entry.model == "qwen-2.5-coder")
+        #expect(http.entry.address.description == "http://127.0.0.1:1234")
+        #expect(http.entry.family == .openAIChat)
+        #expect(http.credential == nil)
+        // Derived from the codec: chat completions carries tools, so the
+        // provider may claim `.toolUse`. It cannot claim what the codec drops.
+        #expect(http.capabilities.contains(.textGeneration))
+    }
+
+    @Test("the entry it builds carries the provider's own timeout")
+    func theEntryCarriesTheTimeout() throws {
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", requestTimeout: 90)
+        #expect(try provider.entry().requestTimeout == 90)
     }
 }
 
-// MARK: - OpenAIProvider
+// MARK: - Model management
 
-@Suite("OpenAIProvider — a 200 reply can still be a refusal")
-struct OpenAIProviderTests {
+@Suite("LMStudioProvider — the model calls that are LM Studio's own")
+struct LMStudioModelManagementTests {
 
-    /// T-AIL-07. The typed provider, straight: a 200 carrying an error body is
-    /// not a decode failure, it is the server talking, and its words must reach
-    /// the thrown error (BR-AIL-10).
+    /// `GET /v1/models` lists only what is LOADED; LM Studio's native
+    /// `/api/v1/models` lists everything on the host. That is the half of this
+    /// server with no OpenAI equivalent, and the reason this type still exists
+    /// after the wire moved out (AIKit#18 r4493310420).
+    @Test("hostedModels reads LM Studio's native models route")
+    func hostedModelsReadsTheNativeRoute() async throws {
+        let network = MockHTTPTransport()
+        network.body = Data(
+            #"{"data":[{"id":"devstral","type":"llm","is_loaded":true},{"id":"nomic","type":"embeddings"}]}"#.utf8
+        )
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+
+        let models = try await provider.hostedModels()
+        #expect(models.map(\.id) == ["devstral", "nomic"])
+        #expect(models.first?.isLoaded == true)
+        #expect(models.last?.isLoaded == nil)
+    }
+
+    @Test("load posts the model to the documented load route")
+    func loadPostsToTheLoadRoute() async throws {
+        let network = MockHTTPTransport()
+        network.body = Data("{}".utf8)
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+
+        try await provider.load(model: "devstral", contextLength: 8192, ttl: 600)
+
+        let request = try #require(network.sentRequest)
+        #expect(request.url?.absoluteString == "http://127.0.0.1:1234/api/v1/models/load")
+        #expect(request.httpMethod == "POST")
+        let body = try #require(try network.sentBodyObject())
+        #expect(body["model"] as? String == "devstral")
+        #expect(body["context_length"] as? Int == 8192)
+        #expect(body["ttl"] as? Int == 600)
+    }
+
+    @Test("load omits the options the caller did not give")
+    func loadOmitsAbsentOptions() async throws {
+        let network = MockHTTPTransport()
+        network.body = Data("{}".utf8)
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+
+        try await provider.load(model: "devstral")
+
+        let body = try #require(try network.sentBodyObject())
+        #expect(body["context_length"] == nil)
+        #expect(body["ttl"] == nil)
+    }
+
+    @Test("unload posts the model to the documented unload route")
+    func unloadPostsToTheUnloadRoute() async throws {
+        let network = MockHTTPTransport()
+        network.body = Data("{}".utf8)
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+
+        try await provider.unload(model: "devstral")
+
+        #expect(network.sentRequest?.url?.absoluteString == "http://127.0.0.1:1234/api/v1/models/unload")
+        #expect(try network.sentBodyObject()?["model"] as? String == "devstral")
+    }
+
+    @Test("a management call that is refused throws, naming the status and the route")
+    func aRefusedManagementCallThrows() async throws {
+        let network = MockHTTPTransport()
+        network.status = 404
+        network.body = Data(#"{"error":{"message":"model not found"}}"#.utf8)
+        let provider = LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+
+        let error = await #expect(throws: AIKitError.self) {
+            try await provider.load(model: "no-such-model")
+        }
+        guard case .http(let status, let body, let target) = try #require(error) else {
+            Issue.record("expected .http, got \(String(describing: error))")
+            return
+        }
+        #expect(status == 404)
+        #expect(body.contains("model not found"))
+        #expect(target.route == "/api/v1/models/load")
+    }
+}
+
+// MARK: - A 200 can still be a refusal
+
+@Suite("HTTPAIProvider — a 200 reply can still be a refusal")
+struct HTTPAIProviderErrorSurfacingTests {
+
+    /// T-AIL-07. A 2xx carrying an error body is not a decode failure, it is
+    /// the server talking, and its words must reach the thrown error
+    /// (BR-AIL-10).
     @Test("errorBodyOn200 puts the server's text in the thrown error")
     func errorBodyOn200() async throws {
-        let network = MockNetworkService()
-        network.resultData = try JSONSerialization.data(withJSONObject: [
+        let network = MockHTTPTransport()
+        network.body = try JSONSerialization.data(withJSONObject: [
             "error": ["message": "Unexpected endpoint or method. (POST /v1/v1/chat/completions)"]
         ])
-        let provider = OpenAIProvider(
-            id: "openai-compatible",
-            displayName: "OpenAI Compatible",
-            capabilities: .textGeneration,
-            baseURL: "http://127.0.0.1:1234",
-            modelName: "any",
-            networkService: network
+        let provider = try HTTPAIProvider(
+            entry: try makeFixtureEntry(family: .openAIChat, id: "openai-compatible"),
+            network: network
         )
 
         do {
@@ -385,19 +552,15 @@ struct OpenAIProviderTests {
 
     @Test("a completion still decodes, and names the provider that answered")
     func completionStillDecodes() async throws {
-        let network = MockNetworkService()
-        network.resultData = Data(
+        let network = MockHTTPTransport()
+        network.body = Data(
             """
             {"id":"chatcmpl-1","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},
             "finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
             """.utf8)
-        let provider = OpenAIProvider(
-            id: "lmstudio",
-            displayName: "LM Studio",
-            capabilities: .textGeneration,
-            baseURL: "http://127.0.0.1:1234",
-            modelName: "qwen",
-            networkService: network
+        let provider = try HTTPAIProvider(
+            entry: try makeFixtureEntry(family: .openAIChat, model: "qwen"),
+            network: network
         )
 
         let response = try await provider.complete(
@@ -409,22 +572,19 @@ struct OpenAIProviderTests {
         #expect(response.tokensUsed.total == 3)
     }
 
-    @Test("the empty-reply message is the one LMStudioProvider matches on")
-    func emptyReplyMessageIsShared() async throws {
-        // Generator and matcher read one constant: this asserts the agreement
-        // rather than assuming two copies of a sentence stay equal.
-        let network = MockNetworkService()
-        network.resultData = try JSONSerialization.data(withJSONObject: [
+    @Test("an empty reply is a case LMStudioProvider maps without reading a sentence")
+    func emptyReplyIsSharedByCase() async throws {
+        // Generator and matcher agree on a CASE. This used to be two copies of
+        // a sentence kept equal by a shared constant, which worked only as long
+        // as nothing else composed a message that happened to match it.
+        let network = MockHTTPTransport()
+        network.body = try JSONSerialization.data(withJSONObject: [
             "id": "chatcmpl-empty",
             "choices": [] as [[String: Any]],
         ])
-        let provider = OpenAIProvider(
-            id: "lmstudio",
-            displayName: "LM Studio",
-            capabilities: .textGeneration,
-            baseURL: "http://127.0.0.1:1234",
-            modelName: "qwen",
-            networkService: network
+        let provider = try HTTPAIProvider(
+            entry: try makeFixtureEntry(family: .openAIChat, model: "qwen"),
+            network: network
         )
 
         do {
@@ -433,12 +593,12 @@ struct OpenAIProviderTests {
             )
             Issue.record("Expected a thrown error")
         } catch {
-            guard case .requestFailed(let message) = error as? AIKitError else {
-                Issue.record("Expected AIKitError.requestFailed, got \(error)")
+            guard case .emptyReply(let target) = error as? AIKitError else {
+                Issue.record("Expected AIKitError.emptyReply, got \(error)")
                 return
             }
-            #expect(message.hasPrefix(AIWireStandard.emptyReplyPrefix(.openAIChat)))
-            #expect(message.contains("http://127.0.0.1:1234/v1/chat/completions"))
+            #expect(target.route == "/v1/chat/completions")
+            #expect(target.address.description == "http://127.0.0.1:1234")
             #expect(LMStudioProvider(model: "qwen").mapped(error) == .emptyContent)
         }
     }

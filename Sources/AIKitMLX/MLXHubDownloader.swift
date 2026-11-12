@@ -80,7 +80,7 @@ public struct MLXHubDownloader: Downloader {
             }
         self.transfer =
             transfer ?? { repository, revision, path, destination, onBytes in
-                let url = HuggingFaceClient()
+                let url = try HuggingFaceClient()
                     .downloadURL(repoId: repository, filename: path, revision: revision)
                 try await ModelDownloader().download(from: url, to: destination) { progress in
                     onBytes(progress.bytesDownloaded, progress.totalBytes ?? 0)

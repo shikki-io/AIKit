@@ -1,12 +1,16 @@
 import Foundation
 
-// Request and reply shapes for the wire standards other than chat completions,
+// Request and reply shapes for the HTTP families other than chat completions,
 // whose DTOs already live in `OpenAIDTOs.swift` and are reused as they are.
 //
-// Every shape here was read off a real reply, captured from the operator's LM
-// Studio on 2026-10-31 with
-// `mistralai_devstral-small-2-24b-instruct-2512-mlx` loaded. Fields the server
-// sends but AIKit has no use for (`logprobs`, `annotations`,
+// Every reply shape here was read off a real reply, captured from the
+// operator's LM Studio on 2026-10-31 and re-measured on 2026-11-12 with
+// `mistralai_devstral-small-2-24b-instruct-2512-mlx` loaded. Every REQUEST
+// shape is from the provider's own captured reference (cited on each family's
+// `EndPoint` enum) and, where a field's behaviour mattered, confirmed against
+// the live server.
+//
+// Fields the server sends but AIKit has no use for (`logprobs`, `annotations`,
 // `system_fingerprint`, `runtime`, `model_info`) are left undeclared on
 // purpose: `JSONDecoder` ignores unknown keys, and declaring them would be a
 // second place to maintain a shape nothing reads.
@@ -21,14 +25,29 @@ import Foundation
 // and the snake_case wire keys mean every one of these needs its own
 // `CodingKeys`. Prefixed names carry the grouping instead.
 
+// MARK: - Body encoding
+
+/// Encodes a request body to a JSON object, once, so an encoding failure
+/// reaches the caller as a thrown error rather than a bodyless request.
+func encodeWireJSONObject<Body: Encodable>(_ body: Body, label: String) throws -> [String: Any] {
+    let data = try JSONEncoder().encode(body)
+    guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        throw EncodingError.invalidValue(
+            body,
+            .init(codingPath: [], debugDescription: "Request body for \(label) did not encode to a JSON object")
+        )
+    }
+    return object
+}
+
 // MARK: - Shared
 
-/// The error body every one of these three surfaces answers with, in both forms
+/// The error body every one of these surfaces answers with, in both forms
 /// seen in the wild: `{"error": {"message": "…"}}` and the bare
 /// `{"error": "…"}`.
 ///
-/// One decoder rather than three copies: the three envelopes below differ in
-/// what their SUCCESS shape is, not in how they say something went wrong.
+/// One decoder rather than four copies: the envelopes below differ in what
+/// their SUCCESS shape is, not in how they say something went wrong.
 struct WireErrorBody: Decodable, Sendable {
     let message: String
 
@@ -75,13 +94,42 @@ func wireErrorMessage(in decoder: Decoder) throws -> String? {
     return try container.decode(WireErrorBody.self, forKey: .error).message
 }
 
+// MARK: - OpenAI completions — /v1/completions
+
+/// Request body for the legacy `POST /v1/completions`.
+///
+/// Declared because the API documents the route (BR-AIL-16). No AIKit caller
+/// builds one today; `AIRequest` is a conversation and this surface takes a
+/// bare prompt, so a codec for it would be a lossy mapping nothing has asked
+/// for.
+struct CompletionsRequest: Encodable, Sendable, Equatable {
+    let model: String
+    let prompt: String
+    let maxTokens: Int?
+    let temperature: Double?
+    let stream: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case model, prompt, temperature, stream
+        case maxTokens = "max_tokens"
+    }
+}
+
+// MARK: - OpenAI embeddings — /v1/embeddings
+
+/// Request body for `POST /v1/embeddings`. Declared for the reason above.
+struct EmbeddingsRequest: Encodable, Sendable, Equatable {
+    let model: String
+    let input: [String]
+}
+
 // MARK: - OpenAI responses — /v1/responses
 
 /// Request body for `/v1/responses`.
 ///
 /// `input` takes the role array (measured: HTTP 200, and `input_tokens` rises
 /// with the system text, so the server reads it). The system prompt goes in
-/// `instructions`, which is this standard's own field for it rather than a
+/// `instructions`, which is this surface's own field for it rather than a
 /// pseudo-message — the reply echoes it back verbatim.
 struct ResponsesRequest: Encodable, Sendable {
     let model: String
@@ -98,7 +146,7 @@ struct ResponsesRequest: Encodable, Sendable {
 }
 
 /// One turn in a `/v1/responses` request.
-struct ResponsesInputMessage: Encodable, Sendable {
+struct ResponsesInputMessage: Encodable, Sendable, Equatable {
     let role: String
     let content: String
 }
@@ -169,6 +217,31 @@ struct ResponsesUsage: Decodable, Sendable {
     }
 }
 
+/// One SSE event from a streamed `/v1/responses`.
+///
+/// Captured 2026-11-12. The stream is a long sequence of typed events
+/// (`response.created`, `response.in_progress`,
+/// `response.output_item.added`, `response.content_part.added`, …); the two
+/// that carry the answer are the ones read here:
+///
+/// ```
+/// event: response.output_text.delta
+/// data: {"type":"response.output_text.delta","delta":"p",…}
+/// event: response.completed
+/// data: {"type":"response.completed","response":{…}}
+/// ```
+///
+/// The `event:` label repeats the payload's own `type`, so the payload alone is
+/// enough and nothing has to track which event it is inside.
+struct ResponsesStreamEvent: Decodable, Sendable {
+    let type: String
+    /// Present on `response.output_text.delta`, and only there.
+    let delta: String?
+
+    static let textDelta = "response.output_text.delta"
+    static let completed = "response.completed"
+}
+
 // MARK: - Anthropic messages — /v1/messages
 
 /// Request body for `/v1/messages`.
@@ -191,8 +264,19 @@ struct AnthropicMessagesRequest: Encodable, Sendable {
     }
 }
 
+/// Request body for `/v1/messages/count_tokens`.
+///
+/// The same conversation as a message request, minus everything about
+/// generating: the route counts what would be sent. Declared because the API
+/// documents it (BR-AIL-16); no AIKit caller builds one today.
+struct AnthropicCountTokensRequest: Encodable, Sendable {
+    let model: String
+    let messages: [AnthropicMessage]
+    let system: String?
+}
+
 /// One turn in a `/v1/messages` request.
-struct AnthropicMessage: Encodable, Sendable {
+struct AnthropicMessage: Encodable, Sendable, Equatable {
     let role: String
     let content: String
 }
@@ -200,7 +284,7 @@ struct AnthropicMessage: Encodable, Sendable {
 /// One reply from `/v1/messages`, in either shape the surface answers with.
 ///
 /// Anthropic's error envelope is `{"type": "error", "error": {…}}`, so the
-/// discriminator is the nested error object just as it is for the other two.
+/// discriminator is the nested error object just as it is for the others.
 enum AnthropicMessagesReply: Decodable, Sendable {
     case message(AnthropicMessagesResponseDTO)
     case serverError(message: String)
@@ -255,42 +339,115 @@ struct AnthropicUsage: Decodable, Sendable {
     }
 }
 
+/// One SSE event from a streamed `/v1/messages`.
+///
+/// Captured 2026-11-12:
+///
+/// ```
+/// event: content_block_delta
+/// data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"p"}}
+/// event: message_stop
+/// data: {"type":"message_stop"}
+/// ```
+///
+/// `message_start`, `content_block_start`, `content_block_stop` and
+/// `message_delta` also arrive and carry no answer text.
+struct AnthropicStreamEvent: Decodable, Sendable {
+    let type: String
+    let delta: AnthropicStreamDelta?
+
+    static let contentBlockDelta = "content_block_delta"
+    static let messageStop = "message_stop"
+}
+
+/// The `delta` of a `content_block_delta`. `text` is nil for a delta that is
+/// not a `text_delta` — a `thinking_delta` or an `input_json_delta`.
+struct AnthropicStreamDelta: Decodable, Sendable {
+    let type: String?
+    let text: String?
+}
+
 // MARK: - LM Studio native — /api/v1/chat
 
 /// Request body for `/api/v1/chat`.
 ///
-/// Measured, and narrower than it looks:
-/// - `input` is a prompt string. A role array is rejected outright
-///   (`Invalid discriminator value. Expected 'text' | 'image'`), so this
-///   standard has no conversation shape at this version and the prompt is
-///   flattened by `AIWirePromptFlattening`.
-/// - `max_tokens` is **rejected** (`Unrecognized key(s) in object:
-///   'max_tokens'`); the budget field is `max_output_tokens`.
-/// - `temperature` and `stream` are accepted.
+/// Documented and measured; see ``LMStudioEndPoint`` for the capture and the
+/// three request shapes the server refuses. In short: `input` is a typed-part
+/// array with no roles, the system prompt is the top-level `system_prompt`, and
+/// the budget field is `max_output_tokens` (`max_tokens` is a 400).
 ///
-/// Every field but `input` and `model` is therefore optional and omitted when
-/// nil, because an unrecognised key is a 400 on this surface rather than
-/// something the server ignores.
+/// Every field but `input` and `model` is optional and omitted when nil,
+/// because an unrecognised key is a 400 on this surface rather than something
+/// the server ignores.
 struct LMStudioNativeRequest: Encodable, Sendable {
     let model: String
-    let input: String
+    let input: [LMStudioInputPart]
+    let systemPrompt: String?
     let temperature: Double?
     let maxOutputTokens: Int?
     let stream: Bool?
 
     enum CodingKeys: String, CodingKey {
         case model, input, temperature, stream
+        case systemPrompt = "system_prompt"
         case maxOutputTokens = "max_output_tokens"
     }
 }
 
+/// One part of an `/api/v1/chat` `input` array.
+///
+/// The discriminator is `type`, and its value decides which other key is
+/// required: `text` wants `content`, `image` wants `data_url`. Measured —
+/// sending `{"type":"text","text":…}` answers `'input.0.content' is required,
+/// Unrecognized key(s) in object: 'text'`.
+struct LMStudioInputPart: Encodable, Sendable, Equatable {
+    let type: String
+    let content: String?
+    let dataURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, content
+        case dataURL = "data_url"
+    }
+
+    /// A text part, the only kind AIKit sends today.
+    static func text(_ content: String) -> LMStudioInputPart {
+        LMStudioInputPart(type: "text", content: content, dataURL: nil)
+    }
+}
+
+/// Request body for `POST /api/v1/models/load`.
+///
+/// Declared because the API documents the route (BR-AIL-16).
+struct LMStudioModelLoadRequest: Encodable, Sendable, Equatable {
+    let model: String
+    /// Context length to load with, when the caller wants one. Omitted
+    /// otherwise, so the host's own default applies.
+    let contextLength: Int?
+    /// Seconds of idleness after which the host may evict the model.
+    let ttl: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case model, ttl
+        case contextLength = "context_length"
+    }
+}
+
+/// Request body for `POST /api/v1/models/unload`.
+struct LMStudioModelUnloadRequest: Encodable, Sendable, Equatable {
+    let model: String
+}
+
+/// Request body for `POST /api/v1/models/download`.
+struct LMStudioModelDownloadRequest: Encodable, Sendable, Equatable {
+    let model: String
+}
+
 /// One reply from `/api/v1/chat`, in either shape the surface answers with.
 ///
-/// This is the one surface measured to *validate* the request: an unknown model
+/// This is the one family measured to *validate* the request: an unknown model
 /// is HTTP 404 with an error body, where the three others silently answer with
-/// whatever is loaded. NetKit turns a non-2xx into `NetworkError` before a body
-/// is decoded, so the error case here covers the 200-with-an-error-body shape
-/// the others share.
+/// whatever is loaded.
 enum LMStudioNativeReply: Decodable, Sendable {
     case response(LMStudioNativeResponseDTO)
     case serverError(message: String)
@@ -312,7 +469,7 @@ enum LMStudioNativeReply: Decodable, Sendable {
 /// matches neither server.
 struct LMStudioNativeResponseDTO: Decodable, Sendable {
     let responseId: String?
-    /// The loaded model instance that answered — this standard's `model` field.
+    /// The loaded model instance that answered — this surface's `model` field.
     let modelInstanceId: String?
     let output: [LMStudioNativeOutputItem]
     let stats: LMStudioNativeStats?
@@ -344,4 +501,26 @@ struct LMStudioNativeStats: Decodable, Sendable {
         case inputTokens = "input_tokens"
         case totalOutputTokens = "total_output_tokens"
     }
+}
+
+/// One SSE event from a streamed `/api/v1/chat`.
+///
+/// Captured 2026-11-12. This family streams its own lifecycle as well as the
+/// answer — `chat.start`, `prompt_processing.start`,
+/// `prompt_processing.progress`, `message.start`, `message.delta`,
+/// `message.end`, `chat.end` — and only the two read here carry an answer:
+///
+/// ```
+/// event: message.delta
+/// data: {"type":"message.delta","content":"p"}
+/// event: chat.end
+/// data: {"type":"chat.end","result":{…}}
+/// ```
+struct LMStudioStreamEvent: Decodable, Sendable {
+    let type: String
+    /// Present on `message.delta`, and only there.
+    let content: String?
+
+    static let messageDelta = "message.delta"
+    static let chatEnd = "chat.end"
 }
