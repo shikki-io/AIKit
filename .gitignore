@@ -29,3 +29,18 @@
 # CoreKit TestScratch: run-scoped test fixtures, swept by the suite that made
 # them. Never tracked — a crashed run leaves its tree behind.
 .tests/
+
+# shikki wave-engine scratch, dropped into the working directory of a dispatched
+# unit and NEVER a repository artifact (W26 of spec
+# ai-layer-aikit-core-2026-10-31, operator thread AIKit#18 r4500609852).
+#
+# `.shikki-unit-gate.json` reached this repo through the engine's own
+# `feat(agent): unit unit-w6 generated files (auto-commit)` commit (bbd9721):
+# the auto-commit stages the working directory, so the engine committed its own
+# per-unit verdict file ({"lastVerdict":"GREEN_STALE","unitId":"unit-w6"}) as if
+# it were source. It then sat in the PR, naming a wave six revisions old and
+# telling a reviewer nothing true about the branch. Ignoring the three paths the
+# engine writes stops the next auto-commit repeating it.
+.shikki-unit-gate.json
+.shikki-spec.md
+.shikki/

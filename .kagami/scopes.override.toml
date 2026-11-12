@@ -19,20 +19,24 @@ type_patterns = ["Tests"]
 # the top level, and the old single-star glob described only the top level.
 test_file_patterns = ["**/AIKitTests/**/*.swift"]
 timeout_seconds = 300
-# Measured 2026-11-12 at the W20 commit of spec ai-layer-aikit-core-2026-10-31:
-# `kagami test --scope AIKitAll --strict` reported 512/512 (run
-# C5CFF147-686B-40A6-AD62-1CA014722C3D). The previous floor was 413, measured
-# at the W13 commit; before that 257 at 046a8fb (W1), when the target held 258
-# tests with 1 skipped.
+# Measured 2026-11-12 at the W26 commit of spec ai-layer-aikit-core-2026-10-31:
+# `kagami test --scope AIKitAll --strict` reported 585/585 (run
+# E8533D1A-0789-4F28-9EEB-42A36B72825F). The base for that run — W20 with W23
+# and W25 consolidated onto it, ffd489b — measured 578/578 (run
+# A11AD1D4-E061-46B7-8C02-3A6CB6AA893E), and W26's `MockProductBoundaryTests`
+# adds the 7 between them.
 #
-# W20 replaced `WireStandardTests` and its two extensions with the route-SSoT,
+# Earlier floors: 512 measured at the W20 commit, 413 at W13, 257 at 046a8fb
+# (W1), when the target held 258 tests with 1 skipped. W20 replaced
+# `WireStandardTests` and its two extensions with the route-SSoT,
 # codec-refusal and one-entry-point suites (EndPointRouteTests, WireCodecTests,
-# HTTPAIProviderTests, AIServerAddressTests), which is a net +99.
+# HTTPAIProviderTests, AIServerAddressTests), a net +99; W23 and W25 carried
+# the rest of the way to 578.
 #
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 512
+expected_test_min = 585
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]

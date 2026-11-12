@@ -1,6 +1,11 @@
+import AIKit
 import Foundation
 
 /// Mock runtime engine for testing.
+///
+/// **A test double.** It loads no weights: `loadModel` hands back a
+/// ``MockAIProvider`` and records the identifier. Lives in `AIKitTestSupport`,
+/// not `AIKit`, so a shipping target cannot name it (W26, r4500328752).
 public final class MockRuntimeEngine: RuntimeEngine, @unchecked Sendable {
     public let id: String
     public let displayName: String

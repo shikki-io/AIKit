@@ -293,6 +293,26 @@ public enum ClaudeSessionIndex {
         return (cwd, topic)
     }
 
+    /// The character a JSON `\`-escape stands for.
+    ///
+    /// Split out of ``extractStringField(json:key:)`` so the scanner is one
+    /// loop over three cases and this table is a table. It carried the
+    /// scanner's cyclomatic complexity to 12 while adding no decision to the
+    /// scan itself.
+    ///
+    /// An unknown escape yields the character as written, which is what the
+    /// transcript lines this reads actually need: `\u` sequences are not
+    /// decoded (no transcript field has one), and dropping the pair entirely
+    /// would silently shorten a topic.
+    private static func unescaped(_ escape: Character) -> Character {
+        switch escape {
+        case "n": "\n"
+        case "t": "\t"
+        case "r": "\r"
+        default: escape
+        }
+    }
+
     /// Extract `"<key>":"<value>"` from a JSON line, handling standard escapes.
     /// Returns nil when the key is absent or the value is not a string.
     static func extractStringField(json: String, key: String) -> String? {
@@ -305,16 +325,7 @@ public enum ClaudeSessionIndex {
             if ch == "\\" {
                 let next = json.index(after: iter)
                 guard next < json.endIndex else { break }
-                let esc = json[next]
-                switch esc {
-                case "n": result.append("\n")
-                case "t": result.append("\t")
-                case "r": result.append("\r")
-                case "\"": result.append("\"")
-                case "\\": result.append("\\")
-                case "/": result.append("/")
-                default: result.append(esc)
-                }
+                result.append(unescaped(json[next]))
                 iter = json.index(after: next)
             } else if ch == "\"" {
                 return result

@@ -10,7 +10,7 @@ struct HuggingFaceClientTests {
     // MARK: - HFModelInfo decoding
 
     private func sampleJSON() -> Data {
-        """
+        let json = """
         [
             {
                 "modelId": "nvidia/nemotron-3-nano-4b",
@@ -33,11 +33,12 @@ struct HuggingFaceClientTests {
                 "library_name": "transformers"
             }
         ]
-        """.data(using: .utf8)!
+        """
+        return Data(json.utf8)
     }
 
     private func singleModelJSON() -> Data {
-        """
+        let json = """
         {
             "modelId": "nvidia/nemotron-3-nano-4b",
             "author": "nvidia",
@@ -48,7 +49,8 @@ struct HuggingFaceClientTests {
             "pipeline_tag": "text-generation",
             "library_name": "transformers"
         }
-        """.data(using: .utf8)!
+        """
+        return Data(json.utf8)
     }
 
     @Test("Search parses response from mock network")
@@ -142,7 +144,7 @@ struct HuggingFaceClientTests {
     @Test("Search with filter builds request")
     func searchWithFilter() async throws {
         let mock = MockNetworkService()
-        mock.resultData = "[]".data(using: .utf8)!
+        mock.resultData = Data("[]".utf8)
 
         let client = HuggingFaceClient(networkService: mock)
         let filter = HFSearchFilter(
