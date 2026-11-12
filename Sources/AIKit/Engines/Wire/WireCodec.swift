@@ -10,59 +10,36 @@ import NetKit
 /// forget to perform it. This is the half that was missing: every codec knew
 /// how to build its body and none of them said what it could not hold, so
 /// fields were dropped in silence.
-public struct WireCodecCapabilities: Sendable, Equatable {
+struct WireCodecCapabilities: Sendable, Equatable {
 
     /// Roles this wire can keep as roles. A role outside the set is refused —
     /// never flattened into `"role: text"`, which forged a transcript the
     /// model then read as content (AIKit#18, `AIWireStandard.swift:310-322`).
-    public let roles: Set<AIMessage.Role>
+    let roles: Set<AIMessage.Role>
     /// Whether a system prompt has somewhere to go.
-    public let systemPrompt: Bool
+    let systemPrompt: Bool
     /// Whether tool definitions are carried onto this wire by this codec.
-    public let tools: Bool
+    let tools: Bool
     /// Response formats this codec sends. Empty means it sends none.
-    public let responseFormats: Set<ResponseFormat>
+    let responseFormats: Set<ResponseFormat>
     /// Media input kinds this codec carries. Empty means it carries none.
-    public let inputKinds: Set<AIMediaKind>
+    let inputKinds: Set<AIMediaKind>
     /// Whether this codec can read a streamed reply.
-    public let streaming: Bool
-
-    public init(
-        roles: Set<AIMessage.Role>,
-        systemPrompt: Bool,
-        tools: Bool,
-        responseFormats: Set<ResponseFormat>,
-        inputKinds: Set<AIMediaKind>,
-        streaming: Bool
-    ) {
-        self.roles = roles
-        self.systemPrompt = systemPrompt
-        self.tools = tools
-        self.responseFormats = responseFormats
-        self.inputKinds = inputKinds
-        self.streaming = streaming
-    }
+    let streaming: Bool
 }
 
 // MARK: - WireReplyContext
 
 /// What a codec needs to turn bytes into an ``AIResponse``.
-public struct WireReplyContext: Sendable, Equatable {
+struct WireReplyContext: Sendable, Equatable {
     /// Where the request went, for an error that must name it.
-    public let target: AIRequestTarget
+    let target: AIRequestTarget
     /// The model that was ASKED for — used only when the reply names none.
-    public let requestedModel: String
+    let requestedModel: String
     /// The id every answer carries (BR-AIL-06).
-    public let providerID: String
+    let providerID: String
     /// Measured round trip.
-    public let latencyMs: Int
-
-    public init(target: AIRequestTarget, requestedModel: String, providerID: String, latencyMs: Int) {
-        self.target = target
-        self.requestedModel = requestedModel
-        self.providerID = providerID
-        self.latencyMs = latencyMs
-    }
+    let latencyMs: Int
 }
 
 // MARK: - WireEndPoint
@@ -92,7 +69,7 @@ protocol WireEndPoint: EndPoint {
 /// nothing about transports, retries, fallback or provenance — that is
 /// ``HTTPAIProvider``'s half — and nothing about routes, which belong to the
 /// family's `EndPoint` enum (BR-AIL-16).
-public protocol WireCodec: Sendable {
+protocol WireCodec: Sendable {
 
     /// The family this codec speaks for.
     var family: AIProviderFamily { get }
@@ -153,7 +130,7 @@ extension WireCodec {
     /// in `body(for:model:stream:)`.
     ///
     /// - Throws: ``AIKitError/unsupported(field:family:)`` naming the field.
-    public func refuseWhatItCannotCarry(_ request: AIRequest, streaming: Bool) throws(AIKitError) {
+    func refuseWhatItCannotCarry(_ request: AIRequest, streaming: Bool) throws(AIKitError) {
         if streaming, !capabilities.streaming {
             throw .unsupported(field: "stream", family: family)
         }

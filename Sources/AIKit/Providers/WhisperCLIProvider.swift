@@ -27,7 +27,7 @@ extension AIRequest {
     ///   when the provider cannot hear at all, and
     ///   ``AIKitError/requestFailed(_:)`` when the provider can hear but the
     ///   request carries nothing for it to listen to.
-    public func audioInput(servedBy capabilities: AICapabilities) throws -> AIInput {
+    func audioInput(servedBy capabilities: AICapabilities) throws -> AIInput {
         guard capabilities.contains(.voiceToText) else {
             throw AIKitError.noProviderAvailable(.voiceToText)
         }
@@ -54,7 +54,7 @@ extension AIRequest {
     ///
     /// - Parameter capabilities: the serving provider's `AICapabilities`.
     /// - Throws: ``AIKitError/noProviderAvailable(_:)`` with `.voiceToText`.
-    public func rejectUnservableAudio(by capabilities: AICapabilities) throws {
+    func rejectUnservableAudio(by capabilities: AICapabilities) throws {
         guard inputs.contains(where: { $0.kind == .audio }) else { return }
         // Derived from the same rule rather than restating it: one capability
         // decision, two entry points.
@@ -109,7 +109,7 @@ extension AIRequest {
     ///   **empty** `.txt`. Exit 0 is not proof of a transcript, which is why
     ///   an empty result throws ``TranscriptionError/emptyTranscript(_:)``
     ///   instead of being returned as a successful empty answer.
-    public struct WhisperCLIProvider: AIProvider, Sendable {
+    struct WhisperCLIProvider: AIProvider, Sendable {
 
         // MARK: - Errors
 
@@ -118,7 +118,7 @@ extension AIRequest {
         /// Every case names what was missing or what the binary said. None of
         /// them is reachable with a transcript in hand, so a caller that gets
         /// a value back got real text.
-        public enum TranscriptionError: Error, LocalizedError, Equatable {
+        enum TranscriptionError: Error, LocalizedError, Equatable {
             /// `binaryPath` is not an executable file.
             case binaryNotFound(String)
             /// `weightsPath` does not exist.
@@ -136,7 +136,7 @@ extension AIRequest {
             /// The binary succeeded and produced no words.
             case emptyTranscript(String)
 
-            public var errorDescription: String? {
+            var errorDescription: String? {
                 switch self {
                 case .binaryNotFound(let path):
                     "whisper-cli not found at \(path). Install: brew install whisper-cpp"
@@ -161,26 +161,26 @@ extension AIRequest {
 
         // MARK: - AIProvider
 
-        public let id: String
-        public let displayName: String
+        let id: String
+        let displayName: String
 
         /// Voice, and only voice. A request with no audio is refused by
         /// ``AIRequest/audioInput(servedBy:)``, not served as text.
-        public let capabilities: AICapabilities = [.voiceToText]
+        let capabilities: AICapabilities = [.voiceToText]
 
         // MARK: - Configuration
 
         /// Absolute path to `whisper-cli` (or `whisper-cpp`).
-        public let binaryPath: String
+        let binaryPath: String
 
         /// Absolute path to the GGML weights, e.g. `ggml-large-v3-turbo.bin`.
-        public let weightsPath: String
+        let weightsPath: String
 
         /// BCP-47 language code, or `"auto"` to let the model detect it.
-        public let language: String
+        let language: String
 
         /// Hard wall-clock limit for one transcription.
-        public let timeout: TimeInterval
+        let timeout: TimeInterval
 
         // MARK: - Collaborators
 
@@ -205,7 +205,7 @@ extension AIRequest {
         ///   - executor: shell executor; `TimedShellExecutor` drains both pipes
         ///     and kills on timeout, which a bare `Process` does not.
         ///   - logger: diagnostic logger.
-        public init(
+        init(
             id: String = "whisper-cli",
             displayName: String = "Whisper (whisper.cpp)",
             binaryPath: String,
@@ -232,7 +232,7 @@ extension AIRequest {
         /// Reported as `.unavailable` rather than `.error` because nothing is
         /// broken: whisper.cpp simply is not installed here, and a router
         /// should move on to the next provider.
-        public var status: AIProviderStatus {
+        var status: AIProviderStatus {
             get async {
                 let fm = FileManager.default
                 guard fm.isExecutableFile(atPath: binaryPath), fm.fileExists(atPath: Self.expandingTilde(weightsPath))
@@ -252,7 +252,7 @@ extension AIRequest {
         /// - Throws: ``TranscriptionError``, or
         ///   ``AIKitError/requestFailed(_:)`` when the request carries no
         ///   audio.
-        public func complete(request: AIRequest) async throws -> AIResponse {
+        func complete(request: AIRequest) async throws -> AIResponse {
             let audio = try request.audioInput(servedBy: capabilities)
             let start = ContinuousClock.now
 
@@ -356,7 +356,7 @@ extension AIRequest {
         ///
         /// - Parameter outputStem: the `--output-file` path, *without* an
         ///   extension — the binary appends `.txt` itself.
-        public static func arguments(
+        static func arguments(
             binaryPath: String,
             weights: String,
             language: String,
@@ -463,13 +463,13 @@ extension AIRequest {
         /// The names come from ``HostExecutable`` (W25) rather than being
         /// spelled here, so the binary vocabulary has one home and a Windows
         /// host gets the `.exe` suffix it needs.
-        public static let executables: [HostExecutable] = CLIProviderFamily.whisperCLI.executables
+        static let executables: [HostExecutable] = CLIProviderFamily.whisperCLI.executables
 
         /// Binary names whisper.cpp has shipped under, newest first.
         ///
         /// Derived from ``executables``: the file names as this host spells
         /// them.
-        public static var binaryNames: [String] { executables.map(\.fileName) }
+        static var binaryNames: [String] { executables.map(\.fileName) }
 
         /// Weights in descending preference.
         ///
@@ -479,7 +479,7 @@ extension AIRequest {
         /// (`features/flsh-whisper-e4b-voice-stack.md`, BR-01) names
         /// whisper-small as the on-device floor and large as the Mac upgrade,
         /// and this is that order read from the large end.
-        public static let weightsPreference = [
+        static let weightsPreference = [
             "ggml-large-v3-turbo.bin",
             "ggml-large-v3.bin",
             "ggml-large.bin",
@@ -496,7 +496,7 @@ extension AIRequest {
         /// separators in it is a POSIX path pretending to be portable, and it
         /// is wrong on a Windows host. `URL.appending(path:)` spells no
         /// separator at all, so the same code is correct everywhere.
-        public static var defaultWeightsDirectories: [URL] {
+        static var defaultWeightsDirectories: [URL] {
             let home = FileManager.default.homeDirectoryForCurrentUser
             return [
                 home
@@ -522,7 +522,7 @@ extension AIRequest {
         /// Returns an optional on purpose: a bare binary name handed to the
         /// init would fail later as a launch error, where "not installed" is
         /// the thing the caller actually needs to know.
-        public static func resolveBinary(
+        static func resolveBinary(
             searchPaths: [String] = Self.pathEntries()
         ) -> String? {
             HostExecutable.resolve(
@@ -532,7 +532,7 @@ extension AIRequest {
         }
 
         /// The most preferred weights present in `directories`, or `nil`.
-        public static func resolveWeights(
+        static func resolveWeights(
             in directories: [URL] = Self.defaultWeightsDirectories,
             preferring preference: [String] = Self.weightsPreference
         ) -> String? {
@@ -551,7 +551,7 @@ extension AIRequest {
         /// literal: Windows separates `PATH` entries with `;`, so the literal
         /// returned the whole variable as one bogus directory there and every
         /// binary read as not installed.
-        public static func pathEntries(
+        static func pathEntries(
             _ path: String? = ProcessInfo.processInfo.environment["PATH"]
         ) -> [String] {
             HostExecutable.searchPaths(path).map(\.path)

@@ -7,13 +7,13 @@ import NetKit
 /// definitions and tool results, and takes a response format. OpenAI itself,
 /// LM Studio, Ollama and any proxy in front of them speak it, which is why it
 /// is the family the legacy `openai-compatible` `kind` maps to.
-public struct OpenAIChatCodec: WireCodec {
+struct OpenAIChatCodec: WireCodec {
 
-    public init() {}
+    init() {}
 
-    public var family: AIProviderFamily { .openAIChat }
+    var family: AIProviderFamily { .openAIChat }
 
-    public var capabilities: WireCodecCapabilities {
+    var capabilities: WireCodecCapabilities {
         WireCodecCapabilities(
             // All four, including `.tool`: this is the only family of the four
             // that carries a tool RESULT back, keyed by the id the server
@@ -35,7 +35,7 @@ public struct OpenAIChatCodec: WireCodec {
 
     // MARK: - Request
 
-    public func body(
+    func body(
         for request: AIRequest,
         model: String,
         stream: Bool
@@ -44,7 +44,7 @@ public struct OpenAIChatCodec: WireCodec {
         return try chatRequest(for: request, model: model, stream: stream)
     }
 
-    public func endpoint(
+    func endpoint(
         for request: AIRequest,
         entry: AIProviderEntry,
         credential: String?,
@@ -121,7 +121,7 @@ public struct OpenAIChatCodec: WireCodec {
 
     // MARK: - Reply
 
-    public func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
+    func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
         let reply = try decode(ChatCompletionReply.self, from: data, context: context)
         let completion: ChatCompletionResponseDTO
         switch reply {
@@ -155,7 +155,7 @@ public struct OpenAIChatCodec: WireCodec {
         )
     }
 
-    public func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
+    func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
         guard let payload = ssePayload(of: line) else { return nil }
         if payload == "[DONE]" {
             return AIChunk(delta: "", isComplete: true)

@@ -7,13 +7,13 @@ import NetKit
 /// wave AIKit could not talk this wire at all: the family was declared and had
 /// no production caller (AIKit#18, panel finding on
 /// `AIWireStandard.swift:185,234`).
-public struct AnthropicMessagesCodec: WireCodec {
+struct AnthropicMessagesCodec: WireCodec {
 
-    public init() {}
+    init() {}
 
-    public var family: AIProviderFamily { .anthropicMessages }
+    var family: AIProviderFamily { .anthropicMessages }
 
-    public var capabilities: WireCodecCapabilities {
+    var capabilities: WireCodecCapabilities {
         WireCodecCapabilities(
             // `.system` is here because a system message in the array is
             // LIFTED to the top-level `system` field, which this surface
@@ -31,7 +31,7 @@ public struct AnthropicMessagesCodec: WireCodec {
 
     // MARK: - Request
 
-    public func body(
+    func body(
         for request: AIRequest,
         model: String,
         stream: Bool
@@ -40,7 +40,7 @@ public struct AnthropicMessagesCodec: WireCodec {
         return messagesRequest(for: request, model: model, stream: stream)
     }
 
-    public func endpoint(
+    func endpoint(
         for request: AIRequest,
         entry: AIProviderEntry,
         credential: String?,
@@ -88,7 +88,7 @@ public struct AnthropicMessagesCodec: WireCodec {
 
     // MARK: - Reply
 
-    public func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
+    func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
         let reply = try decode(AnthropicMessagesReply.self, from: data, context: context)
         let message: AnthropicMessagesResponseDTO
         switch reply {
@@ -113,7 +113,7 @@ public struct AnthropicMessagesCodec: WireCodec {
         )
     }
 
-    public func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
+    func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
         guard let payload = ssePayload(of: line) else { return nil }
         guard let data = payload.data(using: .utf8) else {
             throw .replyUndecodable(target: context.target, reason: "an SSE chunk is not valid UTF-8")

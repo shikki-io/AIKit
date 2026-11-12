@@ -6,13 +6,13 @@ import NetKit
 /// Keeps a conversation as roles in `input` and the system prompt in this
 /// surface's own `instructions` field. It is the newer OpenAI surface and the
 /// one LM Studio pairs with stateful chats and MCP integrations.
-public struct OpenAIResponsesCodec: WireCodec {
+struct OpenAIResponsesCodec: WireCodec {
 
-    public init() {}
+    init() {}
 
-    public var family: AIProviderFamily { .openAIResponses }
+    var family: AIProviderFamily { .openAIResponses }
 
-    public var capabilities: WireCodecCapabilities {
+    var capabilities: WireCodecCapabilities {
         WireCodecCapabilities(
             // No `.tool`: a tool RESULT travels as a `function_call_output`
             // item on this surface rather than as a role, and AIKit does not
@@ -31,7 +31,7 @@ public struct OpenAIResponsesCodec: WireCodec {
 
     // MARK: - Request
 
-    public func body(
+    func body(
         for request: AIRequest,
         model: String,
         stream: Bool
@@ -40,7 +40,7 @@ public struct OpenAIResponsesCodec: WireCodec {
         return responsesRequest(for: request, model: model, stream: stream)
     }
 
-    public func endpoint(
+    func endpoint(
         for request: AIRequest,
         entry: AIProviderEntry,
         credential: String?,
@@ -72,7 +72,7 @@ public struct OpenAIResponsesCodec: WireCodec {
 
     // MARK: - Reply
 
-    public func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
+    func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
         let reply = try decode(ResponsesReply.self, from: data, context: context)
         let value: ResponsesResponseDTO
         switch reply {
@@ -99,7 +99,7 @@ public struct OpenAIResponsesCodec: WireCodec {
         )
     }
 
-    public func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
+    func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
         guard let payload = ssePayload(of: line) else { return nil }
         guard let data = payload.data(using: .utf8) else {
             throw .replyUndecodable(target: context.target, reason: "an SSE chunk is not valid UTF-8")

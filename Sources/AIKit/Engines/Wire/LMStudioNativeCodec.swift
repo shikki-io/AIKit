@@ -18,13 +18,13 @@ import NetKit
 ///   per message, so a multi-turn user conversation survives in order,
 /// - an assistant or tool message is refused by role, because this surface has
 ///   nowhere to put one.
-public struct LMStudioNativeCodec: WireCodec {
+struct LMStudioNativeCodec: WireCodec {
 
-    public init() {}
+    init() {}
 
-    public var family: AIProviderFamily { .lmStudioNative }
+    var family: AIProviderFamily { .lmStudioNative }
 
-    public var capabilities: WireCodecCapabilities {
+    var capabilities: WireCodecCapabilities {
         WireCodecCapabilities(
             // `.system` is carried by `system_prompt`, `.user` by an `input`
             // part. `.assistant` and `.tool` are documented ❌ and have no
@@ -46,7 +46,7 @@ public struct LMStudioNativeCodec: WireCodec {
 
     // MARK: - Request
 
-    public func body(
+    func body(
         for request: AIRequest,
         model: String,
         stream: Bool
@@ -55,7 +55,7 @@ public struct LMStudioNativeCodec: WireCodec {
         return try nativeRequest(for: request, model: model, stream: stream)
     }
 
-    public func endpoint(
+    func endpoint(
         for request: AIRequest,
         entry: AIProviderEntry,
         credential: String?,
@@ -113,7 +113,7 @@ public struct LMStudioNativeCodec: WireCodec {
 
     // MARK: - Reply
 
-    public func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
+    func response(from data: Data, context: WireReplyContext) throws(AIKitError) -> AIResponse {
         let reply = try decode(LMStudioNativeReply.self, from: data, context: context)
         let value: LMStudioNativeResponseDTO
         switch reply {
@@ -139,7 +139,7 @@ public struct LMStudioNativeCodec: WireCodec {
         )
     }
 
-    public func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
+    func chunk(fromLine line: String, context: WireReplyContext) throws(AIKitError) -> AIChunk? {
         guard let payload = ssePayload(of: line) else { return nil }
         guard let data = payload.data(using: .utf8) else {
             throw .replyUndecodable(target: context.target, reason: "an SSE chunk is not valid UTF-8")

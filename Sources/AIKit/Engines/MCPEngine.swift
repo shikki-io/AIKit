@@ -6,15 +6,15 @@ private let endpointLogger = Logger(label: "aikit.endpoints.mcp")
 
 /// Generic MCP (Model Context Protocol) client engine.
 /// Connects to any MCP server exposing tools — Koharu, LM Studio MCP, custom servers.
-public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
-    public let id: String
-    public let displayName: String
-    public let supportedFormats: [ModelFormat] = [.api]
+final class MCPEngine: RuntimeEngine, @unchecked Sendable {
+    let id: String
+    let displayName: String
+    let supportedFormats: [ModelFormat] = [.api]
 
     private let baseURL: String
     private let networkService: any NetworkProtocol
 
-    public init(
+    init(
         id: String = "mcp",
         displayName: String = "MCP Server",
         baseURL: String,
@@ -26,7 +26,7 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
         self.networkService = networkService
     }
 
-    public var isAvailable: Bool {
+    var isAvailable: Bool {
         // MCP engines are available if configured — actual health is checked at call time.
         true
     }
@@ -51,7 +51,7 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
     }
 
     /// Discover tools from the MCP server.
-    public func discoverTools() async throws -> [MCPTool] {
+    func discoverTools() async throws -> [MCPTool] {
         let response: MCPToolsListResponse = try await networkService.sendRequest(
             endpoint: MCPEndPoint.toolsList(server: try server())
         )
@@ -59,7 +59,7 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
     }
 
     /// Call an MCP tool by name with arguments.
-    public func callTool(name: String, arguments: [String: String]) async throws -> MCPToolResult {
+    func callTool(name: String, arguments: [String: String]) async throws -> MCPToolResult {
         try await networkService.sendRequest(
             endpoint: MCPEndPoint.callTool(server: try server(), name: name, arguments: arguments)
         )
@@ -67,7 +67,7 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
 
     // MARK: - RuntimeEngine
 
-    public func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
+    func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
         MCPProvider(
             id: "\(id)/\(descriptor.id.modelId)",
             displayName: "\(displayName) — \(descriptor.name)",
@@ -76,11 +76,11 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
         )
     }
 
-    public func unloadModel(_ id: ModelIdentifier) async throws {
+    func unloadModel(_ id: ModelIdentifier) async throws {
         // MCP engines are stateless — nothing to unload.
     }
 
-    public func loadedModels() -> [ModelIdentifier] {
+    func loadedModels() -> [ModelIdentifier] {
         // MCP engines are stateless — no loaded models to track.
         []
     }
@@ -89,12 +89,12 @@ public final class MCPEngine: RuntimeEngine, @unchecked Sendable {
 // MARK: - MCP DTOs
 
 /// A tool exposed by an MCP server.
-public struct MCPTool: Sendable, Codable, Equatable {
-    public let name: String
-    public let description: String
-    public let inputSchema: MCPInputSchema?
+struct MCPTool: Sendable, Codable, Equatable {
+    let name: String
+    let description: String
+    let inputSchema: MCPInputSchema?
 
-    public init(name: String, description: String, inputSchema: MCPInputSchema? = nil) {
+    init(name: String, description: String, inputSchema: MCPInputSchema? = nil) {
         self.name = name
         self.description = description
         self.inputSchema = inputSchema
@@ -102,47 +102,47 @@ public struct MCPTool: Sendable, Codable, Equatable {
 }
 
 /// JSON Schema-like description of a tool's input.
-public struct MCPInputSchema: Sendable, Codable, Equatable {
-    public let type: String
-    public let properties: [String: MCPPropertySchema]?
+struct MCPInputSchema: Sendable, Codable, Equatable {
+    let type: String
+    let properties: [String: MCPPropertySchema]?
 
-    public init(type: String = "object", properties: [String: MCPPropertySchema]? = nil) {
+    init(type: String = "object", properties: [String: MCPPropertySchema]? = nil) {
         self.type = type
         self.properties = properties
     }
 }
 
 /// Schema for a single property in an MCP tool input.
-public struct MCPPropertySchema: Sendable, Codable, Equatable {
-    public let type: String
-    public let description: String?
+struct MCPPropertySchema: Sendable, Codable, Equatable {
+    let type: String
+    let description: String?
 
-    public init(type: String, description: String? = nil) {
+    init(type: String, description: String? = nil) {
         self.type = type
         self.description = description
     }
 }
 
 /// Result from an MCP tool call.
-public struct MCPToolResult: Sendable, Codable, Equatable {
-    public let content: [MCPContent]
+struct MCPToolResult: Sendable, Codable, Equatable {
+    let content: [MCPContent]
 
-    public init(content: [MCPContent]) {
+    init(content: [MCPContent]) {
         self.content = content
     }
 
     /// Convenience: first text content value.
-    public var text: String? {
+    var text: String? {
         content.first { $0.type == "text" }?.text
     }
 }
 
 /// A content block in an MCP response.
-public struct MCPContent: Sendable, Codable, Equatable {
-    public let type: String
-    public let text: String?
+struct MCPContent: Sendable, Codable, Equatable {
+    let type: String
+    let text: String?
 
-    public init(type: String = "text", text: String? = nil) {
+    init(type: String = "text", text: String? = nil) {
         self.type = type
         self.text = text
     }
@@ -168,16 +168,16 @@ struct MCPCallToolRequest: Codable, Sendable, Equatable {
 /// Validated once, with nothing defaulted — the point of the type. A missing
 /// scheme or host is an error naming the value, rather than a quiet rewrite to
 /// `http://127.0.0.1`.
-public struct MCPServerLocation: Sendable, Equatable {
-    public let scheme: String
-    public let host: String
-    public let port: Int?
+struct MCPServerLocation: Sendable, Equatable {
+    let scheme: String
+    let host: String
+    let port: Int?
     /// The mount path, with no trailing slash. Empty when the server is
     /// mounted at the root.
-    public let mountPath: String
+    let mountPath: String
 
     /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)``.
-    public init(validating text: String) throws(AIKitError) {
+    init(validating text: String) throws(AIKitError) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw .invalidServerAddress(value: text, reason: "it is empty")
@@ -202,7 +202,7 @@ public struct MCPServerLocation: Sendable, Equatable {
         self.mountPath = path
     }
 
-    public var description: String {
+    var description: String {
         var text = "\(scheme)://\(host)"
         if let port { text += ":\(port)" }
         return text + mountPath

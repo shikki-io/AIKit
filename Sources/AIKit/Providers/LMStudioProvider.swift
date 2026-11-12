@@ -16,7 +16,7 @@ import NetKit
 ///
 /// It carried its own `URLSession` and `[String: Any]` body once — a second
 /// implementation of a wire format the package already had (BR-DISC-A).
-public struct LMStudioProvider: AgentProviding, Sendable {
+struct LMStudioProvider: AgentProviding, Sendable {
 
     /// The settings row this provider serves: who it is, where it is, which
     /// model, and how long a request may take.
@@ -25,30 +25,37 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     /// Studio and the one on the Mac across the desk are the same type with a
     /// different address, and that address came from settings — validated once
     /// when the document loaded, so `run` has nothing left to parse.
-    public let entry: AIProviderEntry
+    let entry: AIProviderEntry
 
     /// What settings call this provider, and what a failed attempt in a
     /// fallback chain names (``AgentProviding/id``).
-    public var id: String { entry.id }
+    var id: String { entry.id }
     /// The LM Studio server root. A server ROOT, no path (BR-AIL-09).
     ///
     /// Non-optional because the init refuses an entry without one, so there is
     /// no empty-string sentinel here for a caller to mistake for an address.
-    public let baseURL: String
+    let baseURL: String
     /// Model identifier as loaded in LM Studio.
-    public var model: String { entry.model }
+    var model: String { entry.model }
     /// Request timeout in seconds, as a ceiling on the caller's own timeout.
-    public var requestTimeout: TimeInterval { entry.requestTimeout }
+    var requestTimeout: TimeInterval { entry.requestTimeout }
     /// Logger for diagnostics.
     private let logger: Logger
-    /// Set only when a caller injects a transport, which tests do (BR-AIL-12).
-    /// Left nil in production because the timeout is an argument to `run`, not
-    /// to `init`, so the transport that carries it is built per call.
-    private let injectedTransport: (any AIHTTPTransport)?
+    /// How this provider gets a transport, for a given per-call deadline.
+    ///
+    /// REQUIRED, and a factory rather than a built transport (W27, AIKit#18
+    /// r4500408737). It was `(any AIHTTPTransport)? = nil`, where `nil` meant
+    /// "build a `URLSession` one here" — so a test that left the argument out
+    /// reached the operator's live server, and no call site said which
+    /// transport it got (BR-AIL-12). A factory rather than a transport because
+    /// the deadline is an argument to `run`, not to `init`: the closure is
+    /// handed `min(callDeadline, entry.requestTimeout)`, so a caller's shorter
+    /// deadline is honoured instead of dropped.
+    private let transport: @Sendable (TimeInterval) -> any AIHTTPTransport
 
     // MARK: - Errors
 
-    public enum LMStudioError: Error, Equatable, Sendable {
+    enum LMStudioError: Error, Equatable, Sendable {
         case connectionRefused(String)
         case rateLimited
         case invalidResponse(String)
@@ -64,21 +71,21 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     ///   - entry: the settings row. Its address was validated when the
     ///     document loaded (BR-AIL-18).
     ///   - logger: Logger for diagnostics.
-    ///   - transport: Transport override. Tests inject a stub; production
-    ///     leaves it nil so `run` can build one carrying the caller's timeout.
+    ///   - transport: how to build a transport for a deadline. Tests hand a
+    ///     stub; production hands ``AIKitAssembly/urlSessionTransport``.
     /// - Throws: ``AIKitError/settings(file:entry:reason:)`` when the row has
     ///   no server address — a `cli-subprocess` or `mlx-in-process` row, which
     ///   this provider cannot serve. Refused HERE rather than carried as an
     ///   empty `baseURL` that reads as an address until the first request.
-    public init(
+    init(
         entry: AIProviderEntry,
         logger: Logger = Logger(label: "shikki.lmstudio-provider"),
-        transport: (any AIHTTPTransport)? = nil
+        transport: @escaping @Sendable (TimeInterval) -> any AIHTTPTransport
     ) throws(AIKitError) {
         baseURL = try entry.serverAddress().description
         self.entry = entry
         self.logger = logger
-        injectedTransport = transport
+        self.transport = transport
     }
 
     /// Serves an LM Studio server at a configured address.
@@ -93,13 +100,13 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     ///
     /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)`` naming the
     ///   value.
-    public init(
+    init(
         id: String = "lmstudio",
         baseURL: String,
         model: String,
         requestTimeout: TimeInterval = AIProviderEntry.defaultRequestTimeout,
         logger: Logger = Logger(label: "shikki.lmstudio-provider"),
-        transport: (any AIHTTPTransport)? = nil
+        transport: @escaping @Sendable (TimeInterval) -> any AIHTTPTransport
     ) throws(AIKitError) {
         try self.init(
             entry: try AIProviderEntry(
@@ -116,7 +123,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 
     // MARK: - AgentProviding
 
-    public func run(prompt: String, timeout: TimeInterval) async throws -> String {
+    func run(prompt: String, timeout: TimeInterval) async throws -> String {
         logger.info(
             "LM Studio request",
             metadata: [
@@ -148,8 +155,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
         HTTPAIProvider(
             entry: entry,
             codec: OpenAIChatCodec(),
-            network: injectedTransport
-                ?? URLSessionHTTPTransport(timeout: min(timeout, requestTimeout)),
+            network: transport(min(timeout, requestTimeout)),
             displayName: "LM Studio"
         )
     }
@@ -175,9 +181,9 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     /// `GET /v1/models` lists only what is LOADED. This is the half of this
     /// server that has no OpenAI equivalent, and the reason this type still
     /// exists after the wire moved out.
-    public func hostedModels() async throws -> [LMStudioHostedModel] {
+    func hostedModels() async throws -> [LMStudioHostedModel] {
         let address = try entry.serverAddress()
-        let transport = injectedTransport ?? URLSessionHTTPTransport(timeout: requestTimeout)
+        let transport = self.transport(requestTimeout)
         let reply: LMStudioModelsReply = try await transport.sendRequest(
             endpoint: LMStudioEndPoint.models(address: address, credential: nil)
         )
@@ -185,7 +191,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     }
 
     /// Asks the host to load a model — `POST /api/v1/models/load`.
-    public func load(model: String, contextLength: Int? = nil, ttl: Int? = nil) async throws {
+    func load(model: String, contextLength: Int? = nil, ttl: Int? = nil) async throws {
         let address = try entry.serverAddress()
         try await send(
             LMStudioEndPoint.loadModel(
@@ -198,7 +204,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     }
 
     /// Asks the host to unload a model — `POST /api/v1/models/unload`.
-    public func unload(model: String) async throws {
+    func unload(model: String) async throws {
         let address = try entry.serverAddress()
         try await send(
             LMStudioEndPoint.unloadModel(
@@ -213,7 +219,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     /// The route in the error comes from the endpoint, never from a literal
     /// repeated here: the enum is the SSoT for it (BR-AIL-16).
     private func send(_ endPoint: any EndPoint, address: AIServerAddress) async throws {
-        let transport = injectedTransport ?? URLSessionHTTPTransport(timeout: requestTimeout)
+        let transport = self.transport(requestTimeout)
         let reply = try await transport.send(try transport.createRequest(endPoint: endPoint))
         guard 200..<300 ~= reply.status else {
             throw AIKitError.http(
@@ -351,12 +357,12 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 // MARK: - Hosted models
 
 /// One model on an LM Studio host, as `GET /api/v1/models` reports it.
-public struct LMStudioHostedModel: Sendable, Codable, Equatable {
-    public let id: String
+struct LMStudioHostedModel: Sendable, Codable, Equatable {
+    let id: String
     /// `llm`, `embeddings`, … as the host classifies it.
-    public let type: String?
+    let type: String?
     /// Whether the host currently has it in memory.
-    public let isLoaded: Bool?
+    let isLoaded: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, type

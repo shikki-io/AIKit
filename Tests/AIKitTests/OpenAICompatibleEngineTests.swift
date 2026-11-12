@@ -11,7 +11,7 @@ struct OpenAICompatibleEngineTests {
 
     @Test("LM Studio preset has correct defaults")
     func lmStudioPresetDefaults() throws {
-        let engine = try OpenAICompatibleEngine.lmStudio()
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: MockHTTPTransport())
         #expect(engine.id == "lmstudio")
         #expect(engine.displayName == "LM Studio")
         #expect(engine.isAvailable)
@@ -22,7 +22,7 @@ struct OpenAICompatibleEngineTests {
 
     @Test("Ollama preset has correct defaults")
     func ollamaPresetDefaults() throws {
-        let engine = try OpenAICompatibleEngine.ollama()
+        let engine = try OpenAICompatibleEngine.ollama(transport: MockHTTPTransport())
         #expect(engine.id == "ollama")
         #expect(engine.displayName == "Ollama")
         #expect(engine.isAvailable)
@@ -31,14 +31,14 @@ struct OpenAICompatibleEngineTests {
 
     @Test("OpenAI preset includes API key")
     func openAIPresetIncludesKey() throws {
-        let engine = try OpenAICompatibleEngine.openAI(apiKey: TestCredential.openAI)
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: TestCredential.openAI, transport: MockHTTPTransport())
         #expect(engine.id == "openai")
         #expect(engine.displayName == "OpenAI")
     }
 
     @Test("Anthropic preset configures correctly")
     func anthropicPresetDefaults() throws {
-        let engine = try OpenAICompatibleEngine.anthropic(apiKey: TestCredential.anthropic)
+        let engine = try OpenAICompatibleEngine.anthropic(apiKey: TestCredential.anthropic, transport: MockHTTPTransport())
         #expect(engine.id == "anthropic")
         #expect(engine.displayName == "Anthropic")
     }

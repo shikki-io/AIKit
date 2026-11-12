@@ -135,52 +135,22 @@ struct AIServerAddressReachTests {
     }
 
     // MARK: - Nothing configured at all
-
-    @Test("an absent address is its own error, naming what to set")
-    func anAbsentAddressIsNamed() throws {
-        // The other half of BR-AIL-18, and what W21 deleted: an absent address
-        // used to become `http://127.0.0.1:1234` or `http://localhost:8080`,
-        // so a host that had configured nothing got a connection refusal from
-        // its own loopback instead of being told what to fill in.
-        let error = AIKitError.serverAddressNotConfigured(setting: "LMSTUDIO_URL")
-        let message = try #require(error.errorDescription)
-        #expect(message.contains("LMSTUDIO_URL"))
-        #expect(message.lowercased().contains("does not default to the local machine"))
-        // A settings mistake is never retried on the next provider: that would
-        // hide an unconfigured entry behind a working one.
-        #expect(!FallbackEligibility.allows(error))
-    }
-
-    @Test("a provider with no address configured refuses to be built")
-    func aProviderWithNoAddressRefuses() throws {
-        // Proven on the real type, not on the error value: `LMStudioProvider`
-        // is where `?? "http://127.0.0.1:1234"` lived.
-        //
-        // The environment is this process's, so the assertion is conditional
-        // on it rather than mutating it — a `setenv` here would race every
-        // other test in the suite, which run in parallel.
-        if ProcessInfo.processInfo.environment["LMSTUDIO_URL"] == nil {
-            let error = #expect(throws: AIKitError.self) {
-                _ = try LMStudioProvider(model: "qwen")
-            }
-            guard case .serverAddressNotConfigured(let setting) = try #require(error) else {
-                Issue.record("expected .serverAddressNotConfigured, got \(String(describing: error))")
-                return
-            }
-            #expect(setting == "LMSTUDIO_URL")
-        } else {
-            // LMSTUDIO_URL is set in this environment, so the argument-free
-            // init legitimately succeeds. What must still hold is that the
-            // value went through the validator.
-            let provider = try LMStudioProvider(model: "qwen")
-            #expect(provider.address.description == provider.baseURL)
-        }
-    }
+    //
+    // W21 made an absent address its own error (`serverAddressNotConfigured`).
+    // W22 made `LMStudioProvider` and `MLXEngine` take a non-optional address,
+    // so "nothing configured" is no longer a value a caller can pass: the
+    // compiler refuses it, and the error case went with it. A settings file
+    // missing the address is refused at load, naming the file and the entry
+    // (`AIKitError.settings`, AIProviderRepositoryTests).
 
     @Test("a provider refuses an address that is not a server root")
     func aProviderRefusesANonRoot() throws {
         let error = #expect(throws: AIKitError.self) {
-            _ = try LMStudioProvider(baseURL: "http://127.0.0.1:1234/v1", model: "qwen")
+            _ = try LMStudioProvider(
+                baseURL: "\(fixtureServerRoot)/v1",
+                model: "qwen",
+                transport: MockHTTPTransport.factory()
+            )
         }
         // Named at construction, not at first request: validated once.
         #expect(error?.errorDescription?.contains("/v1") == true)

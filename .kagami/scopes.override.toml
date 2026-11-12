@@ -65,7 +65,7 @@ timeout_seconds = 300
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 660
+expected_test_min = 660  # W27 moved its own suite to AIKitPublicSurfaceTests, so this is unchanged
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -188,3 +188,55 @@ timeout_seconds = 120
 # follows: 26 + W24's one = 27, measured at ea5a2fb.
 expected_test_min = 27
 description = "AIServerAddress: validated once, nothing defaulted, reach classified (BR-AIL-18). Run: kagami test --scope AIKitServerAddress"
+
+# W27 of spec ai-layer-aikit-core-2026-10-31 (T-AIL-52, T-AIL-53), BR-AIL-21.
+# The public-surface ratchet: AIKit's and AIKitMLX's exported symbol graph must
+# equal `AIKitPublicAPI.txt`, and no provider API may be in it.
+#
+# Its own scope, not a line in AIKitAll, for the same reason
+# AIKitNoLocalhostFallback has one: a rule cited by name in a review has to be
+# runnable alone — `kagami test --scope AIKitPublicSurface`.
+#
+# ITS OWN TEST TARGET, not a filter over AIKitTests. The suite shells out to a
+# build, and measured in this worktree that cost the whole-target `AIKitAll`
+# scope 11s -> 1m19s cold, with a 7-core compile running beside suites that
+# assert a wall-clock budget. One such suite failed on the first run that way
+# (FallbackProviderChainTests "the timeout is the whole chain's budget", run
+# FE7289AE: a 5s budget spent on 0.2s of stub delay), and passed on every run
+# after. A separate target removes the interaction instead of widening a
+# number.
+#
+# WHAT IT NEEDS ON THE MACHINE. The suite runs `scripts/public-api.sh`, which
+# builds BOTH `AIKit` and `AIKitMLX` with `-emit-symbol-graph` under its own
+# scratch path (`.build/public-api`). AIKitMLX links mlx-swift, whose Metal
+# kernels are compiled from source, so this scope needs the selected Xcode's
+# MetalToolchain component — the same requirement the `AIKitMLX` scope carries.
+# Check with `xcodebuild -showComponent MetalToolchain`.
+#
+# `pre_pr_default` is LEFT ON all the same, unlike the AIKitMLX scope: a public
+# symbol slipping in is exactly the thing a pre-PR run exists to catch, and the
+# AIKitMLX half of the surface is three symbols that must not grow. A builder
+# without the toolchain sees a build failure naming it, not a silent pass.
+#
+# Timing measured in this worktree: ~40s for the first run (cold scratch, both
+# targets), ~3s incremental afterwards. The timeout is the cold figure with
+# room for a cold dependency graph.
+[[scopes]]
+name = "AIKitPublicSurface"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitPublicSurfaceTests"
+test_file_patterns = ["**/AIKitPublicSurfaceTests/*.swift"]
+timeout_seconds = 600
+# Measured 2026-11-12 at the W27 commit: 4 test FUNCTIONS — the allowlist diff
+# (T-AIL-52), the provider-API ratchet (T-AIL-53; one function, 33 parameterised
+# cases), the AIKitMLX three-symbol pin, and the proof AIKitTestSupport exports
+# the doubles. kagami counts functions, not the cases a parameterised one
+# expands to.
+#
+# The other half of T-AIL-53 — that the `AIKit` PRODUCT carries no double — is
+# `MockProductBoundaryTests`, which stays in `AIKitTests` and in `AIKitAll`
+# where W26 put it. It reads source files and costs nothing, so it has no
+# reason to move into this target's expensive lane.
+expected_test_min = 4
+description = "BR-AIL-21: the exported symbol graph equals AIKitPublicAPI.txt, no provider API is public, AIKitMLX exports one registration. Run: kagami test --scope AIKitPublicSurface"

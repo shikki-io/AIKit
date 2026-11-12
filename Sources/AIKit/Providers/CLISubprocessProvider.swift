@@ -24,7 +24,7 @@ import Foundation
 /// differ independently — Windows uses `\` inside a path and `;` between them.
 /// Splitting `PATH` on a hardcoded `":"` silently yields one bogus entry on
 /// Windows, which reads as "the binary is not installed".
-public enum SearchPathSeparator: String, Sendable, CaseIterable, Equatable {
+enum SearchPathSeparator: String, Sendable, CaseIterable, Equatable {
 
     /// `:` — POSIX, so macOS and Linux.
     case posix = ":"
@@ -33,7 +33,7 @@ public enum SearchPathSeparator: String, Sendable, CaseIterable, Equatable {
     case windows = ";"
 
     /// The separator for the OS this binary was compiled for.
-    public static var native: SearchPathSeparator {
+    static var native: SearchPathSeparator {
         #if os(Windows)
             .windows
         #else
@@ -42,7 +42,7 @@ public enum SearchPathSeparator: String, Sendable, CaseIterable, Equatable {
     }
 
     /// The separator as a `Character`, for `split(separator:)`.
-    public var character: Character { Character(rawValue) }
+    var character: Character { Character(rawValue) }
 }
 
 // MARK: - HostExecutable
@@ -59,7 +59,7 @@ public enum SearchPathSeparator: String, Sendable, CaseIterable, Equatable {
 /// A name, never a path: where a binary lives is the host's business, which is
 /// why resolution goes through ``url(in:)`` and ``resolve(in:)`` against
 /// directories the caller supplies, and nothing here hardcodes `/usr/bin`.
-public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
+enum HostExecutable: String, Sendable, CaseIterable, Hashable {
 
     /// whisper.cpp's current CLI name.
     case whisperCLI = "whisper-cli"
@@ -82,7 +82,7 @@ public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
     /// Windows needs the `.exe` suffix: `FileManager.isExecutableFile` on a
     /// suffix-less name finds nothing there, so a PATH scan would report every
     /// binary missing.
-    public var fileName: String {
+    var fileName: String {
         #if os(Windows)
             "\(rawValue).exe"
         #else
@@ -94,7 +94,7 @@ public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
     ///
     /// Composed, never interpolated: a path built by `URL.appending(path:)`
     /// carries no separator literal and is therefore correct on every host.
-    public func url(in directory: URL) -> URL {
+    func url(in directory: URL) -> URL {
         directory.appending(path: fileName)
     }
 
@@ -104,7 +104,7 @@ public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
     ///   installed. Optional on purpose: a bare binary name handed on would
     ///   fail later as a launch error, where "not installed" is the thing the
     ///   caller actually needs to know.
-    public static func resolve(
+    static func resolve(
         _ candidates: [HostExecutable],
         in directories: [URL]
     ) -> String? {
@@ -121,7 +121,7 @@ public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
     ///
     /// - Parameter value: the raw variable, or `nil` when it is unset — which
     ///   yields no directories rather than one empty one.
-    public static func searchPaths(_ value: String?) -> [URL] {
+    static func searchPaths(_ value: String?) -> [URL] {
         (value ?? "")
             .split(separator: SearchPathSeparator.native.character)
             .map(String.init)
@@ -130,7 +130,7 @@ public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
     }
 
     /// The host's `PATH`, as directories.
-    public static var pathDirectories: [URL] {
+    static var pathDirectories: [URL] {
         searchPaths(ProcessInfo.processInfo.environment["PATH"])
     }
 }
@@ -138,7 +138,7 @@ public enum HostExecutable: String, Sendable, CaseIterable, Hashable {
 // MARK: - CLIProviderFamily
 
 /// Why a CLI-backed provider cannot be built on this host.
-public enum CLIProviderError: Error, LocalizedError, Equatable {
+enum CLIProviderError: Error, LocalizedError, Equatable {
 
     /// The host has no subprocess API, so no CLI provider can exist here.
     ///
@@ -147,7 +147,7 @@ public enum CLIProviderError: Error, LocalizedError, Equatable {
     /// matching text.
     case unavailable(platform: HostPlatform)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .unavailable(let platform):
             "A CLI-backed AI provider cannot run on \(platform.rawValue): "
@@ -158,7 +158,7 @@ public enum CLIProviderError: Error, LocalizedError, Equatable {
 }
 
 /// Whether a CLI-backed provider family can be built here.
-public enum CLIProviderAvailability: Sendable, Equatable {
+enum CLIProviderAvailability: Sendable, Equatable {
 
     /// The family can be built on this host.
     case available
@@ -173,7 +173,7 @@ public enum CLIProviderAvailability: Sendable, Equatable {
 /// one of them needs a subprocess API. The enum exists so that "is there a CLI
 /// provider on this platform" is a value a caller can hold and test, rather
 /// than an `#if` the caller has to repeat.
-public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
+enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
 
     /// ``CLISubprocessProvider`` — any operator-defined CLI runner.
     case subprocess = "cli-subprocess"
@@ -182,7 +182,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
     case whisperCLI = "whisper-cli"
 
     /// The executables this family may run, in preference order.
-    public var executables: [HostExecutable] {
+    var executables: [HostExecutable] {
         switch self {
         // An operator-defined runner names its own binary in config; the table
         // has no entry to offer it, and inventing one would be a guess.
@@ -197,7 +197,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
     /// conditions ShellKit on macOS and Linux, so the import and the
     /// availability cannot drift apart. A second platform list here would be a
     /// copy of the manifest that could disagree with it.
-    public static var availability: CLIProviderAvailability {
+    static var availability: CLIProviderAvailability {
         #if canImport(ShellKit)
             .available
         #else
@@ -206,7 +206,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
     }
 
     /// Whether this family can be built on the host running now.
-    public static var isAvailable: Bool { availability == .available }
+    static var isAvailable: Bool { availability == .available }
 
     /// Throws when this family cannot be built here.
     ///
@@ -214,7 +214,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
     /// question into one `try` at the top instead of an `#if` around the whole
     /// construction, and on iOS it throws ``CLIProviderError/unavailable(platform:)``
     /// rather than trapping.
-    public static func requireAvailable() throws {
+    static func requireAvailable() throws {
         if case .unavailable(let platform) = availability {
             throw CLIProviderError.unavailable(platform: platform)
         }
@@ -257,11 +257,11 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
     // If no `BudgetLedger` is supplied, the provider degrades gracefully to an
     // unlimited-concurrency plain shellout — useful for early bring-up and for
     // call sites that already own their own admission control.
-    public struct CLISubprocessProvider: AgentProviding, Sendable {
+    struct CLISubprocessProvider: AgentProviding, Sendable {
 
         // MARK: - Errors
 
-        public enum SubprocessError: Error, Sendable, Equatable {
+        enum SubprocessError: Error, Sendable, Equatable {
             /// The CLI process exited with a non-zero status.
             case nonZeroExit(providerID: AIProviderID, exitCode: Int32, stderr: String)
             /// The CLI process exceeded `timeout` and was killed.
@@ -277,24 +277,24 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
 
         /// Stable id of the provider being fronted. Used for ledger accounting
         /// and error attribution.
-        public let providerID: AIProviderID
+        let providerID: AIProviderID
 
         /// ``AgentProviding/id`` — the routing id's own spelling, so a failed
         /// attempt in a `FallbackProviderChain` names this CLI rather than the
         /// type that ran it.
-        public var id: String { providerID.rawValue }
+        var id: String { providerID.rawValue }
 
         /// Binary + fixed arguments. The prompt is passed on stdin, so no
         /// prompt-shaped placeholder is required in `arguments`.
         ///
         /// Example: `["claude", "-p", "--dangerously-skip-permissions"]`.
-        public let arguments: [String]
+        let arguments: [String]
 
         /// Working directory for the child process (nil = inherit).
-        public let workingDirectory: String?
+        let workingDirectory: String?
 
         /// Extra environment variables merged into the child process env.
-        public let environment: [String: String]
+        let environment: [String: String]
 
         // MARK: - Collaborators
 
@@ -318,7 +318,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
         ///     Defaults to `ceil(count / 4)` — a coarse but conservative approximation
         ///     that matches Anthropic's public rule of thumb.
         ///   - logger: diagnostic logger.
-        public init(
+        init(
             providerID: AIProviderID,
             arguments: [String],
             executor: any ShellExecutorProtocol = TimedShellExecutor(),
@@ -342,7 +342,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
 
         // MARK: - AgentProviding
 
-        public func run(prompt: String, timeout: TimeInterval) async throws -> String {
+        func run(prompt: String, timeout: TimeInterval) async throws -> String {
             if let ledger {
                 return try await ledger.withSlot(for: providerID) { _ in
                     try await runSubprocess(prompt: prompt, timeout: timeout, ledger: ledger)
@@ -404,7 +404,7 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
 
         /// Default estimator: `ceil(count / 4)` for prompt and output.
         /// Matches Anthropic's public "roughly 4 characters per token" heuristic.
-        public static let defaultTokenEstimator: @Sendable (_ prompt: String, _ output: String) -> (in: Int, out: Int) = { prompt, output in
+        static let defaultTokenEstimator: @Sendable (_ prompt: String, _ output: String) -> (in: Int, out: Int) = { prompt, output in
                 (
                     in: max(1, (prompt.count + 3) / 4),
                     out: max(0, (output.count + 3) / 4)

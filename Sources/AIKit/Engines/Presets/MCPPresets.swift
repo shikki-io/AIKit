@@ -42,7 +42,7 @@ extension MCPEngine {
     /// the top of this file.
     ///
     /// - Parameter port: the port Koharu listens on; 9999 is its own default.
-    public static func localKoharu(
+    static func localKoharu(
         port: Int = 9_999,
         networkService: any NetworkProtocol = NetworkService()
     ) -> MCPEngine {
@@ -65,7 +65,7 @@ extension MCPEngine {
     /// different protocol.
     ///
     /// - Parameter port: LM Studio's server port; 1234 is its own default.
-    public static func localLMStudio(
+    static func localLMStudio(
         port: Int = 1_234,
         networkService: any NetworkProtocol = NetworkService()
     ) -> MCPEngine {

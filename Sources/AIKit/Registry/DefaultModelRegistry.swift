@@ -10,7 +10,24 @@ public final class DefaultModelRegistry: ModelRegistry, @unchecked Sendable {
     /// - Parameter localStore: injected, with no default. The manifest's
     ///   location comes from the host's path layer (W23 of spec
     ///   ai-layer-aikit-core-2026-10-31), so a kit cannot build one for itself.
-    public init(
+    ///
+    /// The search client and the downloader are NOT parameters here: the
+    /// Hugging Face endpoint stays internal BEHIND the catalogue (W27,
+    /// BR-AIL-21, door 3). A caller asks the catalogue for models; which
+    /// registry it searches and how it fetches bytes is the catalogue's own
+    /// business, and a test reaches the init below through `@testable` to
+    /// inject both.
+    public convenience init(localStore: LocalModelStore) {
+        self.init(
+            localStore: localStore,
+            hfClient: HuggingFaceClient(),
+            downloader: ModelDownloader()
+        )
+    }
+
+    /// The full init. Internal because `HuggingFaceClient` and
+    /// `ModelDownloader` are.
+    init(
         localStore: LocalModelStore,
         hfClient: HuggingFaceClient = HuggingFaceClient(),
         downloader: ModelDownloader = ModelDownloader()

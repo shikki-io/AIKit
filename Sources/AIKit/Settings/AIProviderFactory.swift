@@ -66,11 +66,34 @@ public struct AIProviderFactory: Sendable {
 
     // MARK: - Init
 
+    /// - Parameters:
+    ///   - credentials: resolves an ``AIProviderEntry/apiKeyRef`` to a secret.
+    ///   - builders: a family this factory cannot serve on its own.
+    ///     `AIKitMLX.register(into:)` adds `mlx-in-process` through it.
+    ///
+    /// The transport is NOT a parameter here, and that is the point of the
+    /// thin surface (W27, BR-AIL-21): ``AIHTTPTransport`` is a provider API,
+    /// so it is internal, and the one production transport factory is
+    /// ``AIKitAssembly/urlSessionTransport``. A test reaches the init below
+    /// through `@testable` to hand a stub (BR-AIL-12).
     public init(
         credentials: @escaping @Sendable (String) -> String? = { _ in nil },
-        transport: @escaping @Sendable (AIProviderEntry) -> any AIHTTPTransport = {
-            URLSessionHTTPTransport(timeout: $0.requestTimeout)
-        },
+        builders: [AIProviderFamily: Builder] = [:]
+    ) {
+        self.init(
+            credentials: credentials,
+            transport: AIKitAssembly.urlSessionTransport,
+            builders: builders
+        )
+    }
+
+    /// The full init, including the transport factory.
+    ///
+    /// Internal because its transport parameter is: a host picks providers, not
+    /// the socket they are spoken over.
+    init(
+        credentials: @escaping @Sendable (String) -> String? = { _ in nil },
+        transport: @escaping @Sendable (AIProviderEntry) -> any AIHTTPTransport,
         builders: [AIProviderFamily: Builder] = [:]
     ) {
         self.credentials = credentials
@@ -79,6 +102,9 @@ public struct AIProviderFactory: Sendable {
     }
 
     /// The same factory with one more family it can serve.
+    ///
+    /// This is how an optional target joins without AIKit linking it
+    /// (BR-AIL-14): `AIKitMLX.register(into:)` is one call to this.
     public func registering(_ family: AIProviderFamily, builder: @escaping Builder) -> AIProviderFactory {
         var builders = self.builders
         builders[family] = builder

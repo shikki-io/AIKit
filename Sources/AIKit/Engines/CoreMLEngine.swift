@@ -19,10 +19,10 @@
     /// `.voiceToText`, loads as a transcriber instead of as a generic model.
     /// That is the iOS half of S3.5 — Core ML runs on the Neural Engine on both
     /// platforms, so an iPhone needs no CLI to transcribe.
-    public final class CoreMLEngine: RuntimeEngine, @unchecked Sendable {
-        public let id = "coreml"
-        public let displayName = "Apple CoreML"
-        public let supportedFormats: [ModelFormat] = [.coreml]
+    final class CoreMLEngine: RuntimeEngine, @unchecked Sendable {
+        let id = "coreml"
+        let displayName = "Apple CoreML"
+        let supportedFormats: [ModelFormat] = [.coreml]
 
         /// Directory containing .mlmodelc files.
         let modelsDirectory: URL
@@ -33,18 +33,18 @@
         /// - Parameter modelsDirectory: Where compiled models live. Injected, never
         ///   defaulted: the directory is the caller's to decide from the Shikki
         ///   path layer, so AIKit owns no home-relative folder of its own.
-        public init(modelsDirectory: URL) {
+        init(modelsDirectory: URL) {
             self.modelsDirectory = modelsDirectory
         }
 
-        public var isAvailable: Bool {
+        var isAvailable: Bool {
             // CoreML is available on all Apple platforms.
             true
         }
 
         // MARK: - RuntimeEngine
 
-        public func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
+        func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
             let model = try await compiledModel(for: descriptor)
 
             let provider: any AIProvider
@@ -75,11 +75,11 @@
             return provider
         }
 
-        public func unloadModel(_ id: ModelIdentifier) async throws {
+        func unloadModel(_ id: ModelIdentifier) async throws {
             _loadedModels.removeAll { $0 == id }
         }
 
-        public func loadedModels() -> [ModelIdentifier] {
+        func loadedModels() -> [ModelIdentifier] {
             _loadedModels
         }
 
@@ -129,7 +129,7 @@
         /// large reserved as the Mac upgrade. A caller on a machine with the
         /// headroom passes its own list to ``resolveVoiceWeights(preferring:)``
         /// rather than AIKit guessing from the host — the point of BR-AIL-08.
-        public static let voiceWeightsPreference = [
+        static let voiceWeightsPreference = [
             "whisper-small.mlmodelc",
             "whisper-small.mlpackage",
             "whisper-base.mlmodelc",
@@ -140,7 +140,7 @@
         /// `<id>.mlmodelc` bundle's name minus the extension, sorted. Empty when
         /// the directory is missing. An id returned here resolves through
         /// ``loadModel(_:)`` as `<modelsDirectory>/<id>.mlmodelc`.
-        public func availableModelIDs() -> [String] {
+        func availableModelIDs() -> [String] {
             let entries = (try? FileManager.default.contentsOfDirectory(
                 at: modelsDirectory, includingPropertiesForKeys: nil)) ?? []
             return entries
@@ -155,7 +155,7 @@
         /// This is what makes the model reachable from config: a caller asks
         /// what is on disk and passes the answer in a `ModelDescriptor`,
         /// instead of a path being decided inside the engine.
-        public func resolveVoiceWeights(
+        func resolveVoiceWeights(
             preferring preference: [String] = CoreMLEngine.voiceWeightsPreference
         ) -> URL? {
             for name in preference {
@@ -584,26 +584,26 @@
     import Foundation
 
     /// Linux stub — CoreML is not available outside Apple platforms.
-    public final class CoreMLEngine: RuntimeEngine, @unchecked Sendable {
-        public let id = "coreml"
-        public let displayName = "Apple CoreML"
-        public let supportedFormats: [ModelFormat] = [.coreml]
+    final class CoreMLEngine: RuntimeEngine, @unchecked Sendable {
+        let id = "coreml"
+        let displayName = "Apple CoreML"
+        let supportedFormats: [ModelFormat] = [.coreml]
 
-        public init(modelsDirectory: URL) {}
+        init(modelsDirectory: URL) {}
 
-        public var isAvailable: Bool { false }
+        var isAvailable: Bool { false }
 
-        public func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
+        func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
             throw AIKitError.engineUnavailable("CoreML is only available on Apple platforms")
         }
 
-        public func unloadModel(_ id: ModelIdentifier) async throws {
+        func unloadModel(_ id: ModelIdentifier) async throws {
             throw AIKitError.engineUnavailable("CoreML is only available on Apple platforms")
         }
 
-        public func loadedModels() -> [ModelIdentifier] { [] }
+        func loadedModels() -> [ModelIdentifier] { [] }
 
-        public func availableModelIDs() -> [String] { [] }
+        func availableModelIDs() -> [String] { [] }
     }
 
 #endif

@@ -21,19 +21,19 @@ import Foundation
 ///
 /// Malformed lines are emitted as ``StreamEvent/Kind/parseError(reason:)``
 /// so nothing is silently dropped — every stdout byte accounts to an event.
-public struct ClaudeCodeStreamJSONParser: StreamParsing {
+struct ClaudeCodeStreamJSONParser: StreamParsing {
 
     private var buffer = LineBuffer()
 
-    public init() {}
+    init() {}
 
     // MARK: - StreamParsing
 
-    public mutating func consume(_ chunk: String) -> [StreamEvent] {
+    mutating func consume(_ chunk: String) -> [StreamEvent] {
         buffer.append(chunk).flatMap(Self.parseLine)
     }
 
-    public mutating func flush() -> [StreamEvent] {
+    mutating func flush() -> [StreamEvent] {
         guard let leftover = buffer.drain() else { return [] }
         return Self.parseLine(leftover)
     }

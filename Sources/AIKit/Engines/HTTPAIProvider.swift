@@ -23,26 +23,26 @@ import NetKit
 /// A local server and a shared one are THE SAME TYPE with a different address
 /// (BR-AIL-20): there is no "local provider" class here, and nothing decides
 /// local-ness by looking for a substring in a host.
-public struct HTTPAIProvider: AIProvider, Sendable {
+struct HTTPAIProvider: AIProvider, Sendable {
 
     // MARK: - AIProvider
 
-    public let id: String
-    public let displayName: String
-    public let capabilities: AICapabilities
+    let id: String
+    let displayName: String
+    let capabilities: AICapabilities
 
     // MARK: - Collaborators
 
     /// Who, where, which model — as the operator configured it.
-    public let entry: AIProviderEntry
+    let entry: AIProviderEntry
     /// Request in, reply out, for this entry's family.
-    public let codec: any WireCodec
+    let codec: any WireCodec
     /// Bytes out, status and bytes in.
-    public let network: any AIHTTPTransport
+    let network: any AIHTTPTransport
     /// The resolved secret, when the entry names one. Never stored in settings
     /// (BR-AIL-20): the entry carries an `apiKeyRef` and a broker resolves it
     /// before the provider is built.
-    public let credential: String?
+    let credential: String?
 
     // MARK: - Init
 
@@ -59,7 +59,7 @@ public struct HTTPAIProvider: AIProvider, Sendable {
     ///   - capabilities: What the model can do. Defaults to what the CODEC can
     ///     carry, so a provider never advertises a capability its wire drops —
     ///     which is the inversion this wave removes.
-    public init(
+    init(
         entry: AIProviderEntry,
         codec: any WireCodec,
         network: any AIHTTPTransport,
@@ -86,7 +86,7 @@ public struct HTTPAIProvider: AIProvider, Sendable {
     ///
     /// - Throws: ``AIKitError/engineUnavailable(_:)`` when the entry names a
     ///   local family, which has no wire and is served by its own provider.
-    public init(
+    init(
         entry: AIProviderEntry,
         network: any AIHTTPTransport,
         credential: String? = nil,
@@ -107,7 +107,7 @@ public struct HTTPAIProvider: AIProvider, Sendable {
     /// carrying the entry's own timeout.
     ///
     /// - Throws: As above.
-    public init(
+    init(
         entry: AIProviderEntry,
         credential: String? = nil,
         displayName: String? = nil,
@@ -134,13 +134,13 @@ public struct HTTPAIProvider: AIProvider, Sendable {
         return capabilities
     }
 
-    public var status: AIProviderStatus {
+    var status: AIProviderStatus {
         get async { .ready }
     }
 
     // MARK: - complete
 
-    public func complete(request: AIRequest) async throws -> AIResponse {
+    func complete(request: AIRequest) async throws -> AIResponse {
         let start = ContinuousClock.now
         let endpoint = try codec.endpoint(for: request, entry: entry, credential: credential, stream: false)
         let target = AIRequestTarget(entry: entry, address: try entry.serverAddress(), route: endpoint.path)
@@ -168,7 +168,7 @@ public struct HTTPAIProvider: AIProvider, Sendable {
 
     // MARK: - stream
 
-    public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
+    func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
         let start = ContinuousClock.now
         let endpoint = try codec.endpoint(for: request, entry: entry, credential: credential, stream: true)
         let target = AIRequestTarget(entry: entry, address: try entry.serverAddress(), route: endpoint.path)

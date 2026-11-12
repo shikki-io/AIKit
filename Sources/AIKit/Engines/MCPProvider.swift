@@ -2,14 +2,14 @@ import Foundation
 
 /// AIProvider that wraps MCP tool calls as AI completions.
 /// Translates AIRequest into MCP tool calls and maps responses back to AIResponse.
-public struct MCPProvider: AIProvider, Sendable {
-    public let id: String
-    public let displayName: String
-    public let capabilities: AICapabilities
+struct MCPProvider: AIProvider, Sendable {
+    let id: String
+    let displayName: String
+    let capabilities: AICapabilities
 
     private let engine: MCPEngine
 
-    public init(
+    init(
         id: String,
         displayName: String,
         capabilities: AICapabilities,
@@ -21,11 +21,11 @@ public struct MCPProvider: AIProvider, Sendable {
         self.engine = engine
     }
 
-    public var status: AIProviderStatus {
+    var status: AIProviderStatus {
         get async { .ready }
     }
 
-    public func complete(request: AIRequest) async throws -> AIResponse {
+    func complete(request: AIRequest) async throws -> AIResponse {
         let startTime = ContinuousClock.now
 
         // Extract the last user message as the prompt.
