@@ -111,8 +111,15 @@ public struct ProviderRouter: Sendable {
         var attempts: [AIProviderAttempt] = []
 
         for provider in fallbackProviders {
+            // Between attempts (W22): a cancelled caller must not start asking
+            // the next provider. The chain this shares its eligibility rule
+            // with does the same, so the two paths now stop at the same point.
+            try Task.checkCancellation()
+
             do {
                 return try await provider.complete(request: request)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 attempts.append(AIProviderAttempt(providerID: provider.id, error: error))
 
@@ -131,6 +138,22 @@ public struct ProviderRouter: Sendable {
 
         throw AIKitError.allProvidersFailed(attempts)
     }
+
+    /// Try THIS router's own providers in order until one succeeds.
+    ///
+    /// The order is the order the router was built with, which for a router
+    /// resolved out of ``AIKitAssembly`` is the order of the `[[providers]]`
+    /// rows (BR-AIL-11, W22): local first is the operator's file, not a rule in
+    /// code. A caller that had to pass the list back in was re-deciding an
+    /// order settings had already decided.
+    ///
+    /// - Throws: as ``routeWithFallback(request:providers:)``.
+    public func routeWithFallback(request: AIRequest) async throws -> AIResponse {
+        try await routeWithFallback(request: request, providers: providers)
+    }
+
+    /// The providers this router holds, in the order it will try them.
+    public var orderedProviders: [any AIProvider] { providers }
 }
 
 /// User preferences for provider selection.

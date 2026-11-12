@@ -298,6 +298,17 @@ func makeFixtureAddress(_ root: String = fixtureServerRoot) throws -> AIServerAd
     try AIServerAddress(validating: root)
 }
 
+/// Where a test pretends `mlx_lm.server` listens.
+///
+/// A fixture constant and not an environment read: `MLXEngine` takes its
+/// address as an argument since W22 (BR-AIL-20), so a unit test states one
+/// instead of depending on what is set on this machine.
+let fixtureMLXServerRoot = "http://127.0.0.1:8080"
+
+func makeFixtureMLXAddress() throws -> AIServerAddress {
+    try AIServerAddress(validating: fixtureMLXServerRoot)
+}
+
 /// A settings entry for one family at the fixture address.
 func makeFixtureEntry(
     family: AIProviderFamily,

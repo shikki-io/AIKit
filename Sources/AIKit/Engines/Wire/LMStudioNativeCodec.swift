@@ -64,7 +64,7 @@ public struct LMStudioNativeCodec: WireCodec {
         try refuseWhatItCannotCarry(request, streaming: stream)
         return try proved(
             LMStudioEndPoint.chat(
-                address: entry.address,
+                address: try entry.serverAddress(),
                 credential: credential,
                 body: try nativeRequest(for: request, model: entry.model, stream: stream)
             )

@@ -279,6 +279,11 @@ public enum CLIProviderFamily: String, Sendable, CaseIterable, Hashable {
         /// and error attribution.
         public let providerID: AIProviderID
 
+        /// ``AgentProviding/id`` — the routing id's own spelling, so a failed
+        /// attempt in a `FallbackProviderChain` names this CLI rather than the
+        /// type that ran it.
+        public var id: String { providerID.rawValue }
+
         /// Binary + fixed arguments. The prompt is passed on stdin, so no
         /// prompt-shaped placeholder is required in `arguments`.
         ///

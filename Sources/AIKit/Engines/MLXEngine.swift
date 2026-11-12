@@ -12,12 +12,27 @@
 
         /// Path to Python binary. Auto-detected or user-configured.
         private let pythonPath: String
+        /// Where `mlx_lm.server` listens, as settings say.
+        ///
+        /// INJECTED and required (W22, BR-AIL-20). It used to be read from an
+        /// environment variable inside this type, falling back to port 8080 on
+        /// this machine when the host had not set one — a library initializer
+        /// reading its host's environment and then guessing. An engine that
+        /// guesses an address answers from the wrong server without saying so.
+        /// The variable is named in `AIKitAssemblyTests`, which is also the
+        /// ratchet that keeps it out of Sources.
+        private let serverAddress: AIServerAddress
         /// Python module for video generation.
         private let mlxVideoModule: String
         /// Currently loaded model identifiers.
         private var _loadedModels: [ModelIdentifier] = []
 
-        public init(pythonPath: String? = nil) {
+        /// - Parameters:
+        ///   - serverAddress: where `mlx_lm.server` listens. No default: see
+        ///     ``serverAddress``.
+        ///   - pythonPath: the python binary, auto-detected when nil.
+        public init(serverAddress: AIServerAddress, pythonPath: String? = nil) {
+            self.serverAddress = serverAddress
             // Auto-detect python3 path if not provided.
             if let path = pythonPath {
                 self.pythonPath = path
@@ -36,23 +51,6 @@
             #else
                 return false
             #endif
-        }
-
-        /// Server ROOT for the mlx_lm.server HTTP endpoint.
-        ///
-        /// The `/v1` this used to carry is gone: the route belongs to
-        /// ``OpenAIEndPoint``, and an address that carried `/v1` would have been
-        /// posted to as `/v1/v1/chat/completions` — the mistake BR-AIL-09 exists
-        /// to forbid, and the one ``AIServerAddress`` now refuses outright
-        /// (AIKit#18, panel finding on `MLXEngine.swift:44`).
-        ///
-        /// FIXME(spec 8badc87f-e9e0-4bfd-913f-a52f52ba70fc W22): the environment read stays for now. BR-AIL-20 forbids a
-        /// library initializer reading one, and W22 of spec
-        /// ai-layer-aikit-core-2026-10-31 deletes `MLX_LM_BASE_URL` here along with
-        /// `LMSTUDIO_URL` and `LMSTUDIO_MODEL`, replacing all three with a settings
-        /// entry injected through CoreKit DI.
-        private static var mlxLMBaseURL: String {
-            ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"] ?? "http://localhost:8080"
         }
 
         /// Detect installed MLX models/capabilities.
@@ -101,7 +99,7 @@
                     entry: AIProviderEntry(
                         id: "\(id)/\(descriptor.id.modelId)",
                         family: .openAIChat,
-                        address: Self.mlxLMBaseURL,
+                        address: serverAddress,
                         model: descriptor.huggingFaceId ?? descriptor.id.modelId
                     ),
                     displayName: "\(displayName) — \(descriptor.name)",

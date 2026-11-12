@@ -16,6 +16,10 @@ import Foundation
 public struct ModelAliasMap: Sendable, Equatable {
     private let aliases: [String: String]
 
+    /// The pairs this map holds, for a caller that has to write them back into
+    /// a settings row (``AICLISubprocessOptions``).
+    public var mapping: [String: String] { aliases }
+
     /// Create a map from the given `alias → canonical` pairs.
     /// An empty map is a valid passthrough (every input resolves to itself).
     public init(_ aliases: [String: String]) {

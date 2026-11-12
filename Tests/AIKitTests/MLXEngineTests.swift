@@ -6,8 +6,8 @@ import Testing
 struct MLXEngineTests {
 
     @Test("MLX engine has correct id and formats")
-    func engineIdentity() {
-        let engine = MLXEngine()
+    func engineIdentity() throws {
+        let engine = MLXEngine(serverAddress: try makeFixtureMLXAddress())
         #expect(engine.id == "mlx")
         #expect(engine.displayName == "Apple MLX")
         #expect(engine.supportedFormats == [.mlx, .gguf])
@@ -15,14 +15,14 @@ struct MLXEngineTests {
 
     #if canImport(Darwin) && arch(arm64)
     @Test("isAvailable returns true on Apple Silicon")
-    func availableOnAppleSilicon() {
-        let engine = MLXEngine()
+    func availableOnAppleSilicon() throws {
+        let engine = MLXEngine(serverAddress: try makeFixtureMLXAddress())
         #expect(engine.isAvailable)
     }
     #else
     @Test("isAvailable returns false on non-Apple-Silicon")
-    func unavailableOffPlatform() {
-        let engine = MLXEngine()
+    func unavailableOffPlatform() throws {
+        let engine = MLXEngine(serverAddress: try makeFixtureMLXAddress())
         #expect(!engine.isAvailable)
     }
     #endif
@@ -104,8 +104,8 @@ struct MLXEngineTests {
     }
 
     @Test("Loaded models starts empty")
-    func loadedModelsEmpty() {
-        let engine = MLXEngine()
+    func loadedModelsEmpty() throws {
+        let engine = MLXEngine(serverAddress: try makeFixtureMLXAddress())
         #expect(engine.loadedModels().isEmpty)
     }
 
@@ -128,7 +128,7 @@ struct MLXEngineTests {
     #if canImport(Darwin) && arch(arm64)
     @Test("loadModel LLM domain returns provider advertising synthesis")
     func loadModelLLMDomain() async throws {
-        let engine = MLXEngine()
+        let engine = MLXEngine(serverAddress: try makeFixtureMLXAddress())
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "mlx", modelId: "llama-3.2-3b-instruct-4bit"),
             name: "Llama 3.2 3B Instruct 4bit",
@@ -151,8 +151,8 @@ struct MLXEngineTests {
     }
 
     @Test("detectCapabilities includes synthesis on arm64")
-    func detectCapabilitiesIncludesSynthesis() {
-        let engine = MLXEngine()
+    func detectCapabilitiesIncludesSynthesis() throws {
+        let engine = MLXEngine(serverAddress: try makeFixtureMLXAddress())
         let caps = engine.detectCapabilities()
         // On arm64 with python3 available, synthesis is advertised.
         if ShellRunner.commandExists("python3") {

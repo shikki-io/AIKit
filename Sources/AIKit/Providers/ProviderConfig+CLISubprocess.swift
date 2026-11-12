@@ -50,7 +50,14 @@
         // MARK: - Constants
 
         /// The single accepted value for the `kind` field.
-        public static let kindLiteral: String = "cli-subprocess"
+        ///
+        /// DERIVED from ``AIProviderFamily/cliSubprocess``, not spelled again.
+        /// Two `kind` parsers used to exist with no knowledge of each other —
+        /// `AIProviderFamily.init(kind:)` and the literal comparison in this
+        /// file — so the vocabularies could drift and a row accepted by one was
+        /// rejected by the other (AIKit#18, panel finding on
+        /// `AIWireStandard.swift:66` and `ProviderConfig+CLISubprocess.swift:51,106`).
+        public static let kindLiteral: String = AIProviderFamily.cliSubprocess.rawValue
 
         // MARK: - Stored properties
 
@@ -103,8 +110,12 @@
         ///     (or an empty `binary`).
         ///   - ``ConfigError/invalidField(_:)`` for shape mismatches.
         public init(dictionary: [String: Any]) throws {
-            // kind: optional but if present must match.
-            if let kind = dictionary["kind"] as? String, kind != Self.kindLiteral {
+            // kind: optional, but if present it is read through the ONE
+            // vocabulary and must resolve to this family. A row saying
+            // `openai-compatible` is refused here by the same parser that
+            // accepts it for an HTTP entry, so the two answers agree.
+            if let kind = dictionary["kind"] as? String,
+                AIProviderFamily(kind: kind) != .cliSubprocess {
                 throw ConfigError.wrongKind(kind)
             }
 
@@ -129,6 +140,41 @@
                 modelAliases: ModelAliasMap(aliases),
                 env: env,
                 cwd: cwd
+            )
+        }
+
+        // MARK: - Init (from a typed settings row)
+
+        /// Builds a config from the typed options of a `[[providers]]` row.
+        ///
+        /// This is the direction W22 established: the SETTINGS row
+        /// (``AICLISubprocessOptions``) is read by `AIProviderEntry`'s decoder,
+        /// and this type is built from it rather than parsing the same keys out
+        /// of an untyped dictionary a second time.
+        ///
+        /// - Parameters:
+        ///   - options: the row's CLI fields.
+        ///   - defaultModel: the row's `model`, which is this config's default.
+        public init(options: AICLISubprocessOptions, defaultModel: String) {
+            self.init(
+                binary: options.binary,
+                argsTemplate: options.argsTemplate,
+                defaultModel: defaultModel,
+                modelAliases: ModelAliasMap(options.modelAliases),
+                env: options.environment,
+                cwd: options.workingDirectory
+            )
+        }
+
+        /// The row's CLI fields again, for a caller that holds a config and
+        /// needs a settings row.
+        public var options: AICLISubprocessOptions {
+            AICLISubprocessOptions(
+                binary: binary,
+                argsTemplate: argsTemplate,
+                modelAliases: modelAliases.mapping,
+                environment: env,
+                workingDirectory: cwd
             )
         }
 

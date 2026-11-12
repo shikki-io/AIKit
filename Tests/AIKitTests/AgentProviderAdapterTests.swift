@@ -16,10 +16,12 @@ import Testing
 private final class StubAgent: AgentProviding, @unchecked Sendable {
     private(set) var prompts: [String] = []
     private(set) var timeouts: [TimeInterval] = []
+    let id: String
     let output: String
     let error: (any Error)?
 
-    init(output: String = "", error: (any Error)? = nil) {
+    init(id: String = "stub-agent", output: String = "", error: (any Error)? = nil) {
+        self.id = id
         self.output = output
         self.error = error
     }

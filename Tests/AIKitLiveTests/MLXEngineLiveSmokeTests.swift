@@ -31,9 +31,20 @@ struct MLXEngineLiveSmokeTests {
     #if canImport(Darwin) && arch(arm64)
         @Test("live synthesis: loadModel + complete returns non-empty output via MLX")
         func liveSynthesisOutputNonEmpty() async throws {
-            // This test requires mlx_lm.server running at MLX_LM_BASE_URL (default :8080).
-            // `shi doctor --check mlx-lm --fix` provisions it (W3).
-            let engine = MLXEngine()
+            // This test requires mlx_lm.server running at the address below;
+            // `MLX_LM_BASE_URL` overrides it. `shi doctor --check mlx-lm --fix`
+            // provisions it (W3).
+            //
+            // The environment read lives HERE, in a live test, and no longer in
+            // `MLXEngine` (W22, BR-AIL-20): a library initializer must not read
+            // its host's environment, while a test that needs a running server
+            // is exactly the caller allowed to ask the host where it put one.
+            let engine = MLXEngine(
+                serverAddress: try AIServerAddress(
+                    validating: ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"]
+                        ?? "http://127.0.0.1:8080"
+                )
+            )
             let descriptor = smallLLMDescriptor()
 
             let provider = try await engine.loadModel(descriptor)
