@@ -25,6 +25,15 @@ public enum AIKitError: Error, LocalizedError, Equatable {
     /// which is the single place an address is read.
     case invalidServerAddress(value: String, reason: String)
 
+    /// The settings document could not be read as a provider list
+    /// (BR-AIL-18, BR-AIL-20).
+    ///
+    /// Names the FILE, the entry when one is identifiable, and what is wrong,
+    /// because the only useful answer to this is an edit to that file at that
+    /// row. A settings mistake that arrived as a generic `requestFailed` sent
+    /// a reader looking for a server fault instead.
+    case settings(file: String, entry: String?, reason: String)
+
     /// The request carries something this family's wire cannot express
     /// (BR-AIL-17).
     ///
@@ -90,6 +99,8 @@ public enum AIKitError: Error, LocalizedError, Equatable {
             AIProviderAttempt.summary(of: attempts)
         case .invalidServerAddress(let value, let reason):
             "Not a server address: '\(value)' — \(reason)"
+        case .settings(let file, let entry, let reason):
+            entry.map { "\(file): provider '\($0)' — \(reason)" } ?? "\(file): \(reason)"
         case .unsupported(let field, let family):
             "\(family.displayName) cannot carry '\(field)', so nothing was sent"
         case .http(let status, let body, let target):
@@ -265,8 +276,10 @@ public enum FallbackEligibility {
         .emptyReply, .replyUndecodable, .streamLineTooLong,
             // A settings mistake, and NOT eligible on purpose: trying the next
             // provider would hide a misconfigured address behind a working one,
-            // and the operator would keep an entry that never works.
-            .invalidServerAddress,
+            // and the operator would keep an entry that never works. The same
+            // reasoning covers the document as a whole: a `[[providers]]` row
+            // that does not parse is not a provider that is down.
+            .invalidServerAddress, .settings,
             // A registry transfer, not a completion attempt. Retrying the
             // request elsewhere does not finish a download.
             .downloadFailed,

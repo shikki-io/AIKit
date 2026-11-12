@@ -17,12 +17,28 @@ import NetKit
 /// It carried its own `URLSession` and `[String: Any]` body once — a second
 /// implementation of a wire format the package already had (BR-DISC-A).
 public struct LMStudioProvider: AgentProviding, Sendable {
-    /// Base URL for the LM Studio server. A server ROOT, no path (BR-AIL-09).
+
+    /// The settings row this provider serves: who it is, where it is, which
+    /// model, and how long a request may take.
+    ///
+    /// Held rather than copied field by field (W22, BR-AIL-20). A local LM
+    /// Studio and the one on the Mac across the desk are the same type with a
+    /// different address, and that address came from settings — validated once
+    /// when the document loaded, so `run` has nothing left to parse.
+    public let entry: AIProviderEntry
+
+    /// What settings call this provider, and what a failed attempt in a
+    /// fallback chain names (``AgentProviding/id``).
+    public var id: String { entry.id }
+    /// The LM Studio server root. A server ROOT, no path (BR-AIL-09).
+    ///
+    /// Non-optional because the init refuses an entry without one, so there is
+    /// no empty-string sentinel here for a caller to mistake for an address.
     public let baseURL: String
     /// Model identifier as loaded in LM Studio.
-    public let model: String
+    public var model: String { entry.model }
     /// Request timeout in seconds, as a ceiling on the caller's own timeout.
-    public let requestTimeout: TimeInterval
+    public var requestTimeout: TimeInterval { entry.requestTimeout }
     /// Logger for diagnostics.
     private let logger: Logger
     /// Set only when a caller injects a transport, which tests do (BR-AIL-12).
@@ -42,39 +58,60 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 
     // MARK: - Init
 
-    /// Create a new LMStudioProvider.
+    /// Serves one configured LM Studio entry.
+    ///
     /// - Parameters:
-    ///   - baseURL: LM Studio server root. Defaults to env `LMSTUDIO_URL` or
-    ///     `http://127.0.0.1:1234`.
-    ///   - model: Model name. Defaults to env `LMSTUDIO_MODEL` or `local-model`.
-    ///   - requestTimeout: Ceiling for a single request in seconds. Defaults to 300.
+    ///   - entry: the settings row. Its address was validated when the
+    ///     document loaded (BR-AIL-18).
     ///   - logger: Logger for diagnostics.
     ///   - transport: Transport override. Tests inject a stub; production
     ///     leaves it nil so `run` can build one carrying the caller's timeout.
-    ///
-    /// FIXME(spec 8badc87f-e9e0-4bfd-913f-a52f52ba70fc W22): BR-AIL-20 forbids a library initializer reading an
-    /// environment variable, and the two reads below are the ones it names.
-    /// W22 of spec ai-layer-aikit-core-2026-10-31 makes this init non-optional
-    /// and deletes `LMSTUDIO_URL` and `LMSTUDIO_MODEL` from Sources, with the
-    /// values arriving as an ``AIProviderEntry`` through CoreKit DI.
+    /// - Throws: ``AIKitError/settings(file:entry:reason:)`` when the row has
+    ///   no server address — a `cli-subprocess` or `mlx-in-process` row, which
+    ///   this provider cannot serve. Refused HERE rather than carried as an
+    ///   empty `baseURL` that reads as an address until the first request.
     public init(
-        baseURL: String? = nil,
-        model: String? = nil,
+        entry: AIProviderEntry,
+        logger: Logger = Logger(label: "shikki.lmstudio-provider"),
+        transport: (any AIHTTPTransport)? = nil
+    ) throws(AIKitError) {
+        baseURL = try entry.serverAddress().description
+        self.entry = entry
+        self.logger = logger
+        injectedTransport = transport
+    }
+
+    /// Serves an LM Studio server at a configured address.
+    ///
+    /// Non-optional and throwing, both deliberately (W22, BR-AIL-18 and
+    /// BR-AIL-20). What this replaces read `LMSTUDIO_URL` and `LMSTUDIO_MODEL`
+    /// from the process environment and fell back to `http://127.0.0.1:1234`
+    /// and `local-model`, so a host that had set neither got a provider
+    /// pointing at its own machine and a model name no server has — and a
+    /// library initializer decided it. Both reads are gone from Sources; the
+    /// address is now validated here, once, instead of at the first request.
+    ///
+    /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)`` naming the
+    ///   value.
+    public init(
+        id: String = "lmstudio",
+        baseURL: String,
+        model: String,
         requestTimeout: TimeInterval = AIProviderEntry.defaultRequestTimeout,
         logger: Logger = Logger(label: "shikki.lmstudio-provider"),
         transport: (any AIHTTPTransport)? = nil
-    ) {
-        self.baseURL =
-            baseURL
-            ?? ProcessInfo.processInfo.environment["LMSTUDIO_URL"]
-            ?? "http://127.0.0.1:1234"
-        self.model =
-            model
-            ?? ProcessInfo.processInfo.environment["LMSTUDIO_MODEL"]
-            ?? "local-model"
-        self.requestTimeout = requestTimeout
-        self.logger = logger
-        injectedTransport = transport
+    ) throws(AIKitError) {
+        try self.init(
+            entry: try AIProviderEntry(
+                id: id,
+                family: .openAIChat,
+                address: baseURL,
+                model: model,
+                requestTimeout: requestTimeout
+            ),
+            logger: logger,
+            transport: transport
+        )
     }
 
     // MARK: - AgentProviding
@@ -103,27 +140,13 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 
     // MARK: - Request Building
 
-    /// The settings entry this provider's requests are built from.
-    ///
-    /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)`` when
-    ///   `baseURL` is not a server root.
-    func entry() throws(AIKitError) -> AIProviderEntry {
-        try AIProviderEntry(
-            id: "lmstudio",
-            family: .openAIChat,
-            address: baseURL,
-            model: model,
-            requestTimeout: requestTimeout
-        )
-    }
-
     /// The provider that does the wire work, built for one call because the
     /// timeout it must honour is that call's argument.
     ///
-    /// - Throws: As `entry()`.
-    func provider(timeout: TimeInterval) throws(AIKitError) -> HTTPAIProvider {
+    /// Nothing is validated here any more: the entry arrived validated.
+    func provider(timeout: TimeInterval) -> HTTPAIProvider {
         HTTPAIProvider(
-            entry: try entry(),
+            entry: entry,
             codec: OpenAIChatCodec(),
             network: injectedTransport
                 ?? URLSessionHTTPTransport(timeout: min(timeout, requestTimeout)),
@@ -153,7 +176,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     /// server that has no OpenAI equivalent, and the reason this type still
     /// exists after the wire moved out.
     public func hostedModels() async throws -> [LMStudioHostedModel] {
-        let address = try AIServerAddress(validating: baseURL)
+        let address = try entry.serverAddress()
         let transport = injectedTransport ?? URLSessionHTTPTransport(timeout: requestTimeout)
         let reply: LMStudioModelsReply = try await transport.sendRequest(
             endpoint: LMStudioEndPoint.models(address: address, credential: nil)
@@ -163,7 +186,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 
     /// Asks the host to load a model — `POST /api/v1/models/load`.
     public func load(model: String, contextLength: Int? = nil, ttl: Int? = nil) async throws {
-        let address = try AIServerAddress(validating: baseURL)
+        let address = try entry.serverAddress()
         try await send(
             LMStudioEndPoint.loadModel(
                 address: address,
@@ -176,7 +199,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 
     /// Asks the host to unload a model — `POST /api/v1/models/unload`.
     public func unload(model: String) async throws {
-        let address = try AIServerAddress(validating: baseURL)
+        let address = try entry.serverAddress()
         try await send(
             LMStudioEndPoint.unloadModel(
                 address: address, credential: nil, body: LMStudioModelUnloadRequest(model: model)),
@@ -196,7 +219,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
             throw AIKitError.http(
                 status: reply.status,
                 body: reply.text,
-                target: AIRequestTarget(entryID: "lmstudio", address: address, route: endPoint.path)
+                target: AIRequestTarget(entryID: id, address: address, route: endPoint.path)
             )
         }
     }
@@ -256,6 +279,11 @@ public struct LMStudioProvider: AgentProviding, Sendable {
             // reporting it as one would hide a misconfigured address behind a
             // retry on the next provider.
             return .invalidResponse("Not a server address: '\(value)' — \(reason)")
+        case .settings:
+            // Same reasoning, one level up: the DOCUMENT is wrong, so no
+            // provider in it is "down" and falling back would hide the edit
+            // the operator has to make.
+            return .invalidResponse(aiKitError.localizedDescription)
         default:
             return .invalidResponse(aiKitError.localizedDescription)
         }

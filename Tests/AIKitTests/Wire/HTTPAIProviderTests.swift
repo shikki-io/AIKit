@@ -400,7 +400,7 @@ struct HTTPAIProviderFamilyTests {
         #expect(AIProviderEntry.defaultRequestTimeout == 300)
         let transport = URLSessionHTTPTransport(timeout: entry.requestTimeout)
         let request = try transport.createRequest(
-            endPoint: OpenAIEndPoint.models(address: entry.address, credential: nil)
+            endPoint: OpenAIEndPoint.models(address: try entry.serverAddress(), credential: nil)
         )
         #expect(request.timeoutInterval == 420)
     }

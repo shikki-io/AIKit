@@ -143,7 +143,7 @@ public struct HTTPAIProvider: AIProvider, Sendable {
     public func complete(request: AIRequest) async throws -> AIResponse {
         let start = ContinuousClock.now
         let endpoint = try codec.endpoint(for: request, entry: entry, credential: credential, stream: false)
-        let target = AIRequestTarget(entry: entry, route: endpoint.path)
+        let target = AIRequestTarget(entry: entry, address: try entry.serverAddress(), route: endpoint.path)
         let urlRequest = try network.createRequest(endPoint: endpoint)
 
         let reply = try await network.send(urlRequest)
@@ -171,7 +171,7 @@ public struct HTTPAIProvider: AIProvider, Sendable {
     public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
         let start = ContinuousClock.now
         let endpoint = try codec.endpoint(for: request, entry: entry, credential: credential, stream: true)
-        let target = AIRequestTarget(entry: entry, route: endpoint.path)
+        let target = AIRequestTarget(entry: entry, address: try entry.serverAddress(), route: endpoint.path)
         let urlRequest = try network.createRequest(endPoint: endpoint)
 
         // The status is read here, before this function returns a stream at

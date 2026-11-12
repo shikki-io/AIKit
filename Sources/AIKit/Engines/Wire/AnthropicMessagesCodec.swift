@@ -49,7 +49,7 @@ public struct AnthropicMessagesCodec: WireCodec {
         try refuseWhatItCannotCarry(request, streaming: stream)
         return try proved(
             AnthropicEndPoint.messages(
-                address: entry.address,
+                address: try entry.serverAddress(),
                 credential: credential,
                 body: messagesRequest(for: request, model: entry.model, stream: stream)
             )

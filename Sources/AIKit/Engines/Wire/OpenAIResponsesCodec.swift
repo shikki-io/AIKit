@@ -49,7 +49,7 @@ public struct OpenAIResponsesCodec: WireCodec {
         try refuseWhatItCannotCarry(request, streaming: stream)
         return try proved(
             OpenAIEndPoint.responses(
-                address: entry.address,
+                address: try entry.serverAddress(),
                 credential: credential,
                 body: responsesRequest(for: request, model: entry.model, stream: stream)
             )

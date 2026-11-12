@@ -53,7 +53,7 @@ public struct OpenAIChatCodec: WireCodec {
         try refuseWhatItCannotCarry(request, streaming: stream)
         let body = try chatRequest(for: request, model: entry.model, stream: stream)
         return try proved(
-            OpenAIEndPoint.chatCompletions(address: entry.address, credential: credential, body: body)
+            OpenAIEndPoint.chatCompletions(address: try entry.serverAddress(), credential: credential, body: body)
         )
     }
 

@@ -29,10 +29,23 @@ timeout_seconds = 300
 # codec-refusal and one-entry-point suites (EndPointRouteTests, WireCodecTests,
 # HTTPAIProviderTests, AIServerAddressTests), which is a net +99.
 #
+# CORRECTED and raised 2026-11-12 at the W22 commit. Two measurements, both
+# `kagami test --scope AIKitAll --strict` in this worktree:
+#
+#   * 578/578 at the W20 merge head ffd489b, BEFORE this wave
+#     (run 2188A6F0-65FB-49B5-9CB2-857AE1D29B41). So 512 was already stale by
+#     66 — it was written from a partial W20 measurement and the gate had been
+#     passing with a floor two suites below what it ran.
+#   * 619/619 with W22's suites in
+#     (run 7ED24A63-9B72-4913-B752-39A14774ED1C): +41 for
+#     AIProviderRepositoryTests (T-AIL-45), AIKitAssemblyTests (T-AIL-46) and
+#     FallbackProviderChainTests' deadline, cancellation and provider-id cases
+#     (T-AIL-47).
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 512
+expected_test_min = 619
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]

@@ -52,8 +52,22 @@ public enum AIProviderFamily: String, Sendable, Codable, CaseIterable {
         .openAIChat, .openAIResponses, .anthropicMessages, .lmStudioNative,
     ]
 
+    /// The three families served on the host itself rather than over a wire.
+    public static let localFamilies: [AIProviderFamily] = [.cliSubprocess, .mlxInProcess, .coreML]
+
     /// Whether this family is served by ``HTTPAIProvider``.
     public var isHTTP: Bool { Self.httpFamilies.contains(self) }
+
+    /// Whether a `[[providers]]` row of this family carries
+    /// ``AICLISubprocessOptions`` beyond the common fields.
+    ///
+    /// Read by ``AIProviderEntry``'s decoder, so the family — the one `kind`
+    /// vocabulary — is also what decides which options shape a row has. That
+    /// is the second half of the consolidation this type began: the `kind`
+    /// switch in `ProviderConfig+CLISubprocess` used to answer this question
+    /// on its own, from a string literal, with no knowledge of this enum
+    /// (AIKit#18, panel finding on two `kind` parsers unaware of each other).
+    public var carriesCLIOptions: Bool { self == .cliSubprocess }
 
     /// Human-readable name, for `shi providers discover` output and errors.
     public var displayName: String {
