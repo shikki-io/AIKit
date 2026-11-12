@@ -321,7 +321,29 @@ public struct AIRequestTarget: Sendable, Equatable, Hashable, CustomStringConver
         self.init(entryID: entry.id, address: address, route: route)
     }
 
-    public var description: String { "\(entryID) at \(address)\(route)" }
+    /// The platform the process that sent the request is running on.
+    ///
+    /// Not stored, and deliberately not part of ``Equatable``: it is a property
+    /// of the running host rather than of the request, so two targets that
+    /// name the same entry, address and route are the same target whichever
+    /// machine printed them.
+    public var hostPlatform: HostPlatform { .current }
+
+    /// `<entry> at <address><route>, from <platform>`.
+    ///
+    /// The platform is in the text because of AIKit#18 r4500322517: *"you have
+    /// the current target where it run, iOS, macOS, tvOS, Linux, windows …
+    /// it's not because lms can run it's running in local, you can have
+    /// several mac on the same network or the lms server running on a gaming
+    /// computer you gonna use even if shikki is running on a MacBook Air"*.
+    ///
+    /// "Local" names the SERVER's reach (``AIServerAddress/reach``), never the
+    /// client's whereabouts, so a loopback address and an iPhone client are not
+    /// a contradiction — they are two different facts, and a log that carries
+    /// only the first cannot say which device failed. The settings file and
+    /// entry are the other half of that context and arrive with
+    /// ``AIKitError/settings(file:entry:reason:)`` (W22).
+    public var description: String { "\(entryID) at \(address)\(route), from \(hostPlatform.rawValue)" }
 }
 
 // MARK: - AIProviderOptions

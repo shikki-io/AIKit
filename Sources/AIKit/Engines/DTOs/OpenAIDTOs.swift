@@ -89,20 +89,25 @@ struct ChatCompletionRequest: Encodable, Sendable {
 // MARK: - Chat Completion Response
 
 /// OpenAI-compatible chat completion response.
-struct ChatCompletionResponseDTO: Decodable, Sendable {
+struct ChatCompletionResponseDTO: Codable, Sendable, Equatable {
     let id: String
     /// The model that actually answered.
     ///
-    /// Optional because a reply is not required to echo it, and because this
-    /// type is decode-only — no call site builds it memberwise. Measured on LM
+    /// Optional because a reply is not required to echo it. Measured on LM
     /// Studio 2026-10-31: this surface *ignores* an unknown `model` in the
     /// request and answers with whatever is loaded, so the request's model name
     /// is not evidence of who answered and the reply's value is (BR-AIL-06).
+    ///
+    /// No PRODUCTION call site builds this type memberwise — AIKit reads
+    /// replies and never writes one. It gained `Encodable` in W24 so a test
+    /// fixture can be MINTED from the same declaration the decoder reads,
+    /// instead of being a second, hand-written statement of the same wire
+    /// shape that drifts from it silently (AIKit#18 r4500592040 and siblings).
     let model: String?
     let choices: [Choice]
     let usage: Usage?
 
-    struct Choice: Decodable, Sendable {
+    struct Choice: Codable, Sendable, Equatable {
         let index: Int
         let message: Message
         let finishReason: String?
@@ -114,7 +119,7 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
         }
     }
 
-    struct Message: Decodable, Sendable {
+    struct Message: Codable, Sendable, Equatable {
         let role: String
         let content: String?
         let toolCalls: [ToolCall]?
@@ -126,19 +131,19 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
         }
     }
 
-    struct ToolCall: Decodable, Sendable {
+    struct ToolCall: Codable, Sendable, Equatable {
         let id: String?
         let type: String?
         let function: FunctionCall
 
         // swiftlint:disable:next nesting
-        struct FunctionCall: Decodable, Sendable {
+        struct FunctionCall: Codable, Sendable, Equatable {
             let name: String
             let arguments: String
         }
     }
 
-    struct Usage: Decodable, Sendable {
+    struct Usage: Codable, Sendable, Equatable {
         let promptTokens: Int?
         let completionTokens: Int?
         let totalTokens: Int?
@@ -155,11 +160,11 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
 // MARK: - Streaming Chunk
 
 /// A single SSE chunk from a streaming chat completion.
-struct ChatCompletionChunkDTO: Decodable, Sendable {
+struct ChatCompletionChunkDTO: Codable, Sendable, Equatable {
     let id: String
     let choices: [Choice]
 
-    struct Choice: Decodable, Sendable {
+    struct Choice: Codable, Sendable, Equatable {
         let index: Int
         let delta: Delta
         let finishReason: String?
@@ -171,7 +176,7 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
         }
     }
 
-    struct Delta: Decodable, Sendable {
+    struct Delta: Codable, Sendable, Equatable {
         let role: String?
         let content: String?
         let toolCalls: [ToolCallDelta]?
@@ -183,14 +188,14 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
         }
     }
 
-    struct ToolCallDelta: Decodable, Sendable {
+    struct ToolCallDelta: Codable, Sendable, Equatable {
         let index: Int?
         let id: String?
         let type: String?
         let function: FunctionDelta?
 
         // swiftlint:disable:next nesting
-        struct FunctionDelta: Decodable, Sendable {
+        struct FunctionDelta: Codable, Sendable, Equatable {
             let name: String?
             let arguments: String?
         }
@@ -200,10 +205,10 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
 // MARK: - Models List
 
 /// Response from /v1/models endpoint.
-struct ModelsListResponseDTO: Decodable, Sendable {
+struct ModelsListResponseDTO: Codable, Sendable, Equatable {
     let data: [ModelInfo]
 
-    struct ModelInfo: Decodable, Sendable {
+    struct ModelInfo: Codable, Sendable, Equatable {
         let id: String
         let ownedBy: String?
         let created: Int?

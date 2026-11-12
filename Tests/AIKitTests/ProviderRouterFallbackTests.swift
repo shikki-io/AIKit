@@ -85,7 +85,7 @@ struct ProviderRouterFallbackTests {
     @Test("a total failure lists every provider and its cause")
     func keepsEveryCause() async throws {
         let refused = MockAIProvider(id: "lmstudio-local", capabilities: .textGeneration)
-        refused.shouldThrow = LMStudioProvider.LMStudioError.connectionRefused("127.0.0.1:1234")
+        refused.shouldThrow = LMStudioProvider.LMStudioError.connectionRefused(fixtureServerHostPort)
         let limited = MockAIProvider(id: "openai-cloud", capabilities: .textGeneration)
         limited.shouldThrow = LMStudioProvider.LMStudioError.rateLimited
         let missing = MockAIProvider(id: "mlx/local", capabilities: .textGeneration)
@@ -104,7 +104,7 @@ struct ProviderRouterFallbackTests {
             // Every provider asked, in order, each with its own cause.
             #expect(attempts.count == 3)
             #expect(attempts.map(\.providerID) == ["lmstudio-local", "openai-cloud", "mlx/local"])
-            #expect(attempts[0].cause.contains("127.0.0.1:1234"))
+            #expect(attempts[0].cause.contains(fixtureServerHostPort))
             #expect(attempts[2].cause.contains("MLX requires macOS on Apple Silicon"))
             return true
         }

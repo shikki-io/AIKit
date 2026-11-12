@@ -211,6 +211,200 @@ struct NoLocalhostFallbackRatchetTests {
         var scanner = CommentStripper(source: source)
         return scanner.run()
     }
+
+    // MARK: - Literals (shared with W24's fixture rule)
+
+    /// One string literal found in a file: its VALUE, and the line it opened
+    /// on.
+    struct Hit: Sendable, Equatable {
+        /// The literal's value — escapes resolved, so `"{\"a\":1}"` reads as
+        /// `{"a":1}` and can be handed to a JSON parser.
+        let text: String
+        /// 1-indexed, and the line of the OPENING delimiter, so a multiline
+        /// literal is reported where a reader will look for it.
+        let line: Int
+    }
+
+    /// Every string literal in `code`, in all three Swift spellings.
+    ///
+    /// W24's fixture rule needs the literals themselves, where W21's rules
+    /// needed only a substring match, so this is the one piece of scanning the
+    /// two rules share rather than each having its own idea of what a literal
+    /// is — two enforcers of one idea being the defect BR-EC-02 names.
+    ///
+    /// `code` is expected to have been through ``codeOnly`` already.
+    static func stringLiterals(in code: String) -> [Hit] {
+        var scanner = StringLiteralScanner(source: code)
+        return scanner.run()
+    }
+
+    /// `Tests/`, found from this file rather than from the working directory.
+    static var testsRoot: URL {
+        URL(fileURLWithPath: #filePath)  // Tests/AIKitTests/Wire/<self>.swift
+            .deletingLastPathComponent()  // Wire
+            .deletingLastPathComponent()  // AIKitTests
+            .deletingLastPathComponent()  // Tests
+    }
+
+    /// The repo root — the parent of `Sources/` and `Tests/`.
+    static var repoRoot: URL { testsRoot.deletingLastPathComponent() }
+
+    /// `file` as a repo-relative path, which is how a declaration names it and
+    /// how a failure message should read.
+    static func relativeToRepo(_ file: URL) -> String {
+        let root = repoRoot.path
+        return file.path.hasPrefix(root)
+            ? String(file.path.dropFirst(root.count + 1))
+            : file.path
+    }
+}
+
+// MARK: - StringLiteralScanner
+
+/// Pulls the string literals out of Swift source, resolving escapes.
+///
+/// Three spellings, and each one matters to the rules above:
+///
+///   * `"…"` with escapes — the form a JSON payload is usually written in, and
+///     the one whose `\"` must become `"` before a JSON parser sees it;
+///   * `"""…"""` multiline — how the captured replies are written;
+///   * `#"…"#` raw, any number of `#` — how a payload with quotes in it is
+///     written when escaping every one would be unreadable.
+///
+/// An INTERPOLATION becomes the placeholder `INTERP`. Without that, a payload
+/// built as `"{\"model\":\"\(name)\"}"` would carry `\(` — not a legal
+/// JSON escape — so `JSONSerialization` would reject it and the fixture rule
+/// would quietly let an interpolated hand-written payload through. The
+/// placeholder keeps such a payload parseable, and therefore catchable.
+private struct StringLiteralScanner {
+
+    let characters: [Character]
+    var index = 0
+    var line = 1
+    var hits: [NoLocalhostFallbackRatchetTests.Hit] = []
+
+    init(source: String) {
+        characters = Array(source)
+    }
+
+    mutating func run() -> [NoLocalhostFallbackRatchetTests.Hit] {
+        while index < characters.count {
+            if characters[index] == "\n" {
+                line += 1
+                index += 1
+            } else if let hashes = rawOpener() {
+                readRaw(hashes: hashes)
+            } else if matches("\"\"\"") {
+                readDelimited(open: 3, terminator: "\"\"\"", raw: false, stopsAtNewline: false)
+            } else if characters[index] == "\"" {
+                readDelimited(open: 1, terminator: "\"", raw: false, stopsAtNewline: true)
+            } else {
+                index += 1
+            }
+        }
+        return hits
+    }
+
+    // MARK: Cursor
+
+    private func peek(_ offset: Int) -> Character? {
+        let target = index + offset
+        return target < characters.count ? characters[target] : nil
+    }
+
+    private func matches(_ text: String) -> Bool {
+        text.enumerated().allSatisfy { peek($0.offset) == $0.element }
+    }
+
+    /// The number of `#` opening a raw literal here, or nil.
+    private func rawOpener() -> Int? {
+        guard characters[index] == "#" else { return nil }
+        var hashes = 0
+        while peek(hashes) == "#" { hashes += 1 }
+        return peek(hashes) == "\"" ? hashes : nil
+    }
+
+    // MARK: Reading
+
+    private mutating func readRaw(hashes: Int) {
+        let closing = "\"" + String(repeating: "#", count: hashes)
+        // `#"""…"""#` opens with three quotes; `#"…"#` with one.
+        let opensMultiline = (0..<3).allSatisfy { peek(hashes + $0) == "\"" }
+        index += hashes + (opensMultiline ? 3 : 1)
+        readBody(terminator: closing, raw: true, stopsAtNewline: false)
+    }
+
+    private mutating func readDelimited(open: Int, terminator: String, raw: Bool, stopsAtNewline: Bool) {
+        index += open
+        readBody(terminator: terminator, raw: raw, stopsAtNewline: stopsAtNewline)
+    }
+
+    private mutating func readBody(terminator: String, raw: Bool, stopsAtNewline: Bool) {
+        let startLine = line
+        var body = ""
+        while index < characters.count {
+            if matches(terminator) {
+                index += terminator.count
+                hits.append(.init(text: body, line: startLine))
+                return
+            }
+            let character = characters[index]
+            if character == "\n" {
+                if stopsAtNewline {
+                    // An unterminated literal: not this scanner's business to
+                    // diagnose, and the compiler has already refused the file.
+                    return
+                }
+                line += 1
+                body.append(character)
+                index += 1
+            } else if !raw, character == "\\" {
+                body += escape()
+            } else {
+                body.append(character)
+                index += 1
+            }
+        }
+    }
+
+    /// Resolves one backslash escape, including an interpolation.
+    private mutating func escape() -> String {
+        guard let next = peek(1) else {
+            index += 1
+            return "\\"
+        }
+        if next == "(" {
+            skipInterpolation()
+            return "INTERP"
+        }
+        index += 2
+        switch next {
+        case "\"": return "\""
+        case "\\": return "\\"
+        case "n": return "\n"
+        case "t": return "\t"
+        case "r": return "\r"
+        case "/": return "/"
+        // Anything else (`\u`, `\0`, …) is kept as written: a JSON parser
+        // reads `\u0041` itself, and no rule here depends on the rest.
+        default: return "\\" + String(next)
+        }
+    }
+
+    /// Steps over `\( … )`, counting nested parentheses.
+    private mutating func skipInterpolation() {
+        index += 2  // past `\(`
+        var depth = 1
+        while index < characters.count, depth > 0 {
+            switch characters[index] {
+            case "(": depth += 1
+            case ")": depth -= 1
+            case "\n": line += 1
+            default: break
+            }
+            index += 1
+        }
+    }
 }
 
 // MARK: - CommentStripper
@@ -222,12 +416,16 @@ struct NoLocalhostFallbackRatchetTests {
 /// put it over the complexity the linter allows — which was fair: the
 /// states are what a reader wants to see named.
 private struct CommentStripper {
-    enum State { case code, lineComment, blockComment, string, multilineString }
+    enum State { case code, lineComment, blockComment, string, multilineString, rawString }
 
     let characters: [Character]
     var index = 0
     var state: State = .code
     var blockDepth = 0
+    /// How many `#` opened the raw literal being scanned, so `"` + that many
+    /// closes it. W24: `Tests/` is full of `#"…"#`, and without this state a
+    /// `//` inside one was read as a comment and the rest of the line vanished.
+    var rawHashes = 0
     var output = ""
 
     init(source: String) {
@@ -243,6 +441,7 @@ private struct CommentStripper {
             case .blockComment: stepBlockComment()
             case .string: stepString()
             case .multilineString: stepMultilineString()
+            case .rawString: stepRawString()
             }
         }
         return output
@@ -265,7 +464,13 @@ private struct CommentStripper {
     // MARK: States
 
     private mutating func stepCode() {
-        if current == "/", peek(1) == "/" {
+        if current == "#", let hashes = rawLiteralOpener() {
+            state = .rawString
+            rawHashes = hashes
+            // The opener is emitted verbatim: it is code, and its content is a
+            // literal that `stringLiterals` still has to be able to find.
+            take(hashes + 1, as: String(repeating: "#", count: hashes) + "\"")
+        } else if current == "/", peek(1) == "/" {
             state = .lineComment
             take(2, as: "  ")
         } else if current == "/", peek(1) == "*" {
@@ -320,6 +525,174 @@ private struct CommentStripper {
             take(3, as: "\"\"\"")
         } else {
             take(1, as: String(current))
+        }
+    }
+
+    /// The number of `#` opening a raw literal here, or nil if this `#` starts
+    /// something else (`#expect`, `#filePath`, `#if`).
+    private func rawLiteralOpener() -> Int? {
+        var hashes = 0
+        while peek(hashes) == "#" { hashes += 1 }
+        return peek(hashes) == "\"" ? hashes : nil
+    }
+
+    /// Inside `#"…"#`. Nothing escapes in a raw literal, so the only thing to
+    /// look for is `"` followed by the same number of `#` that opened it.
+    /// That also terminates `#"""…"""#` correctly, at the last of the three
+    /// quotes.
+    private mutating func stepRawString() {
+        if current == "\"", (1...rawHashes).allSatisfy({ peek($0) == "#" }) {
+            state = .code
+            take(rawHashes + 1, as: "\"" + String(repeating: "#", count: rawHashes))
+        } else {
+            take(1, as: String(current))
+        }
+    }
+}
+
+// MARK: - The operator's server is spelled once
+
+/// W24, carried from W21 (AIKit#18 r4500587739): *"I see too many
+/// `http://127.0.0.1:1234` in all the tests we did not have a SSoT for that?
+/// Instead of hardcoded the url of my lms?"*
+///
+/// The rule is narrow on purpose, and the narrowness is the point. W21's rule
+/// in `Sources/` forbids a localhost FALLBACK — an absent address answered
+/// with the local machine. In `Tests/` that shape is legitimate everywhere,
+/// because an address is an INPUT to most of these suites. What is not
+/// legitimate is re-typing the operator's own LM Studio: when it moves, every
+/// copy has to be found, and the ones that are missed keep passing against a
+/// server that is no longer there.
+///
+/// So this scans for one thing — ``fixtureServerHostPort`` — and anything
+/// else about addresses stays W21's business. The files below hold it because
+/// the address IS their subject; every other file takes it from
+/// ``fixtureServerRoot``.
+@Suite("The fixture server address is declared once, not re-typed per suite")
+struct FixtureAddressSSoTTests {
+
+    /// Where the operator's LM Studio address may be written, and why.
+    struct Declared {
+        let path: String
+        let count: Int
+        let reason: String
+    }
+
+    /// Counts measured at the W24 commit by the rule below, not estimated.
+    static let declared: [Declared] = [
+        Declared(
+            path: "Tests/AIKitTests/Support/WireFixtures.swift",
+            count: 2,
+            reason: "The SSoT itself: `fixtureServerRoot` and the `fixtureServerHostPort` taken from it."
+        ),
+        Declared(
+            path: "Tests/AIKitTests/Wire/AIServerAddressTests.swift",
+            count: 12,
+            reason: """
+                `AIServerAddress(validating:)` is the subject here, so its inputs are addresses \
+                by definition — the good root, the same root with a trailing slash, the `/v1` \
+                that must be refused, the bare `host:port` that must not be assumed to be http.
+                """
+        ),
+        Declared(
+            path: "Tests/AIKitTests/Wire/AIServerAddressReachTests.swift",
+            count: 1,
+            reason: """
+                `AIServerAddress.reach` is the subject: the loopback rows are the classification \
+                being asserted, and replacing them with a constant would hide WHICH address was \
+                classified.
+                """
+        ),
+        Declared(
+            path: "Tests/AIKitTests/Settings/AIProviderRepositoryTests.swift",
+            count: 9,
+            reason: """
+                A settings FILE is the subject. These addresses live inside TOML documents the \
+                repository has to parse, plus the list of bad addresses it has to refuse, so they \
+                are test data rather than a reference to the operator's server.
+                """
+        ),
+        Declared(
+            path: "Tests/AIKitTests/Wire/NoLocalhostFallbackRatchetTests.swift",
+            count: 6,
+            reason: """
+                This file: the four expressions W21 deleted and the two shapes its rule must not \
+                flag are quoted so a rotted detector goes red here rather than passing forever \
+                (BR-EC-02). Declaring the enforcer to its own rule is the honest way round.
+                """
+        ),
+    ]
+
+    static let byPath: [String: Declared] = Dictionary(
+        uniqueKeysWithValues: declared.map { ($0.path, $0) })
+
+    @Test("no suite re-types the operator's LM Studio address")
+    func theFixtureAddressIsNotRetyped() throws {
+        var offenders: [String] = []
+        var counted: [String: Int] = [:]
+
+        for file in try NoLocalhostFallbackRatchetTests.swiftFiles(
+            under: NoLocalhostFallbackRatchetTests.testsRoot
+        ) {
+            let path = NoLocalhostFallbackRatchetTests.relativeToRepo(file)
+            let code = NoLocalhostFallbackRatchetTests.codeOnly(
+                try String(contentsOf: file, encoding: .utf8))
+            let hits = NoLocalhostFallbackRatchetTests.stringLiterals(in: code)
+                .filter { $0.text.contains(fixtureServerHostPort) }
+            guard !hits.isEmpty else { continue }
+            counted[path] = hits.count
+
+            if Self.byPath[path] == nil {
+                offenders.append("\(path):\(hits[0].line) — \(hits.count) occurrence(s)")
+            }
+        }
+
+        #expect(
+            offenders.isEmpty,
+            """
+            W24: the operator's LM Studio address is `fixtureServerRoot` in \
+            WireFixtures.swift, and a suite that needs it interpolates that \
+            (`"\\(fixtureServerRoot)/v1/chat/completions"`) or uses \
+            `fixtureServerHostPort` for a bare host:port. If the address is \
+            genuinely the SUBJECT of a new suite, declare it above with its \
+            reason. Offenders: \(offenders.joined(separator: " | "))
+            """
+        )
+
+        for row in Self.declared {
+            let found = counted[row.path] ?? 0
+            #expect(
+                found == row.count,
+                "\(row.path) declares \(row.count) occurrence(s) of the fixture address and holds \(found)"
+            )
+        }
+    }
+
+    @Test("the rule still recognises the address it is for")
+    func theAddressRuleStillMatches() {
+        // BR-EC-02 again: a rule that stopped matching would pass forever.
+        for spelling in [
+            #"let a = "http://127.0.0.1:1234""#,
+            #"let a = "http://127.0.0.1:1234/v1/chat/completions""#,
+            #"let a = "127.0.0.1:1234""#,
+        ] {
+            let hits = NoLocalhostFallbackRatchetTests.stringLiterals(
+                in: NoLocalhostFallbackRatchetTests.codeOnly(spelling)
+            ).filter { $0.text.contains(fixtureServerHostPort) }
+            #expect(!hits.isEmpty, "the address rule no longer recognises: \(spelling)")
+        }
+
+        // And what it must NOT flag: the interpolated form every migrated
+        // suite now uses, a different port on the same host, and a comment.
+        for allowed in [
+            #"let a = "\(fixtureServerRoot)/v1/chat/completions""#,
+            #"let a = "http://127.0.0.1:8080""#,
+            #"// it used to be "http://127.0.0.1:1234" here"#,
+        ] {
+            let hits = NoLocalhostFallbackRatchetTests.stringLiterals(
+                in: NoLocalhostFallbackRatchetTests.codeOnly(allowed)
+            ).filter { $0.text.contains(fixtureServerHostPort) }
+            #expect(hits.isEmpty, "the address rule flags something it should not: \(allowed)")
         }
     }
 }

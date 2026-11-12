@@ -351,7 +351,7 @@ public struct LMStudioProvider: AgentProviding, Sendable {
 // MARK: - Hosted models
 
 /// One model on an LM Studio host, as `GET /api/v1/models` reports it.
-public struct LMStudioHostedModel: Sendable, Decodable, Equatable {
+public struct LMStudioHostedModel: Sendable, Codable, Equatable {
     public let id: String
     /// `llm`, `embeddings`, … as the host classifies it.
     public let type: String?
@@ -365,6 +365,10 @@ public struct LMStudioHostedModel: Sendable, Decodable, Equatable {
 }
 
 /// The `GET /api/v1/models` envelope.
-struct LMStudioModelsReply: Sendable, Decodable {
+///
+/// `Encodable` for the reason given on ``ChatCompletionResponseDTO/model``: a
+/// test fixture is MINTED from this declaration rather than hand-written
+/// beside it (W24).
+struct LMStudioModelsReply: Sendable, Codable, Equatable {
     let data: [LMStudioHostedModel]
 }

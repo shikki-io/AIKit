@@ -25,7 +25,7 @@ struct WireCodecRefusalTests {
     @Test("tools are refused by every family that does not carry them", arguments: wireFamilyFixtures)
     func refusesTools(fixture: WireFamilyFixture) async throws {
         var request = makeFixtureRequest()
-        request.tools = [AITool(name: "grep", description: "search", parametersSchema: "{\"type\":\"object\"}")]
+        request.tools = [AITool(name: "grep", description: "search", parametersSchema: fixtureToolSchema)]
 
         if fixture.codec.capabilities.tools {
             // `openai-chat` does carry them, and sends them.
@@ -107,7 +107,7 @@ struct WireCodecRefusalTests {
                 AIMessage(
                     role: .assistant,
                     content: "",
-                    toolCalls: [AIToolCall(id: nil, name: "grep", arguments: "{}")]
+                    toolCalls: [AIToolCall(id: nil, name: "grep", arguments: fixtureEmptyJSONObject)]
                 ),
             ],
             maxTokens: 16
@@ -124,7 +124,7 @@ struct WireCodecRefusalTests {
                 AIMessage(
                     role: .assistant,
                     content: "",
-                    toolCalls: [AIToolCall(id: "", name: "grep", arguments: "{}")]
+                    toolCalls: [AIToolCall(id: "", name: "grep", arguments: fixtureEmptyJSONObject)]
                 ),
             ],
             maxTokens: 16
@@ -141,7 +141,7 @@ struct WireCodecRefusalTests {
                 AIMessage(
                     role: .assistant,
                     content: "",
-                    toolCalls: [AIToolCall(id: "call_abc123", name: "grep", arguments: "{\"q\":\"x\"}")]
+                    toolCalls: [AIToolCall(id: "call_abc123", name: "grep", arguments: fixtureToolArguments)]
                 ),
                 AIMessage(role: .tool, content: "found", toolCallId: "call_abc123"),
             ],
@@ -389,14 +389,14 @@ struct WireCodecRoundTripTests {
     @Test("a 2xx carrying an error body surfaces the server's words", arguments: wireFamilyFixtures)
     func anErrorBodyOnSuccessSurfaces(fixture: WireFamilyFixture) throws {
         let context = try makeFixtureContext(family: fixture.family, route: fixture.route)
-        let body = #"{"error": {"message": "Model unloaded, try again"}}"#
+        let body = try mintErrorReply("Model unloaded, try again")
         let error = #expect(throws: AIKitError.self) {
             _ = try fixture.codec.response(from: Data(body.utf8), context: context)
         }
         // BR-AIL-10: the text, and where it came from.
         let described = try #require(error?.errorDescription)
         #expect(described.contains("Model unloaded, try again"))
-        #expect(described.contains("127.0.0.1:1234"))
+        #expect(described.contains(fixtureServerHostPort))
         #expect(described.contains(fixture.route))
     }
 
@@ -404,7 +404,7 @@ struct WireCodecRoundTripTests {
     func aBareStringErrorBodySurfaces(fixture: WireFamilyFixture) throws {
         let context = try makeFixtureContext(family: fixture.family, route: fixture.route)
         let error = #expect(throws: AIKitError.self) {
-            _ = try fixture.codec.response(from: Data(#"{"error": "no model"}"#.utf8), context: context)
+            _ = try fixture.codec.response(from: Data(try mintBareErrorReply("no model").utf8), context: context)
         }
         #expect(error?.errorDescription?.contains("no model") == true)
     }
@@ -412,13 +412,7 @@ struct WireCodecRoundTripTests {
     @Test("a reply with no content is a typed empty reply, naming the target", arguments: wireFamilyFixtures)
     func anEmptyReplyIsTyped(fixture: WireFamilyFixture) throws {
         let context = try makeFixtureContext(family: fixture.family, route: fixture.route)
-        let empty: String =
-            switch fixture.family {
-            case .openAIChat: #"{"id":"x","model":"m","choices":[]}"#
-            case .openAIResponses: #"{"id":"x","model":"m","output":[],"error":null}"#
-            case .anthropicMessages: #"{"id":"x","role":"assistant","model":"m","content":[]}"#
-            default: #"{"response_id":"x","model_instance_id":"m","output":[]}"#
-            }
+        let empty = try mintEmptyReply(family: fixture.family)
 
         #expect(throws: AIKitError.emptyReply(target: context.target)) {
             _ = try fixture.codec.response(from: Data(empty.utf8), context: context)

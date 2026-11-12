@@ -18,18 +18,32 @@ import Testing
 // error, and a fallback chain never fired.
 
 /// The statuses the panel named, with whether a chain may fall back on them.
+///
+/// W24: the case carries the server's MESSAGE, and the envelope around it is
+/// minted by ``mintErrorReply`` from ``FixtureWireError`` — so the shape of an
+/// error body is stated in one place for the whole suite instead of once per
+/// row.
 struct StatusCase: Sendable, CustomTestStringConvertible {
     let status: Int
-    let body: String
+    let message: String
     let fallbackEligible: Bool
+
+    /// The wire body a server sends for this status.
+    ///
+    /// Throwing rather than `try?`-and-a-default: a swallowed minting failure
+    /// would make this `""` on BOTH sides of every `body == statusCase.body`
+    /// assertion below, and the suite would pass having sent nothing.
+    var body: String {
+        get throws { try mintErrorReply(message) }
+    }
 
     var testDescription: String { "\(status)" }
 }
 
 private let statusCases: [StatusCase] = [
-    StatusCase(status: 401, body: #"{"error":{"message":"Invalid API key"}}"#, fallbackEligible: false),
-    StatusCase(status: 429, body: #"{"error":{"message":"Rate limit reached"}}"#, fallbackEligible: true),
-    StatusCase(status: 500, body: #"{"error":{"message":"Internal error"}}"#, fallbackEligible: true),
+    StatusCase(status: 401, message: "Invalid API key", fallbackEligible: false),
+    StatusCase(status: 429, message: "Rate limit reached", fallbackEligible: true),
+    StatusCase(status: 500, message: "Internal error", fallbackEligible: true),
 ]
 
 @Suite("HTTPAIProviderTests — a non-success is an error on both paths")
@@ -38,7 +52,7 @@ struct HTTPAIProviderStatusTests {
     @Test("complete throws .http with the status, the body and the target", arguments: statusCases)
     func completeThrowsOnNonSuccess(statusCase: StatusCase) async throws {
         let network = MockHTTPTransport()
-        network.answer(json: statusCase.body, status: statusCase.status)
+        network.answer(json: try statusCase.body, status: statusCase.status)
         let provider = try makeProvider(network: network)
 
         let error = await #expect(throws: AIKitError.self) {
@@ -49,16 +63,16 @@ struct HTTPAIProviderStatusTests {
             return
         }
         #expect(status == statusCase.status)
-        #expect(body == statusCase.body)
+        #expect(body == (try statusCase.body))
         #expect(target.entryID == "lmstudio")
         #expect(target.route == "/v1/chat/completions")
-        #expect(target.address.description == "http://127.0.0.1:1234")
+        #expect(target.address.description == fixtureServerRoot)
     }
 
     @Test("stream throws the same .http, before any chunk", arguments: statusCases)
     func streamThrowsOnNonSuccess(statusCase: StatusCase) async throws {
         let network = MockHTTPTransport()
-        network.answer(json: statusCase.body, status: statusCase.status)
+        network.answer(json: try statusCase.body, status: statusCase.status)
         // Lines are configured and must NOT be reached: the status decides
         // first.
         network.lines = capturedChatSSELines
@@ -72,13 +86,13 @@ struct HTTPAIProviderStatusTests {
             return
         }
         #expect(status == statusCase.status)
-        #expect(body == statusCase.body)
+        #expect(body == (try statusCase.body))
     }
 
     @Test("a streamed non-success is never an empty success", arguments: statusCases)
     func aStreamedNonSuccessIsNeverAnEmptySuccess(statusCase: StatusCase) async throws {
         let network = MockHTTPTransport()
-        network.answer(json: statusCase.body, status: statusCase.status)
+        network.answer(json: try statusCase.body, status: statusCase.status)
         let provider = try makeProvider(network: network)
 
         var chunks: [AIChunk] = []
@@ -98,7 +112,7 @@ struct HTTPAIProviderStatusTests {
     func eligibilityComesFromTheStatus(statusCase: StatusCase) throws {
         let error = AIKitError.http(
             status: statusCase.status,
-            body: statusCase.body,
+            body: try statusCase.body,
             target: try makeFixtureContext(family: .openAIChat, route: "/v1/chat/completions").target
         )
         #expect(FallbackEligibility.allows(error) == statusCase.fallbackEligible)
@@ -128,7 +142,7 @@ struct HTTPAIProviderStatusTests {
         }
         let described = try #require(error?.errorDescription)
         #expect(described.contains("503"))
-        #expect(described.contains("127.0.0.1:1234"))
+        #expect(described.contains(fixtureServerHostPort))
         #expect(described.contains("the server sent no body"))
     }
 
@@ -322,8 +336,8 @@ struct HTTPAIProviderFamilyTests {
         _ = try await chat.complete(request: makeFixtureRequest())
         _ = try await native.complete(request: makeFixtureRequest())
 
-        #expect(chatNetwork.sentRequest?.url?.absoluteString == "http://127.0.0.1:1234/v1/chat/completions")
-        #expect(nativeNetwork.sentRequest?.url?.absoluteString == "http://127.0.0.1:1234/api/v1/chat")
+        #expect(chatNetwork.sentRequest?.url?.absoluteString == "\(fixtureServerRoot)/v1/chat/completions")
+        #expect(nativeNetwork.sentRequest?.url?.absoluteString == "\(fixtureServerRoot)/api/v1/chat")
     }
 
     @Test("a provider names itself from its entry, and its answers carry that id")

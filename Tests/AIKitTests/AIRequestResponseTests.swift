@@ -17,7 +17,7 @@ struct AIRequestResponseTests {
             temperature: 0.5,
             maxTokens: 256,
             model: ModelIdentifier(provider: "openai", modelId: "gpt-5"),
-            tools: [AITool(name: "search", description: "Search the web", parametersSchema: "{}")],
+            tools: [AITool(name: "search", description: "Search the web", parametersSchema: fixtureEmptyJSONObject)],
             responseFormat: .json
         )
 
@@ -44,7 +44,7 @@ struct AIRequestResponseTests {
             model: "gpt-5",
             tokensUsed: TokenUsage(prompt: 10, completion: 5),
             latencyMs: 42,
-            toolCalls: [AIToolCall(name: "search", arguments: "{\"q\": \"test\"}")],
+            toolCalls: [AIToolCall(name: "search", arguments: fixtureToolArguments)],
             providerID: "openai"
         )
 
@@ -107,7 +107,7 @@ struct AIRequestResponseTests {
         let assistantMsg = AIMessage(
             role: .assistant,
             content: "",
-            toolCalls: [AIToolCall(id: "call_42", name: "get_capital", arguments: "{\"country\":\"France\"}")]
+            toolCalls: [AIToolCall(id: "call_42", name: "get_capital", arguments: fixtureToolArgumentsCity)]
         )
 
         for original in [toolMsg, assistantMsg] {
@@ -121,11 +121,20 @@ struct AIRequestResponseTests {
         }
     }
 
-    @Test("AIMessage backward-compatible decode without toolCalls")
+    @Test("AIMessage decodes a payload that carries no tool keys at all")
     func messageBackwardCompatDecode() throws {
-        let json = """
-        {"role":"user","content":"Hello"}
-        """
+        // Minted from `AIMessage` itself (W24): a plain turn encodes WITHOUT
+        // `toolCalls` or `toolCallId`, which is exactly the shape every
+        // pre-W10 stored row has. The assertion below that the two keys are
+        // absent from the wire object is what keeps this honest — if the
+        // encoder started writing them as null, this test would otherwise
+        // become a round trip that proves nothing about an old payload.
+        let json = try mintJSONText(AIMessage(role: .user, content: "Hello"))
+        let wire = try #require(
+            try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        #expect(wire["toolCalls"] == nil)
+        #expect(wire["toolCallId"] == nil)
+
         let decoded = try JSONDecoder().decode(AIMessage.self, from: Data(json.utf8))
         #expect(decoded.role == .user)
         #expect(decoded.content == "Hello")
@@ -135,19 +144,23 @@ struct AIRequestResponseTests {
 
     @Test("AIToolCall carries id through Codable round-trip")
     func toolCallIdRoundTrip() throws {
-        let call = AIToolCall(id: "call_abc", name: "search", arguments: "{\"q\":\"test\"}")
+        let call = AIToolCall(id: "call_abc", name: "search", arguments: fixtureToolArguments)
         let data = try JSONEncoder().encode(call)
         let decoded = try JSONDecoder().decode(AIToolCall.self, from: data)
         #expect(decoded.id == "call_abc")
         #expect(decoded.name == "search")
-        #expect(decoded.arguments == "{\"q\":\"test\"}")
+        #expect(decoded.arguments == fixtureToolArguments)
     }
 
-    @Test("AIToolCall backward-compatible decode without id")
+    @Test("AIToolCall decodes a payload that carries no id")
     func toolCallBackwardCompatDecode() throws {
-        let json = """
-        {"name":"search","arguments":"{}"}
-        """
+        // Minted with `id: nil`, which omits the key — the shape a call stored
+        // before the id existed has.
+        let json = try mintJSONText(AIToolCall(name: "search", arguments: fixtureEmptyJSONObject))
+        let wire = try #require(
+            try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        #expect(wire["id"] == nil, "a nil id must be ABSENT, or this proves nothing about an old row")
+
         let decoded = try JSONDecoder().decode(AIToolCall.self, from: Data(json.utf8))
         #expect(decoded.id == nil)
         #expect(decoded.name == "search")

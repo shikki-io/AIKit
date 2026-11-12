@@ -367,3 +367,315 @@ func fixtureChunks(_ fixture: WireFamilyFixture) throws -> [AIChunk] {
     let context = try makeFixtureContext(family: fixture.family, route: fixture.route)
     return try fixture.sseLines.compactMap { try fixture.codec.chunk(fromLine: $0, context: context) }
 }
+
+// MARK: - Opaque JSON values
+//
+// A JSON *value* a typed model carries as a `String` BY DESIGN. AIKit does not
+// model a tool's JSON Schema or a tool call's arguments — they belong to the
+// tool, not to the wire standard — so there is no DTO to mint them from and no
+// encoder that could produce them. They are spelled once here instead of in six
+// suites, so "what does a tool schema look like" has one answer.
+//
+// W24 of spec ai-layer-aikit-core-2026-10-31, declared as `.opaqueValue` in
+// `DeclaredEvidence`.
+
+/// A minimal JSON Schema for a tool that takes an object.
+let fixtureToolSchema = #"{"type":"object"}"#
+
+/// A schema with a declared property, for a test that needs the nesting.
+let fixtureToolSchemaWithProperties = #"{"type":"object","properties":{"city":{"type":"string"}}}"#
+
+/// The empty JSON object, `{}`.
+///
+/// One constant for the three places it means something: a tool that declares
+/// no parameters, a tool call with no arguments, and the body a route that
+/// merely ACCEPTS a call answers with (LM Studio's `models/load` and
+/// `models/unload`). They are the same two bytes and the same absence of a
+/// payload, so three identically-valued constants would be three names for one
+/// fact — and `{}` IS a JSON object, which is why it is declared here at all
+/// rather than written inline.
+let fixtureEmptyJSONObject = "{}"
+
+/// A tool call's `arguments`, the one-field form.
+let fixtureToolArguments = #"{"q":"swift"}"#
+
+/// A tool call's `arguments`, a different field, so a test asserting the string
+/// arrived unchanged is not asserting against the same bytes as its neighbour.
+let fixtureToolArgumentsCity = #"{"city":"Paris"}"#
+
+// MARK: - Fixture addresses, beyond the one server root
+//
+// AIKit#18 r4500587739: *"I see too many `http://127.0.0.1:1234` in all the
+// tests we did not have a SSoT for that? Instead of hardcoded the url of my
+// lms?"* — so the operator's LM Studio is spelled ONCE, in
+// ``fixtureServerRoot``, and the ratchet in
+// `NoLocalhostFallbackRatchetTests` fails any other file in `Tests/` that
+// writes it. These are the OTHER servers a test needs, each a different
+// service rather than another spelling of the same one.
+
+/// `127.0.0.1:1234` — the host and port of ``fixtureServerRoot``, for an
+/// assertion against an error message that quotes the server but not a scheme.
+let fixtureServerHostPort = "127.0.0.1:1234"
+
+/// Where a test pretends an MCP server listens. A different service from the
+/// AI provider, hence its own root.
+let fixtureMCPServerRoot = "http://127.0.0.1:9999"
+
+/// A port nothing listens on, for a health check that must report a server as
+/// down. Deliberately high and unregistered.
+let fixtureUnreachableServerRoot = "http://127.0.0.1:59999"
+
+// MARK: - Minted replies
+//
+// WHY MINTING. The operator asked the same question on nine payloads in one
+// review (AIKit#18 r4500530906, r4500580810, r4500583527, r4500589635,
+// r4500592040, r4500592399, r4500592834, r4500593486, r4500599462): *"it's
+// normal it doesn't use typed model with mock data for this?"*
+//
+// A hand-written payload and the DTO that decodes it are two independent
+// statements of one wire shape. When the shape moves, only the DTO gets
+// edited: the payload keeps its old key, `JSONDecoder` ignores it, the field
+// decodes to nil, the optional swallows it, and the test goes on passing. A
+// MINTED payload has ONE statement — the DTO — so the same move is a compile
+// error in the fixture instead of a green test.
+//
+// The fake values below are deliberately NOT the captured ones. When an
+// assertion fails, which kind of fixture it was reading is the first thing
+// worth knowing, and "minted pong" vs "pong" says it without a stack trace.
+
+/// The answer every minted reply carries.
+let fakeReplyText = "minted pong"
+
+/// The model every minted reply says answered. Not ``capturedModel``.
+let fakeReplyModel = "fixture-model-7b-minted"
+
+let fakeReplyPromptTokens = 11
+let fakeReplyCompletionTokens = 5
+
+/// An id a minted reply carries, so two minted replies are told apart.
+let fakeReplyID = "minted-reply-1"
+
+/// Encodes `value` to the JSON text a fixture hands a decoder.
+///
+/// `sortedKeys` so a minted payload is byte-stable: a test that compares two
+/// minted bodies, or that prints one on failure, must not depend on
+/// `JSONEncoder`'s dictionary order.
+func mintJSONText(_ value: some Encodable) throws -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    return try #require(String(data: try encoder.encode(value), encoding: .utf8))
+}
+
+/// A complete 2xx reply for `family`, built from that family's own reply DTO.
+///
+/// `model: nil` omits the field, which is how a reply that names no model is
+/// stated — the shape three of the four surfaces answer with when they are
+/// minimal. `promptTokens: nil` likewise omits `usage` entirely, because a
+/// reply that claims no usage must not read as zero tokens (a zero silently
+/// under-charges a budget and passes a limit check).
+func mintReply(
+    family: AIProviderFamily,
+    text: String = fakeReplyText,
+    model: String? = fakeReplyModel,
+    promptTokens: Int? = fakeReplyPromptTokens,
+    completionTokens: Int? = fakeReplyCompletionTokens
+) throws -> String {
+    switch family {
+    case .openAIChat:
+        return try mintJSONText(
+            ChatCompletionResponseDTO(
+                id: fakeReplyID,
+                model: model,
+                choices: [
+                    ChatCompletionResponseDTO.Choice(
+                        index: 0,
+                        message: ChatCompletionResponseDTO.Message(role: "assistant", content: text, toolCalls: nil),
+                        finishReason: "stop"
+                    ),
+                ],
+                usage: mintChatUsage(promptTokens, completionTokens)
+            )
+        )
+
+    case .openAIResponses:
+        return try mintJSONText(
+            ResponsesResponseDTO(
+                id: fakeReplyID,
+                status: "completed",
+                model: model,
+                output: [
+                    ResponsesOutputItem(
+                        type: "message",
+                        role: "assistant",
+                        content: [ResponsesContentPart(type: "output_text", text: text)]
+                    ),
+                ],
+                usage: promptTokens == nil && completionTokens == nil
+                    ? nil
+                    : ResponsesUsage(inputTokens: promptTokens, outputTokens: completionTokens)
+            )
+        )
+
+    case .anthropicMessages:
+        return try mintJSONText(
+            AnthropicMessagesResponseDTO(
+                id: fakeReplyID,
+                role: "assistant",
+                model: model,
+                content: [AnthropicContentBlock(type: "text", text: text)],
+                stopReason: "end_turn",
+                usage: promptTokens == nil && completionTokens == nil
+                    ? nil
+                    : AnthropicUsage(inputTokens: promptTokens, outputTokens: completionTokens)
+            )
+        )
+
+    case .lmStudioNative:
+        return try mintJSONText(
+            LMStudioNativeResponseDTO(
+                responseId: fakeReplyID,
+                modelInstanceId: model,
+                output: [LMStudioNativeOutputItem(type: "message", content: text)],
+                stats: promptTokens == nil && completionTokens == nil
+                    ? nil
+                    : LMStudioNativeStats(inputTokens: promptTokens, totalOutputTokens: completionTokens)
+            )
+        )
+
+    case .cliSubprocess, .mlxInProcess, .coreML:
+        throw AIKitError.unsupported(field: "a wire reply", family: family)
+    }
+}
+
+/// `usage` for a chat completion, or nil when neither side is known.
+///
+/// `total` is only claimed when both sides are: the same rule `TokenUsage`
+/// applies, stated here so a minted reply cannot carry an arithmetic that the
+/// real server would not have sent.
+private func mintChatUsage(_ prompt: Int?, _ completion: Int?) -> ChatCompletionResponseDTO.Usage? {
+    guard prompt != nil || completion != nil else { return nil }
+    let total = prompt.flatMap { p in completion.map { p + $0 } }
+    return ChatCompletionResponseDTO.Usage(promptTokens: prompt, completionTokens: completion, totalTokens: total)
+}
+
+/// A 2xx reply that carries no answer — the empty-reply case every codec must
+/// report as ``AIKitError/emptyReply(target:)`` rather than as a decode
+/// failure. The envelope is well-formed; only the content array is empty.
+func mintEmptyReply(family: AIProviderFamily) throws -> String {
+    switch family {
+    case .openAIChat:
+        return try mintJSONText(
+            ChatCompletionResponseDTO(id: fakeReplyID, model: fakeReplyModel, choices: [], usage: nil)
+        )
+    case .openAIResponses:
+        return try mintJSONText(
+            ResponsesResponseDTO(
+                id: fakeReplyID, status: "completed", model: fakeReplyModel, output: [], usage: nil)
+        )
+    case .anthropicMessages:
+        return try mintJSONText(
+            AnthropicMessagesResponseDTO(
+                id: fakeReplyID, role: "assistant", model: fakeReplyModel,
+                content: [], stopReason: "end_turn", usage: nil)
+        )
+    case .lmStudioNative:
+        return try mintJSONText(
+            LMStudioNativeResponseDTO(
+                responseId: fakeReplyID, modelInstanceId: fakeReplyModel, output: [], stats: nil)
+        )
+    case .cliSubprocess, .mlxInProcess, .coreML:
+        throw AIKitError.unsupported(field: "a wire reply", family: family)
+    }
+}
+
+/// A models-list reply, as `/v1/models` answers it.
+func mintModelsList(_ models: [(id: String, ownedBy: String?)]) throws -> String {
+    try mintJSONText(
+        ModelsListResponseDTO(
+            data: models.map {
+                ModelsListResponseDTO.ModelInfo(id: $0.id, ownedBy: $0.ownedBy, created: nil)
+            }
+        )
+    )
+}
+
+// MARK: - Minted error envelopes
+
+/// The error body a wire surface answers with, in the nested form
+/// `{"error": {"message": "…"}}`.
+///
+/// This is the ONE minting helper with no production counterpart: AIKit reads
+/// an error body and never writes one, so `WireErrorBody` is `Decodable` only.
+/// `FixturePinTests.aMintedErrorEnvelopeIsReadByTheRealDecoder` is what keeps
+/// the two honest — the production decoder is asserted to read what this
+/// writes, in both forms the servers send (BR-EC-02).
+struct FixtureWireError: Encodable, Sendable, Equatable {
+    struct Body: Encodable, Sendable, Equatable {
+        let message: String
+        let type: String?
+    }
+
+    let error: Body
+}
+
+/// The bare form, `{"error": "…"}`, which LM Studio also answers with.
+struct FixtureBareWireError: Encodable, Sendable, Equatable {
+    let error: String
+}
+
+/// `{"error": {"message": message, "type": type}}`.
+func mintErrorReply(_ message: String, type: String? = "server_error") throws -> String {
+    try mintJSONText(FixtureWireError(error: FixtureWireError.Body(message: message, type: type)))
+}
+
+/// `{"error": message}` — the bare-string form.
+func mintBareErrorReply(_ message: String) throws -> String {
+    try mintJSONText(FixtureBareWireError(error: message))
+}
+
+// MARK: - Minted Hugging Face replies
+//
+// `HFModelInfo` is already `Codable`, so the search and model-detail payloads
+// the registry suites read are minted from it directly. The wire keys that are
+// NOT the property names — `pipeline_tag`, `library_name` — are the reason
+// these fixtures were worth converting: a hand-written payload spelled them
+// once in the test and once in the DTO's `CodingKeys`, and only the second got
+// maintained.
+
+/// One Hugging Face model row, with the fields the suites assert on.
+func makeFixtureHFModel(
+    modelId: String = "nvidia/nemotron-3-nano-4b",
+    author: String? = "nvidia",
+    tags: [String] = ["gguf", "text-generation"],
+    downloads: Int = 50_000,
+    likes: Int = 1_200,
+    lastModified: String? = "2025-11-20T10:30:00.000Z",
+    pipelineTag: String? = "text-generation",
+    library: String? = "transformers"
+) -> HFModelInfo {
+    HFModelInfo(
+        modelId: modelId,
+        author: author,
+        tags: tags,
+        downloads: downloads,
+        likes: likes,
+        lastModified: lastModified,
+        pipelineTag: pipelineTag,
+        library: library
+    )
+}
+
+/// A `GET /api/models` search reply: a JSON array of rows.
+func mintHFSearchReply(_ models: [HFModelInfo]) throws -> Data {
+    Data(try mintJSONText(models).utf8)
+}
+
+/// A `GET /api/models/<id>` reply: one row.
+func mintHFModelReply(_ model: HFModelInfo) throws -> Data {
+    Data(try mintJSONText(model).utf8)
+}
+
+/// LM Studio's native `GET /api/v1/models` reply.
+func mintLMStudioHostedModels(_ models: [LMStudioHostedModel]) throws -> String {
+    try mintJSONText(LMStudioModelsReply(data: models))
+}

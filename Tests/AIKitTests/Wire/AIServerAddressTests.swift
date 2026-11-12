@@ -156,7 +156,7 @@ struct AIServerAddressTests {
         #expect(plain != otherPort)
     }
 
-    @Test("a target names the entry, the address and the route")
+    @Test("a target names the entry, the address, the route and the host it ran on")
     func aTargetNamesAllThree() throws {
         let target = AIRequestTarget(
             entryID: "devstral-local",
@@ -165,6 +165,32 @@ struct AIServerAddressTests {
         )
         // AIKit#18 r4493433754: an error names the injected target, never a
         // host written into the message.
-        #expect(target.description == "devstral-local at http://127.0.0.1:1234/v1/chat/completions")
+        //
+        // And W24 / r4500322517: it names the PLATFORM the request was sent
+        // FROM, because "the server is local" says nothing about which device
+        // asked — *"you can have several mac on the same network or the lms
+        // server running on a gaming computer you gonna use even if shikki is
+        // running on a MacBook Air"*. Without it, two devices failing against
+        // one server produce identical log lines.
+        #expect(
+            target.description
+                == "devstral-local at http://127.0.0.1:1234/v1/chat/completions, from "
+                    + HostPlatform.current.rawValue
+        )
+        #expect(target.hostPlatform == .current)
+    }
+
+    @Test("the host platform is a fact about the client, not about the target's identity")
+    func theHostPlatformIsNotPartOfIdentity() throws {
+        // Two targets naming the same entry, address and route ARE the same
+        // target. Folding the platform into equality would make a stored
+        // target from one device unequal to the same target on another, and
+        // `AIKitError` is `Equatable` precisely so a test can state which
+        // target an error carries.
+        let address = try AIServerAddress(validating: fixtureServerRoot)
+        let one = AIRequestTarget(entryID: "e", address: address, route: "/v1/chat/completions")
+        let two = AIRequestTarget(entryID: "e", address: address, route: "/v1/chat/completions")
+        #expect(one == two)
+        #expect(one.hashValue == two.hashValue)
     }
 }
