@@ -1,6 +1,7 @@
 import CoreKit
 import Foundation
 import Testing
+
 @testable import AIKit
 @testable import NetKit
 
@@ -110,16 +111,16 @@ struct DefaultModelRegistryTests {
 
         let mock = MockNetworkService()
         mock.resultData = """
-        {
-            "modelId": "nvidia/nemotron-3-nano-4b",
-            "author": "nvidia",
-            "tags": ["gguf"],
-            "downloads": 50000,
-            "likes": 1200,
-            "pipeline_tag": "text-generation",
-            "library_name": "transformers"
-        }
-        """.data(using: .utf8)!
+            {
+                "modelId": "nvidia/nemotron-3-nano-4b",
+                "author": "nvidia",
+                "tags": ["gguf"],
+                "downloads": 50000,
+                "likes": 1200,
+                "pipeline_tag": "text-generation",
+                "library_name": "transformers"
+            }
+            """.data(using: .utf8)!
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
@@ -171,17 +172,17 @@ struct DefaultModelRegistryTests {
 
         let mock = MockNetworkService()
         mock.resultData = """
-        [
-            {
-                "modelId": "test/llama-7b",
-                "author": "test",
-                "tags": ["gguf"],
-                "downloads": 100,
-                "likes": 10,
-                "pipeline_tag": "text-generation"
-            }
-        ]
-        """.data(using: .utf8)!
+            [
+                {
+                    "modelId": "test/llama-7b",
+                    "author": "test",
+                    "tags": ["gguf"],
+                    "downloads": 100,
+                    "likes": 10,
+                    "pipeline_tag": "text-generation"
+                }
+            ]
+            """.data(using: .utf8)!
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)

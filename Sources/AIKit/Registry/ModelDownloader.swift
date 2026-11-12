@@ -79,7 +79,7 @@ public struct ModelDownloader: Sendable {
         let (tempURL, response) = try await session.download(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse,
-              200..<400 ~= httpResponse.statusCode
+            200..<400 ~= httpResponse.statusCode
         else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw AIKitError.downloadFailed("HTTP \(statusCode)")
