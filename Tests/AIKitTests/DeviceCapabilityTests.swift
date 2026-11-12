@@ -207,9 +207,11 @@ struct DeviceCapabilityTests {
         )
         // A host nobody listed reports a class with no MLX rather than
         // inventing Apple hardware.
-        #expect(DeviceCapability.row(for:
-            DeviceCapability.deviceClass(forMachineIdentifier: "", totalRAMGB: 8, platform: .other)
-        ).videoCeiling == nil)
+        #expect(
+            DeviceCapability.row(
+                for:
+                    DeviceCapability.deviceClass(forMachineIdentifier: "", totalRAMGB: 8, platform: .other)
+            ).videoCeiling == nil)
     }
 
     @Test("The RAM fallback separates a tablet from a phone")
