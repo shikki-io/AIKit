@@ -46,7 +46,13 @@ public struct AIKitAssembly: DIAssembly {
     /// How a row becomes a provider in `.production`.
     public let factory: AIProviderFactory
     /// How a row becomes a provider in `.mock`.
-    private let mockProvider: @Sendable (AIProviderEntry) -> any AIProvider
+    /// Builds the provider an entry gets in the `.mock` environment.
+    ///
+    /// Injected, never defaulted: the doubles live in `AIKitTestSupport`, out
+    /// of the product (AIKit#18 r4500328752), so this module cannot name one.
+    /// A `.mock` container built without it reports every entry unavailable,
+    /// naming what to add, instead of serving anything (see `providerSet`).
+    private let mockProvider: (@Sendable (AIProviderEntry) -> any AIProvider)?
     /// The document's path, for an error that must name it.
     private let source: String
 
@@ -65,21 +71,12 @@ public struct AIKitAssembly: DIAssembly {
         settings: AIProviderSettings,
         factory: AIProviderFactory = AIProviderFactory(),
         source: String = "the provider settings",
-        mockProvider: @escaping @Sendable (AIProviderEntry) -> any AIProvider = AIKitAssembly.defaultMockProvider
+        mockProvider: (@Sendable (AIProviderEntry) -> any AIProvider)? = nil
     ) {
         self.settings = settings
         self.factory = factory
         self.source = source
         self.mockProvider = mockProvider
-    }
-
-    /// A ``MockAIProvider`` standing in for one row, naming it.
-    public static let defaultMockProvider: @Sendable (AIProviderEntry) -> any AIProvider = { entry in
-        MockAIProvider(
-            id: entry.id,
-            displayName: "\(entry.id) (mock \(entry.family.displayName))",
-            capabilities: .textGeneration
-        )
     }
 
     // MARK: - DIAssembly
@@ -131,6 +128,15 @@ public struct AIKitAssembly: DIAssembly {
     private func providerSet(for environment: DIEnvironment) -> AIProviderSet {
         switch environment {
         case .mock:
+            guard let mockProvider else {
+                let reason = "the .mock environment needs a mock provider: build the assembly with AIKitAssembly.mock(settings:) from AIKitTestSupport"
+                return AIProviderSet(
+                    providers: [],
+                    unavailable: settings.providers.map {
+                        AIProviderAttempt(providerID: $0.id, error: AIKitError.settings(file: source, entry: $0.id, reason: reason))
+                    }
+                )
+            }
             return AIProviderSet(providers: settings.providers.map(mockProvider), unavailable: [])
         case .production:
             var providers: [any AIProvider] = []
