@@ -35,8 +35,6 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     /// Non-optional because the init refuses an entry without one, so there is
     /// no empty-string sentinel here for a caller to mistake for an address.
     public let baseURL: String
-    /// The same server, parsed and validated once in `init` (BR-AIL-18).
-    public let address: AIServerAddress
     /// Model identifier as loaded in LM Studio.
     public var model: String { entry.model }
     /// Request timeout in seconds, as a ceiling on the caller's own timeout.

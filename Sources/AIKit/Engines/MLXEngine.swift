@@ -24,8 +24,6 @@
         private let serverAddress: AIServerAddress
         /// Python module for video generation.
         private let mlxVideoModule: String
-        /// Where `mlx_lm.server` was configured to be, if a caller said.
-        private let lmServerRoot: String?
         /// Currently loaded model identifiers.
         private var _loadedModels: [ModelIdentifier] = []
 
@@ -44,7 +42,6 @@
                 self.pythonPath = "/usr/bin/python3"
             }
             self.mlxVideoModule = "mlx_video"
-            self.lmServerRoot = lmServerRoot
         }
 
         public var isAvailable: Bool {
@@ -98,7 +95,6 @@
                 // LLM domain — HTTP-server mode via mlx_lm.server OpenAI-compat endpoint.
                 // In-process (MLX Swift bindings) is a future enhancement (spec OQ2).
                 let llmCaps: AICapabilities = [.textGeneration, .synthesis]
-                let address = try lmServerAddress()
                 provider = try HTTPAIProvider(
                     entry: AIProviderEntry(
                         id: "\(id)/\(descriptor.id.modelId)",
