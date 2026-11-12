@@ -1,7 +1,7 @@
-generated_at = "2026-11-12T11:28:00Z"
+generated_at = "2026-11-12T11:30:01Z"
 generated_by = "kagami auto-discover --write-cache"
 source_mtime_iso = "2026-11-12T11:18:17Z"
-source_sha = "ffd489b"
+source_sha = "10cf4aa"
 
 [[scopes]]
 discovered_via = "swift-package-ast"
