@@ -21,6 +21,18 @@ let package = Package(
             name: "AIKitMLX",
             targets: ["AIKitMLX"]
         ),
+        // The test doubles, in their OWN product (W26 of spec
+        // ai-layer-aikit-core-2026-10-31, T-AIL-51, thread AIKit#18
+        // r4500328752). MockAIProvider, MockModelRegistry and
+        // MockRuntimeEngine shipped inside `AIKit` itself, so every app linking
+        // the kit could construct a provider that answers canned text and
+        // reaches no model. Moving them here makes that a dependency a reviewer
+        // can see: a shipping target depends on `AIKit` and cannot name a mock,
+        // and a target that CAN name one says so in its own manifest.
+        .library(
+            name: "AIKitTestSupport",
+            targets: ["AIKitTestSupport"]
+        ),
     ],
     dependencies: [
         // NetKit 3.0.0 — the fleet's current transport (W19 of spec
@@ -132,6 +144,20 @@ let package = Package(
                 .product(name: "Tokenizers", package: "swift-transformers"),
             ]
         ),
+        // The test doubles (W26). A library target, not a test target, because
+        // the suites of two different test targets use them — and because that
+        // is what makes the product above possible.
+        //
+        // It depends on `AIKit` and never the reverse: a mock conforms to the
+        // kit's protocols, so the arrow points this way, and `AIKit` keeps no
+        // reference to anything in here.
+        .target(
+            name: "AIKitTestSupport",
+            dependencies: [
+                "AIKit",
+                .product(name: "Logging", package: "swift-log"),
+            ]
+        ),
         .testTarget(
             name: "AIKitLiveTests",
             dependencies: ["AIKit"]
@@ -140,6 +166,7 @@ let package = Package(
             name: "AIKitTests",
             dependencies: [
                 "AIKit",
+                "AIKitTestSupport",
                 .product(name: "NetKit", package: "NetKit"),
                 .product(name: "CoreKit", package: "CoreKit"),
                 // W23: the suite builds its path layer over a run-scoped

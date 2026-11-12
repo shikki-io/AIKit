@@ -29,3 +29,4 @@
 # CoreKit TestScratch: run-scoped test fixtures, swept by the suite that made
 # them. Never tracked — a crashed run leaves its tree behind.
 .tests/
+
