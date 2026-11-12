@@ -505,16 +505,16 @@ struct WireCodecCapabilityTests {
             entry: try makeFixtureEntry(family: fixture.family),
             codec: fixture.codec,
             network: network,
-            credential: "sk-secret"
+            credential: TestCredential.other
         )
         _ = try await provider.complete(request: makeFixtureRequest())
         let headers = try #require(network.sentRequest?.allHTTPHeaderFields)
 
         if fixture.family == .anthropicMessages {
-            #expect(headers["x-api-key"] == "sk-secret")
+            #expect(headers["x-api-key"] == TestCredential.other)
             #expect(headers["anthropic-version"] == "2023-06-01")
         } else {
-            #expect(headers["Authorization"] == "Bearer sk-secret")
+            #expect(headers["Authorization"] == "Bearer \(TestCredential.other)")
         }
     }
 

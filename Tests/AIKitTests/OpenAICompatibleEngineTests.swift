@@ -31,14 +31,14 @@ struct OpenAICompatibleEngineTests {
 
     @Test("OpenAI preset includes API key")
     func openAIPresetIncludesKey() throws {
-        let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-test-123")
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: TestCredential.openAI)
         #expect(engine.id == "openai")
         #expect(engine.displayName == "OpenAI")
     }
 
     @Test("Anthropic preset configures correctly")
     func anthropicPresetDefaults() throws {
-        let engine = try OpenAICompatibleEngine.anthropic(apiKey: "sk-ant-test")
+        let engine = try OpenAICompatibleEngine.anthropic(apiKey: TestCredential.anthropic)
         #expect(engine.id == "anthropic")
         #expect(engine.displayName == "Anthropic")
     }
@@ -58,7 +58,7 @@ struct OpenAICompatibleEngineTests {
             """
         mock.body = Data(modelsJSON.utf8)
 
-        let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-test", transport: mock)
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: TestCredential.openAI, transport: mock)
         let models = try await engine.discoverModels()
 
         #expect(models.count == 2)
@@ -186,7 +186,7 @@ struct OpenAICompatibleEngineTests {
             """
         mock.body = Data(responseJSON.utf8)
 
-        let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-secret-key", transport: mock)
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: TestCredential.other, transport: mock)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "openai", modelId: "gpt-4"),
             name: "gpt-4",
@@ -204,7 +204,7 @@ struct OpenAICompatibleEngineTests {
         _ = try await provider.complete(request: AIRequest(messages: [AIMessage(role: .user, content: "test")]))
 
         let urlRequest = try #require(mock.sentRequests.first)
-        #expect(urlRequest.allHTTPHeaderFields?["Authorization"] == "Bearer sk-secret-key")
+        #expect(urlRequest.allHTTPHeaderFields?["Authorization"] == "Bearer \(TestCredential.other)")
     }
 
     @Test("Provider complete() handles tool calls in response")
