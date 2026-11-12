@@ -11,7 +11,34 @@ struct HuggingFaceClientTests {
 
     private func sampleJSON() -> Data {
         let json = """
-        [
+            [
+                {
+                    "modelId": "nvidia/nemotron-3-nano-4b",
+                    "author": "nvidia",
+                    "tags": ["gguf", "text-generation"],
+                    "downloads": 50000,
+                    "likes": 1200,
+                    "lastModified": "2025-11-20T10:30:00.000Z",
+                    "pipeline_tag": "text-generation",
+                    "library_name": "transformers"
+                },
+                {
+                    "modelId": "meta-llama/Llama-3-8B",
+                    "author": "meta-llama",
+                    "tags": ["safetensors", "text-generation"],
+                    "downloads": 200000,
+                    "likes": 5000,
+                    "lastModified": "2025-10-15T08:00:00.000Z",
+                    "pipeline_tag": "text-generation",
+                    "library_name": "transformers"
+                }
+            ]
+            """
+        return Data(json.utf8)
+    }
+
+    private func singleModelJSON() -> Data {
+        let json = """
             {
                 "modelId": "nvidia/nemotron-3-nano-4b",
                 "author": "nvidia",
@@ -21,35 +48,8 @@ struct HuggingFaceClientTests {
                 "lastModified": "2025-11-20T10:30:00.000Z",
                 "pipeline_tag": "text-generation",
                 "library_name": "transformers"
-            },
-            {
-                "modelId": "meta-llama/Llama-3-8B",
-                "author": "meta-llama",
-                "tags": ["safetensors", "text-generation"],
-                "downloads": 200000,
-                "likes": 5000,
-                "lastModified": "2025-10-15T08:00:00.000Z",
-                "pipeline_tag": "text-generation",
-                "library_name": "transformers"
             }
-        ]
-        """
-        return Data(json.utf8)
-    }
-
-    private func singleModelJSON() -> Data {
-        let json = """
-        {
-            "modelId": "nvidia/nemotron-3-nano-4b",
-            "author": "nvidia",
-            "tags": ["gguf", "text-generation"],
-            "downloads": 50000,
-            "likes": 1200,
-            "lastModified": "2025-11-20T10:30:00.000Z",
-            "pipeline_tag": "text-generation",
-            "library_name": "transformers"
-        }
-        """
+            """
         return Data(json.utf8)
     }
 

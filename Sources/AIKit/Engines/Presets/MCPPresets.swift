@@ -32,7 +32,7 @@ import NetKit
 // The `local` in each name is load-bearing: both default to the loopback
 // interface, so neither is a default for anything reachable over a network.
 
-public extension MCPEngine {
+extension MCPEngine {
 
     /// An engine pointed at a **Koharu manga-translator MCP server running on
     /// this machine**, at its default mount `http://127.0.0.1:<port>/mcp`.
@@ -42,7 +42,7 @@ public extension MCPEngine {
     /// the top of this file.
     ///
     /// - Parameter port: the port Koharu listens on; 9999 is its own default.
-    static func localKoharu(
+    public static func localKoharu(
         port: Int = 9_999,
         networkService: any NetworkProtocol = NetworkService()
     ) -> MCPEngine {
@@ -65,7 +65,7 @@ public extension MCPEngine {
     /// different protocol.
     ///
     /// - Parameter port: LM Studio's server port; 1234 is its own default.
-    static func localLMStudio(
+    public static func localLMStudio(
         port: Int = 1_234,
         networkService: any NetworkProtocol = NetworkService()
     ) -> MCPEngine {

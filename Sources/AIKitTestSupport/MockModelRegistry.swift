@@ -44,7 +44,8 @@ public final class MockModelRegistry: ModelRegistry, @unchecked Sendable {
 
     public func search(query: String, format: ModelFormat?) async throws -> [ModelDescriptor] {
         models.filter { model in
-            let matchesQuery = model.name.localizedCaseInsensitiveContains(query)
+            let matchesQuery =
+                model.name.localizedCaseInsensitiveContains(query)
                 || model.description.localizedCaseInsensitiveContains(query)
             let matchesFormat = format == nil || model.format == format
             return matchesQuery && matchesFormat
