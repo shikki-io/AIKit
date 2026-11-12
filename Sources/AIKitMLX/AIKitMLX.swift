@@ -46,11 +46,21 @@ public enum AIKitMLX {
     ///     here.
     ///   - device: what to measure a load against. Defaults to this device; a
     ///     test describes one.
+    ///   - downloadPlanner: the download policy a missing model is fetched
+    ///     under (W33, BR-AIL-23). Defaults to the shipped one — a snapshot
+    ///     that does not fit is refused, a metered path needs an allow. This is
+    ///     a parameter so the operator's `[models.download]` settings reach the
+    ///     on-device path: without it the default would be the only policy MLX
+    ///     downloads could ever run under.
+    ///   - downloadConsent: an answer the operator already gave for this
+    ///     download.
     /// - Returns: a factory with one more family, leaving the original alone.
     public static func register(
         into factory: AIProviderFactory,
         store: ModelStore? = nil,
-        device: DeviceCapability = .current()
+        device: DeviceCapability = .current(),
+        downloadPlanner: ModelDownloadPlanner = ModelDownloadPlanner(),
+        downloadConsent: ModelDownloadConsent = .none
     ) -> AIProviderFactory {
         factory.registering(family) { entry, _ in
             let descriptor = descriptor(for: entry)
@@ -68,7 +78,10 @@ public enum AIKitMLX {
                 model: descriptor,
                 device: device,
                 id: entry.id,
-                downloader: store.map { MLXHubDownloader(store: $0) }
+                downloader: store.map {
+                    MLXHubDownloader(
+                        store: $0, planner: downloadPlanner, consent: downloadConsent)
+                }
             )
         }
     }

@@ -81,6 +81,34 @@ public enum AIKitError: Error, LocalizedError, Equatable {
     /// the shape that used to grow the SSE buffer without limit.
     case streamLineTooLong(cap: Int, target: AIRequestTarget)
 
+    // MARK: - Rev 28 — a download is planned before it starts (BR-AIL-23)
+
+    /// The destination volume cannot hold a model download (BR-AIL-23).
+    ///
+    /// Thrown by ``ModelDownloadPlan/authorize(consent:)`` BEFORE a byte is
+    /// fetched, carrying both figures as numbers rather than inside a sentence
+    /// so an interface can say *"needs 4.1 GB, 2.3 GB free"* and a CLI can
+    /// print the same two values. `neededBytes` includes the configured
+    /// free-space margin: it is what must be free for the download to be safe,
+    /// not the model's own size.
+    ///
+    /// What this replaces is measured: `DefaultModelRegistry.download` and
+    /// `MLXHubDownloader` began transferring with no comparison between the
+    /// published size the hub had already given them and the space on the
+    /// volume they were writing to.
+    case insufficientSpace(model: String, neededBytes: Int64, freeBytes: Int64)
+
+    /// A download would run over a metered or constrained path and nobody has
+    /// allowed it (BR-AIL-23).
+    ///
+    /// Operator, 2026-11-12: *"especially if you are on mobile device not on
+    /// wifi"*. `models.download.allow_expensive_network` is `false` by default,
+    /// and a per-download ``ModelDownloadConsent`` overrides it once. The case
+    /// carries the observed ``ModelDownloadNetwork`` next to the reason, so a
+    /// log records what was seen and not only what was concluded.
+    case downloadNeedsConsent(
+        model: String, reason: ModelDownloadConsentReason, network: ModelDownloadNetwork)
+
     public var errorDescription: String? {
         switch self {
         case .noProviderAvailable(let capabilities):
@@ -112,6 +140,19 @@ public enum AIKitError: Error, LocalizedError, Equatable {
             "The reply from \(target) could not be read: \(reason)"
         case .streamLineTooLong(let cap, let target):
             "A streamed line from \(target) passed the \(cap)-byte cap without a newline"
+        case .insufficientSpace(let model, let needed, let free):
+            """
+            \(model) needs \(DownloadProgress.formatBytes(needed)) free \
+            (download plus margin) and the volume has \
+            \(DownloadProgress.formatBytes(free)). Nothing was downloaded.
+            """
+        case .downloadNeedsConsent(let model, let reason, let network):
+            """
+            \(model) was not downloaded: the network path is \
+            \(network.rawValue) and no one allowed it. \(reason.question) \
+            Set models.download.allow_expensive_network, or pass a \
+            per-download consent.
+            """
         }
     }
 }
@@ -284,6 +325,13 @@ public enum FallbackEligibility {
             // A registry transfer, not a completion attempt. Retrying the
             // request elsewhere does not finish a download.
             .downloadFailed,
+            // Both are verdicts on a DOWNLOAD this device was about to make —
+            // a volume that cannot hold the model, a path nobody allowed
+            // spending on (BR-AIL-23). Neither is a fact about a provider's
+            // ability to answer a request, and asking the next provider would
+            // neither free disk space nor obtain consent; it would only bury
+            // the one thing the operator has to act on.
+            .insufficientSpace, .downloadNeedsConsent,
             // A refusal that repeats: the caller asked a provider to stream and
             // must see that, not a different provider's answer.
             .streamingNotSupported,

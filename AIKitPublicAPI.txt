@@ -52,6 +52,30 @@
 #    HuggingFaceEndPoint and ModelDownloader are internal, reached through
 #    ModelStore.publishedFiles / .fetchPublishedFile and DefaultModelRegistry.
 #
+#    W33 (BR-AIL-23) added the PLAN a download is made under, and it belongs to
+#    this door for the reason the store does: a caller choosing a model has to
+#    be able to say "needs 4.1 GB, 2.3 GB free" and "this is cellular" BEFORE
+#    anything starts, and a refusal it cannot read is a refusal it cannot
+#    render. Each symbol, with why it is public rather than internal:
+#      * ModelDownloadPlan — the value an interface renders: bytes to fetch
+#        (verified files subtracted), bytes free, the margin, the network path.
+#        Internal would mean the UI recomputes it, which is two answers.
+#      * ModelDownloadDecision / ModelDownloadRefusal /
+#        ModelDownloadConsentReason — the three outcomes, as cases carrying
+#        their numbers, so nothing is parsed back out of a sentence.
+#      * ModelDownloadNetwork — what was observed, kept distinct from what was
+#        concluded, including `.unknown` for a platform with no `Network`.
+#      * ModelDownloadSettings — the `[models.download]` table of the host's
+#        own settings document; a host reads it and hands it over, exactly as
+#        it does the provider list (door 1's rule, BR-AIL-20).
+#      * ModelDownloadConsent — the per-download answer, which only a caller
+#        can obtain.
+#      * ModelDownloadPlanner — where the two measurements are made. Public
+#        because the host injects the policy; its probes are injectable for the
+#        same reason every seam in this kit is.
+#      * AIKitError.insufficientSpace / .downloadNeedsConsent — door 2 already
+#        exports AIKitError; these are its two new cases.
+#
 # 4. TOOLS AND CAPABILITIES — what a provider may call, and what a device can do.
 #    AITool, AIToolCall, AICapabilities, MLXVideoPreset, VideoResolution,
 #    VideoFrameRate, VideoPresetRefusal.
@@ -119,6 +143,11 @@ AIKit  enum  LocalModelStoreError
 AIKit  enum  MediaLanguageResolver
 AIKit  enum  MediaType
 AIKit  enum  ModelDomain
+AIKit  enum  ModelDownloadConsent
+AIKit  enum  ModelDownloadConsentReason
+AIKit  enum  ModelDownloadDecision
+AIKit  enum  ModelDownloadNetwork
+AIKit  enum  ModelDownloadRefusal
 AIKit  enum  ModelFileDigest
 AIKit  enum  ModelFormat
 AIKit  enum  ModelStoreError
@@ -130,9 +159,11 @@ AIKit  enum  VideoPresetRefusal
 AIKit  enum  VideoResolution
 AIKit  enum.case  AIKitError.allProvidersFailed(_:)
 AIKit  enum.case  AIKitError.downloadFailed(_:)
+AIKit  enum.case  AIKitError.downloadNeedsConsent(model:reason:network:)
 AIKit  enum.case  AIKitError.emptyReply(target:)
 AIKit  enum.case  AIKitError.engineUnavailable(_:)
 AIKit  enum.case  AIKitError.http(status:body:target:)
+AIKit  enum.case  AIKitError.insufficientSpace(model:neededBytes:freeBytes:)
 AIKit  enum.case  AIKitError.invalidServerAddress(value:reason:)
 AIKit  enum.case  AIKitError.modelNotFound(_:)
 AIKit  enum.case  AIKitError.noProviderAvailable(_:)
@@ -234,6 +265,18 @@ AIKit  enum.case  ModelDomain.llm
 AIKit  enum.case  ModelDomain.video
 AIKit  enum.case  ModelDomain.vision
 AIKit  enum.case  ModelDomain.voice
+AIKit  enum.case  ModelDownloadConsent.allowExpensiveNetwork
+AIKit  enum.case  ModelDownloadConsent.none
+AIKit  enum.case  ModelDownloadConsentReason.constrainedNetwork
+AIKit  enum.case  ModelDownloadConsentReason.expensiveNetwork
+AIKit  enum.case  ModelDownloadDecision.needsConsent(_:)
+AIKit  enum.case  ModelDownloadDecision.proceed
+AIKit  enum.case  ModelDownloadDecision.refuse(_:)
+AIKit  enum.case  ModelDownloadNetwork.constrained
+AIKit  enum.case  ModelDownloadNetwork.expensive
+AIKit  enum.case  ModelDownloadNetwork.unknown
+AIKit  enum.case  ModelDownloadNetwork.unrestricted
+AIKit  enum.case  ModelDownloadRefusal.insufficientSpace(needed:free:)
 AIKit  enum.case  ModelFileDigest.gitBlobSHA1(_:)
 AIKit  enum.case  ModelFileDigest.sha256(_:)
 AIKit  enum.case  ModelFormat.api
@@ -306,6 +349,13 @@ AIKit  func.op  MediaProfile.!=(_:_:)
 AIKit  func.op  MediaType.!=(_:_:)
 AIKit  func.op  ModelDescriptor.!=(_:_:)
 AIKit  func.op  ModelDomain.!=(_:_:)
+AIKit  func.op  ModelDownloadConsent.!=(_:_:)
+AIKit  func.op  ModelDownloadConsentReason.!=(_:_:)
+AIKit  func.op  ModelDownloadDecision.!=(_:_:)
+AIKit  func.op  ModelDownloadNetwork.!=(_:_:)
+AIKit  func.op  ModelDownloadPlan.!=(_:_:)
+AIKit  func.op  ModelDownloadRefusal.!=(_:_:)
+AIKit  func.op  ModelDownloadSettings.!=(_:_:)
 AIKit  func.op  ModelFile.!=(_:_:)
 AIKit  func.op  ModelFileDestination.!=(_:_:)
 AIKit  func.op  ModelFileDigest.!=(_:_:)
@@ -380,7 +430,7 @@ AIKit  init  AIToolCall.init(id:name:arguments:)
 AIKit  init  AgentSessionEntry.init(sessionID:jsonlPath:projectSlug:cwd:mtime:sizeBytes:firstMessageTopic:)
 AIKit  init  BudgetLedger.init(hardStopTokens:concurrencyCaps:)
 AIKit  init  ClaudeSessionIndexProvider.init()
-AIKit  init  DefaultModelRegistry.init(localStore:)
+AIKit  init  DefaultModelRegistry.init(localStore:modelStore:planner:consent:)
 AIKit  init  DeviceCapability.init(deviceClass:totalRAMGB:availableRAMGB:)
 AIKit  init  DeviceClass.init(from:)
 AIKit  init  DeviceClass.init(rawValue:)
@@ -408,6 +458,16 @@ AIKit  init  ModelDescriptor.init(from:)
 AIKit  init  ModelDescriptor.init(id:name:author:description:capabilities:format:parameters:quantization:sizeBytes:architecture:domain:isLocal:localPath:huggingFaceId:tags:downloadCount:updatedAt:minRAMGB:estimatedTokPerSec:)
 AIKit  init  ModelDomain.init(from:)
 AIKit  init  ModelDomain.init(rawValue:)
+AIKit  init  ModelDownloadConsent.init(from:)
+AIKit  init  ModelDownloadConsent.init(rawValue:)
+AIKit  init  ModelDownloadConsentReason.init(from:)
+AIKit  init  ModelDownloadConsentReason.init(rawValue:)
+AIKit  init  ModelDownloadNetwork.init(from:)
+AIKit  init  ModelDownloadNetwork.init(rawValue:)
+AIKit  init  ModelDownloadPlan.init(repositoryID:pending:held:bytesToFetch:bytesFree:marginBytes:network:expensiveNetworkAllowed:)
+AIKit  init  ModelDownloadPlanner.init(settings:freeSpace:networkPath:)
+AIKit  init  ModelDownloadSettings.init(allowExpensiveNetwork:freeSpaceMarginBytes:)
+AIKit  init  ModelDownloadSettings.init(from:)
 AIKit  init  ModelFile.init(path:sizeBytes:digest:)
 AIKit  init  ModelFilter.init(domain:format:isLocal:capabilities:maxSizeBytes:)
 AIKit  init  ModelFormat.init(from:)
@@ -600,6 +660,22 @@ AIKit  method  ModelDomain.compactJSON()
 AIKit  method  ModelDomain.encode(to:)
 AIKit  method  ModelDomain.hash(into:)
 AIKit  method  ModelDomain.prettyJSON()
+AIKit  method  ModelDownloadConsent.compactJSON()
+AIKit  method  ModelDownloadConsent.encode(to:)
+AIKit  method  ModelDownloadConsent.hash(into:)
+AIKit  method  ModelDownloadConsent.prettyJSON()
+AIKit  method  ModelDownloadConsentReason.compactJSON()
+AIKit  method  ModelDownloadConsentReason.encode(to:)
+AIKit  method  ModelDownloadConsentReason.hash(into:)
+AIKit  method  ModelDownloadConsentReason.prettyJSON()
+AIKit  method  ModelDownloadNetwork.compactJSON()
+AIKit  method  ModelDownloadNetwork.encode(to:)
+AIKit  method  ModelDownloadNetwork.hash(into:)
+AIKit  method  ModelDownloadNetwork.prettyJSON()
+AIKit  method  ModelDownloadPlan.authorize(consent:)
+AIKit  method  ModelDownloadPlanner.plan(repository:files:alreadyHeld:into:)
+AIKit  method  ModelDownloadSettings.compactJSON()
+AIKit  method  ModelDownloadSettings.prettyJSON()
 AIKit  method  ModelFilter.matches(_:)
 AIKit  method  ModelFormat.compactJSON()
 AIKit  method  ModelFormat.encode(to:)
@@ -901,6 +977,39 @@ AIKit  property  ModelDomain.hashValue
 AIKit  property  ModelDomain.lessPrettyJson
 AIKit  property  ModelDomain.prettyJson
 AIKit  property  ModelDomain.rawAttachmentValueRepresentation
+AIKit  property  ModelDownloadConsent.hashValue
+AIKit  property  ModelDownloadConsent.lessPrettyJson
+AIKit  property  ModelDownloadConsent.prettyJson
+AIKit  property  ModelDownloadConsent.rawAttachmentValueRepresentation
+AIKit  property  ModelDownloadConsentReason.hashValue
+AIKit  property  ModelDownloadConsentReason.lessPrettyJson
+AIKit  property  ModelDownloadConsentReason.prettyJson
+AIKit  property  ModelDownloadConsentReason.question
+AIKit  property  ModelDownloadConsentReason.rawAttachmentValueRepresentation
+AIKit  property  ModelDownloadNetwork.consentReason
+AIKit  property  ModelDownloadNetwork.hashValue
+AIKit  property  ModelDownloadNetwork.lessPrettyJson
+AIKit  property  ModelDownloadNetwork.needsConsent
+AIKit  property  ModelDownloadNetwork.prettyJson
+AIKit  property  ModelDownloadNetwork.rawAttachmentValueRepresentation
+AIKit  property  ModelDownloadPlan.bytesFree
+AIKit  property  ModelDownloadPlan.bytesNeeded
+AIKit  property  ModelDownloadPlan.bytesToFetch
+AIKit  property  ModelDownloadPlan.decision
+AIKit  property  ModelDownloadPlan.expensiveNetworkAllowed
+AIKit  property  ModelDownloadPlan.fits
+AIKit  property  ModelDownloadPlan.held
+AIKit  property  ModelDownloadPlan.isEmpty
+AIKit  property  ModelDownloadPlan.marginBytes
+AIKit  property  ModelDownloadPlan.network
+AIKit  property  ModelDownloadPlan.pending
+AIKit  property  ModelDownloadPlan.repositoryID
+AIKit  property  ModelDownloadPlan.summary
+AIKit  property  ModelDownloadPlanner.settings
+AIKit  property  ModelDownloadSettings.allowExpensiveNetwork
+AIKit  property  ModelDownloadSettings.freeSpaceMarginBytes
+AIKit  property  ModelDownloadSettings.lessPrettyJson
+AIKit  property  ModelDownloadSettings.prettyJson
 AIKit  property  ModelFile.digest
 AIKit  property  ModelFile.path
 AIKit  property  ModelFile.sizeBytes
@@ -1023,6 +1132,9 @@ AIKit  struct  MLXVideoPreset
 AIKit  struct  MediaLanguagePreferences
 AIKit  struct  MediaProfile
 AIKit  struct  ModelDescriptor
+AIKit  struct  ModelDownloadPlan
+AIKit  struct  ModelDownloadPlanner
+AIKit  struct  ModelDownloadSettings
 AIKit  struct  ModelFile
 AIKit  struct  ModelFileDestination
 AIKit  struct  ModelFilter
@@ -1062,6 +1174,14 @@ AIKit  type.method  HostPlatform.makeFromRawAttachmentValue(_:)
 AIKit  type.method  MediaLanguageResolver.resolve(mediaType:sourceLanguage:preferences:)
 AIKit  type.method  MediaType.makeFromRawAttachmentValue(_:)
 AIKit  type.method  ModelDomain.makeFromRawAttachmentValue(_:)
+AIKit  type.method  ModelDownloadConsent.makeFromRawAttachmentValue(_:)
+AIKit  type.method  ModelDownloadConsentReason.makeFromRawAttachmentValue(_:)
+AIKit  type.method  ModelDownloadNetwork.makeFromRawAttachmentValue(_:)
+AIKit  type.method  ModelDownloadNetwork.observed(isExpensive:isConstrained:)
+AIKit  type.method  ModelDownloadPlanner.availableCapacity(at:)
+AIKit  type.method  ModelDownloadPlanner.observedNetwork(timeout:)
+AIKit  type.method  ModelDownloadSettings.load(from:)
+AIKit  type.method  ModelDownloadSettings.parse(toml:file:)
 AIKit  type.method  ModelFormat.makeFromRawAttachmentValue(_:)
 AIKit  type.method  ModelStore.fetchPublishedFile(repository:revision:path:to:onBytes:)
 AIKit  type.method  ModelStore.publishedFiles(repository:revision:)
@@ -1101,6 +1221,7 @@ AIKit  type.property  MLXVideoPreset.cinema
 AIKit  type.property  MLXVideoPreset.compact
 AIKit  type.property  MLXVideoPreset.grid
 AIKit  type.property  MLXVideoPreset.standard
+AIKit  type.property  ModelDownloadSettings.defaultFreeSpaceMarginBytes
 AIKit  type.property  ModelRepositoryDirectory.placement
 AIKit  type.property  ModelRepositoryFile.placement
 AIKit  type.property  ModelVerificationReceipt.placement
@@ -1108,7 +1229,9 @@ AIKit  typealias  AIProviderEntry.EntryID
 AIKit  typealias  AIProviderFactory.Builder
 AIKit  typealias  AIProviderRepository.ModelType
 AIKit  typealias  LocalModelManifest.Document
+AIKit  typealias  ModelDownloadPlanner.FreeSpaceProbe
+AIKit  typealias  ModelDownloadPlanner.NetworkProbe
 AIKit  typealias  ModelVerificationReceipt.Document
 AIKitMLX  enum  AIKitMLX
-AIKitMLX  type.method  AIKitMLX.register(into:store:device:)
+AIKitMLX  type.method  AIKitMLX.register(into:store:device:downloadPlanner:downloadConsent:)
 AIKitMLX  type.property  AIKitMLX.family

@@ -139,6 +139,22 @@ struct MLXHubDownloaderTests {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// A planner whose two measurements are STATED, not taken from this
+    /// machine.
+    ///
+    /// W33 of spec ai-layer-aikit-core-2026-10-31 put a plan in front of the
+    /// transfer loop (BR-AIL-23), and the default planner measures the real
+    /// volume and the real network path. Left at the default, every suite here
+    /// would depend on how full the builder's disk is and on whether the
+    /// operator happens to be tethered — a red suite on a hotspot, which is a
+    /// sandbox escape, not a finding. The space is generous and the path is
+    /// unrestricted, so these suites assert what they are about; the plan's own
+    /// refusals are asserted in `ModelDownloadPlanTests`.
+    static let statedPlanner = ModelDownloadPlanner(
+        freeSpace: { _ in 1024 * 1024 * 1024 * 1024 },
+        networkPath: { .unrestricted }
+    )
+
     private static let repository = "mlx-community/Test-7B-4bit"
 
     /// One small config and one file big enough to be reported in chunks.
@@ -157,6 +173,7 @@ struct MLXHubDownloaderTests {
         let hub = StubHub(contents: Self.sampleContents(weightBytes: 1024))
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer
         )
@@ -224,6 +241,7 @@ struct MLXHubDownloaderTests {
 
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer
         )
@@ -257,6 +275,7 @@ struct MLXHubDownloaderTests {
         let hub = StubHub(contents: Self.sampleContents(weightBytes: 512))
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer
         )
@@ -289,6 +308,7 @@ struct MLXHubDownloaderTests {
         let hub = StubHub(contents: Self.sampleContents(weightBytes: 1024))
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer
         )
@@ -323,6 +343,7 @@ struct MLXHubDownloaderTests {
 
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer
         )
@@ -350,6 +371,7 @@ struct MLXHubDownloaderTests {
         let corrupt = Data(repeating: 0x22, count: 4096)
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: { _, _, _, destination, onBytes in
                 try FileManager.default.createDirectory(
@@ -395,6 +417,7 @@ struct MLXHubDownloaderTests {
 
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer
         )
@@ -425,6 +448,7 @@ struct MLXHubDownloaderTests {
 
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer,
             onHashProgress: { path, hashed, total in hashReports.append(path, hashed, total) }
@@ -500,6 +524,7 @@ struct MLXHubDownloaderTests {
         let hashReports = HashReports()
         let downloader = MLXHubDownloader(
             store: sandbox.store,
+            planner: Self.statedPlanner,
             index: hub.index,
             transfer: hub.transfer,
             onHashProgress: { path, hashed, total in hashReports.append(path, hashed, total) }
