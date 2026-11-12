@@ -176,10 +176,15 @@ timeout_seconds = 120
 # following them. W24 adds one (`AIRequestTarget`'s host platform is printed
 # but is not part of its identity), taking the run to 27/27 — still two short.
 #
-# W24 does NOT lower this to 27. A floor is a coverage contract, and lowering
-# one to make a run green grandfathers a loss nobody has explained — which is
-# the exact move BR-EC-01 forbids. The two missing functions have to be found
-# and either restored or accounted for, by the wave that owns them. W24's own
-# declared gate is `AIKitAll`, which is green at 660/660.
-expected_test_min = 28
+# ACCOUNTED FOR (coordinator, after W24): the two functions are
+# `anAbsentAddressIsNamed` and `aProviderWithNoAddressRefuses` in
+# AIServerAddressReachTests. They tested `AIKitError.serverAddressNotConfigured`,
+# which the W21/W22 merge (50f66d3, "merge epic (W21, W26) into W22") deleted:
+# W22 made the address of `LMStudioProvider` and `MLXEngine` non-optional, so
+# "no address configured" can no longer be written and the case had no
+# producer. The file says so at "MARK: - Nothing configured at all"; a missing
+# address in a settings file is refused at load and tested in
+# AIProviderRepositoryTests. The behaviour left with its tests, so the floor
+# follows: 26 + W24's one = 27, measured at ea5a2fb.
+expected_test_min = 27
 description = "AIServerAddress: validated once, nothing defaulted, reach classified (BR-AIL-18). Run: kagami test --scope AIKitServerAddress"
