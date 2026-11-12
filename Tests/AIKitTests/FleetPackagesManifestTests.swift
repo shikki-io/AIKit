@@ -31,9 +31,9 @@ struct FleetPackagesManifestTests {
     ]
 
     private static let packageRoot = URL(filePath: #filePath)
-        .deletingLastPathComponent() // AIKitTests
-        .deletingLastPathComponent() // Tests
-        .deletingLastPathComponent() // package root
+        .deletingLastPathComponent()  // AIKitTests
+        .deletingLastPathComponent()  // Tests
+        .deletingLastPathComponent()  // package root
 
     private static func manifest() throws -> String {
         try String(contentsOf: packageRoot.appending(path: "Package.swift"), encoding: .utf8)

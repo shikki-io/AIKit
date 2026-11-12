@@ -242,16 +242,28 @@ extension AIWireStandard {
         switch self {
         case .openAIChat:
             let reply: ChatCompletionReply = try await networkService.sendRequest(endpoint: endpoint)
-            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
+            map = {
+                try reply.response(
+                    requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1)
+            }
         case .openAIResponses:
             let reply: ResponsesReply = try await networkService.sendRequest(endpoint: endpoint)
-            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
+            map = {
+                try reply.response(
+                    requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1)
+            }
         case .anthropicMessages:
             let reply: AnthropicMessagesReply = try await networkService.sendRequest(endpoint: endpoint)
-            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
+            map = {
+                try reply.response(
+                    requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1)
+            }
         case .lmStudioNative:
             let reply: LMStudioNativeReply = try await networkService.sendRequest(endpoint: endpoint)
-            map = { try reply.response(requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1) }
+            map = {
+                try reply.response(
+                    requestedModel: target.model, providerID: target.providerID, latencyMs: $0, requestURL: $1)
+            }
         }
         let elapsed = start.duration(to: .now)
         let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
