@@ -23,21 +23,66 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // NetKit v2.1.0 — generic name restored (name-restoration epic 2026-07-20); fuzzy fork consolidated so no collision.
-        .package(url: "https://github.com/FJ-Studios/NetKit.git", from: "2.1.0"),
+        // NetKit 3.0.0 — the fleet's current transport (W19 of spec
+        // ai-layer-aikit-core-2026-10-31). Two things moved at once:
+        //
+        //  * The canonical org is `obyw-one`. The previous owner's URL only
+        //    kept resolving through GitHub's transfer redirect, and a redirect
+        //    is not a declaration: SwiftPM records the location it was given,
+        //    so `Package.resolved` named a repository that no longer owns the
+        //    code. (The retired org name is spelled out nowhere in this file
+        //    on purpose — T-AIL-38 asserts the manifest no longer carries it.)
+        //  * 3.0.0 is a deliberate source break. `createRequest(endPoint:)` is
+        //    now `throws(NetworkError)` instead of calling
+        //    `preconditionFailure` on an endpoint that forms no URL and
+        //    swallowing a body it could not encode with `try?`. Both of those
+        //    are exactly the silent failures W20/W21 exist to remove, so the
+        //    call sites here adopt the throwing form rather than pin back.
+        //    3.0.0 also drops the Combine `sendRequest(endpoint:type:)`
+        //    requirement (it lives in the Apple-only `NetKitApple` product
+        //    now); AIKit never used it.
+        .package(url: "https://github.com/obyw-one/NetKit.git", from: "3.0.0"),
+        // CoreKit 0.16.0 — declared DIRECTLY, not taken transitively through
+        // NetKit, because AIKit itself is about to import it: the DI container
+        // and `RepositoryProtocol` (W22, BR-AIL-20) and the virtual path layer
+        // (W23). A package whose types appear in our sources is our
+        // dependency, whatever the graph would have supplied anyway.
+        //
+        // 0.16.0 is the floor NetKit 3.0.0 also takes, and the first CoreKit
+        // without its own `URLSessionS3Transport` (obyw-one/CoreKit#34), which
+        // 0.14/0.15 made ambiguous for type lookup against NetKit's copy.
+        .package(url: "https://github.com/obyw-one/CoreKit.git", from: "0.16.0"),
         // swift-log — the three CLI providers log their attempts and fallbacks.
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
-        // ShellKit v0.1.0 — async subprocess primitives with a hard timeout
-        // (TimedShellExecutor); CLISubprocessProvider runs every CLI through it.
+        // ShellKit 0.5.1 — async subprocess primitives with a hard timeout
+        // (TimedShellExecutor); CLISubprocessProvider and WhisperCLIProvider
+        // run every CLI through it. Now homed at `shikki-io`, the org that
+        // ships it (W19).
         //
-        // macOS ONLY (W1 of spec ai-layer-aikit-core-2026-10-31, BR-AIL-02).
-        // ShellKit declares `.macOS(.v14)` and builds on `Foundation.Process`,
-        // which does not exist in the iOS SDK: linking it unconditionally made
-        // `xcodebuild -scheme AIKit -destination 'generic/platform=iOS'` fail with
-        // `cannot find 'Process' in scope` inside ShellKit's TimedShellExecutor.
-        // The dependency is therefore conditioned per platform below, and the two
+        // macOS and Linux ONLY (W1 of spec ai-layer-aikit-core-2026-10-31,
+        // BR-AIL-02). ShellKit declares `.macOS(.v14)` and builds on
+        // `Foundation.Process`, which does not exist in the iOS SDK: linking it
+        // unconditionally made
+        // `xcodebuild -scheme AIKit -destination 'generic/platform=iOS'` fail
+        // with `cannot find 'Process' in scope` inside its TimedShellExecutor.
+        // The dependency is therefore conditioned per platform below, and the
         // source files that need it sit behind `#if canImport(ShellKit)`.
-        .package(url: "https://github.com/obyw-one/ShellKit", from: "0.1.0"),
+        //
+        // 0.5.1 adds `ShellExecutorProtocol.runStreaming` as a requirement WITH
+        // a default implementation, so AIKit's conformers keep compiling
+        // unchanged.
+        .package(url: "https://github.com/shikki-io/ShellKit", from: "0.5.1"),
+        // TOMLKit 0.5.5 — the decoder for the `[[providers]]` settings document
+        // (W22, BR-AIL-20). Declared and LINKED by the `AIKit` target in this
+        // wave even though no source imports it yet, precisely so this wave's
+        // `xcodebuild -destination 'generic/platform=iOS'` gate proves it
+        // builds for iOS before W22 depends on that.
+        //
+        // The floor matters: TOMLKit 0.5.5's own manifest takes `Checkit` on
+        // `.branch("master")`, and SwiftPM refuses a branch requirement inside
+        // a versioned dependency graph. 0.6.0 moved it to `from: "0.0.2"`, and
+        // `from: "0.5.5"` resolves there.
+        .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.5"),
         // mlx-swift-lm — in-process on-device inference, reached only by the
         // AIKitMLX target. `from: "3.32.3"` and never a pin: W13 of spec
         // ai-layer-aikit-core-2026-10-31 moved this off `from: "2.31.3"`, which
@@ -68,8 +113,10 @@ let package = Package(
             name: "AIKit",
             dependencies: [
                 .product(name: "NetKit", package: "NetKit"),
+                .product(name: "CoreKit", package: "CoreKit"),
+                .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Logging", package: "swift-log"),
-                .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS])),
+                .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS, .linux])),
             ]
         ),
         // On-device MLX, extracted from shikki-client's
@@ -94,8 +141,10 @@ let package = Package(
             dependencies: [
                 "AIKit",
                 .product(name: "NetKit", package: "NetKit"),
+                .product(name: "CoreKit", package: "CoreKit"),
+                .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Logging", package: "swift-log"),
-                .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS])),
+                .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS, .linux])),
             ]
         ),
         // The MLX provider's own suite. It reaches MLX through the

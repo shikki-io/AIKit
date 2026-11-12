@@ -27,7 +27,7 @@ import Foundation
 // must depend on `AgentSessionIndexProvider` (ShiKit/Agent/
 // AgentSessionIndexProvider.swift) — a gemma-4 / KIMI-K3 / any-provider
 // session store plugs in as another conformer. The provider family's final
-// home is the AIKit SPM (FJ-Studios/AIKit); it migrates there with the
+// home is the AIKit SPM (shikki-io/AIKit); it migrates there with the
 // extraction epic (plan 34bd228b).
 
 // MARK: - AgentSessionEntry
@@ -141,10 +141,7 @@ public enum ClaudeSessionIndex {
         for slug in projectDirs {
             let dir = "\(rootPath)/\(slug)"
             var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue else {
-                continue
-            }
-            guard let files = try? fm.contentsOfDirectory(atPath: dir) else { continue }
+            guard fm.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue, let files = try? fm.contentsOfDirectory(atPath: dir) else { continue }
             for file in files where file.hasSuffix(".jsonl") {
                 let path = "\(dir)/\(file)"
                 guard let entry = makeEntry(jsonlPath: path, projectSlug: slug) else { continue }
@@ -242,15 +239,13 @@ public enum ClaudeSessionIndex {
             let segment = dotPrefix + tokens[idx..<end].joined(separator: "-")
             let candidate = joinPath(prefix, segment)
             var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: candidate, isDirectory: &isDir), isDir.boolValue {
-                if let deeper = walk(
-                    tokens: tokens,
-                    index: end,
-                    prefix: candidate,
-                    fileManager: fileManager
-                ) {
-                    return deeper
-                }
+            if fileManager.fileExists(atPath: candidate, isDirectory: &isDir), isDir.boolValue, let deeper = walk(
+                tokens: tokens,
+                index: end,
+                prefix: candidate,
+                fileManager: fileManager
+            ) {
+                return deeper
             }
             end -= 1
         }
@@ -285,10 +280,8 @@ public enum ClaudeSessionIndex {
             if cwd == nil, let extracted = extractStringField(json: str, key: "cwd") {
                 cwd = extracted
             }
-            if topic == nil, str.contains("\"type\":\"user\"") {
-                if let content = extractStringField(json: str, key: "content") {
-                    topic = shortenTopic(content)
-                }
+            if topic == nil, str.contains("\"type\":\"user\""), let content = extractStringField(json: str, key: "content") {
+                topic = shortenTopic(content)
             }
             if cwd != nil, topic != nil { break }
         }

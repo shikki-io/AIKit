@@ -140,8 +140,8 @@ struct LMStudioProviderTests {
                 responseFormat: nil
             )
         )
-        #expect(within.createRequest(endPoint: endpoint).timeoutInterval == 120)
-        #expect(NetworkService().createRequest(endPoint: endpoint).timeoutInterval == 60)
+        #expect(try within.createRequest(endPoint: endpoint).timeoutInterval == 120)
+        #expect(try NetworkService().createRequest(endPoint: endpoint).timeoutInterval == 60)
     }
 
     @Test("an injected transport is used as it was given")

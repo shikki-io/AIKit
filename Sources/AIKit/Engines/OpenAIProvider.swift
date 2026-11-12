@@ -68,7 +68,7 @@ public struct OpenAIProvider: AIProvider, Sendable {
 
     public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
         let endpoint = try AIWireStandard.openAIChat.endPoint(target: target, request: request, stream: true)
-        let urlRequest = networkService.createRequest(endPoint: endpoint)
+        let urlRequest = try networkService.createRequest(endPoint: endpoint)
 
         return AsyncThrowingStream { continuation in
             let delegate = SSEStreamDelegate(continuation: continuation)
@@ -213,8 +213,13 @@ public struct TimeoutNetworkService: NetworkProtocol {
         self.timeoutInterval = timeoutInterval
     }
 
-    public func createRequest(endPoint: EndPoint) -> URLRequest {
-        var request = base.createRequest(endPoint: endPoint)
+    /// `throws(NetworkError)` since NetKit 3.0.0: the inherited builder now
+    /// reports an endpoint that forms no URL, and a body JSON cannot
+    /// represent, instead of trapping on the first and dropping the second.
+    /// This override only adds the timeout, so it forwards that typed error
+    /// untouched rather than deciding anything about it.
+    public func createRequest(endPoint: EndPoint) throws(NetworkError) -> URLRequest {
+        var request = try base.createRequest(endPoint: endPoint)
         request.timeoutInterval = timeoutInterval
         return request
     }
