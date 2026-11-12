@@ -291,7 +291,7 @@ struct OpenAICompatibleEngineTests {
                 ]
             ))
 
-        #expect(response.content == "")
+        #expect(response.content.isEmpty)
         #expect(response.toolCalls?.count == 1)
         #expect(response.toolCalls?.first?.name == "get_weather")
         #expect(response.toolCalls?.first?.arguments == "{\"city\":\"Paris\"}")
