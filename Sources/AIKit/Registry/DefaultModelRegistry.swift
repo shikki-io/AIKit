@@ -1,3 +1,4 @@
+import CoreKit
 import Foundation
 
 /// Production model registry combining local storage, HuggingFace search, and download.
@@ -6,8 +7,11 @@ public final class DefaultModelRegistry: ModelRegistry, @unchecked Sendable {
     private let hfClient: HuggingFaceClient
     private let downloader: ModelDownloader
 
+    /// - Parameter localStore: injected, with no default. The manifest's
+    ///   location comes from the host's path layer (W23 of spec
+    ///   ai-layer-aikit-core-2026-10-31), so a kit cannot build one for itself.
     public init(
-        localStore: LocalModelStore = LocalModelStore(),
+        localStore: LocalModelStore,
         hfClient: HuggingFaceClient = HuggingFaceClient(),
         downloader: ModelDownloader = ModelDownloader()
     ) {
@@ -50,21 +54,25 @@ public final class DefaultModelRegistry: ModelRegistry, @unchecked Sendable {
             throw AIKitError.downloadFailed("Download only supported for HuggingFace models")
         }
 
-        // Find a GGUF file to download (convention: look for *.gguf)
-        let filename = "\(info.modelId.components(separatedBy: "/").last ?? "model").gguf"
+        // Find a GGUF file to download (convention: look for *.gguf). The
+        // repository id is a POSIX wire path, so its last component is read as
+        // one — `VirtualPath` parses and validates it, and no separator is
+        // spelled here.
+        let stem = (try? VirtualPath(parsing: info.modelId))?.last?.rawValue ?? "model"
+        let filename = "\(stem).gguf"
         let downloadURL = hfClient.downloadURL(repoId: info.modelId, filename: filename)
-        let destinationPath = localStore.modelPath(for: id)
-            .appendingPathComponent(filename)
+        // Resolved by the path layer, not appended to whatever this type held.
+        let destination = try localStore.fileURL(for: id, named: filename)
 
-        try await downloader.download(from: downloadURL, to: destinationPath) { progress in
+        try await downloader.download(from: downloadURL, to: destination) { progress in
             onProgress(progress.fraction)
         }
 
         let descriptor = info.toDescriptor(format: .gguf)
         var localDescriptor = descriptor
         localDescriptor.isLocal = true
-        localDescriptor.localPath = destinationPath
-        try localStore.register(localDescriptor, at: destinationPath)
+        localDescriptor.localPath = destination.url
+        try localStore.register(localDescriptor, at: destination.url)
     }
 
     public func deleteLocal(id: ModelIdentifier) async throws {

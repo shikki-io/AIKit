@@ -1,3 +1,4 @@
+import CoreKit
 import Foundation
 import Testing
 @testable import AIKit
@@ -6,15 +7,19 @@ import Testing
 @Suite("DefaultModelRegistry")
 struct DefaultModelRegistryTests {
 
-    private func makeTempStore() -> (LocalModelStore, URL) {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aikit-registry-tests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        return (LocalModelStore(basePath: tempDir), tempDir)
-    }
-
-    private func cleanup(_ dir: URL) {
-        try? FileManager.default.removeItem(at: dir)
+    /// A store over a run-scoped path layer.
+    ///
+    /// The `TestPathLayer` is RETURNED, not discarded: it owns the scratch tree
+    /// and sweeps it in `deinit`, so dropping it here would delete the
+    /// directory the store is still resolving against. W23 of spec
+    /// ai-layer-aikit-core-2026-10-31.
+    private func makeTempStore(
+        scope: String = "default-model-registry"
+    ) throws -> (LocalModelStore, TestPathLayer) {
+        let paths = try TestPathLayer(scope: scope)
+        try FileManager.default.createDirectory(
+            at: paths.layer.base(of: AIKitNode.models), withIntermediateDirectories: true)
+        return (try LocalModelStore(paths: paths.layer), paths)
     }
 
     private func sampleDescriptor(
@@ -39,8 +44,8 @@ struct DefaultModelRegistryTests {
 
     @Test("listModels returns local models")
     func listModelsReturnsLocal() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
@@ -58,8 +63,8 @@ struct DefaultModelRegistryTests {
 
     @Test("listModels applies filter")
     func listModelsFilters() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
@@ -78,8 +83,8 @@ struct DefaultModelRegistryTests {
 
     @Test("getModel finds local model first")
     func getModelFindsLocal() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
@@ -100,8 +105,8 @@ struct DefaultModelRegistryTests {
 
     @Test("getModel falls back to HuggingFace for remote")
     func getModelFallsBackToHF() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let mock = MockNetworkService()
         mock.resultData = """
@@ -127,8 +132,8 @@ struct DefaultModelRegistryTests {
 
     @Test("getModel throws for unknown non-HF provider")
     func getModelThrowsForUnknownProvider() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let mock = MockNetworkService()
         let client = HuggingFaceClient(networkService: mock)
@@ -142,8 +147,8 @@ struct DefaultModelRegistryTests {
 
     @Test("deleteLocal removes from store")
     func deleteLocalRemoves() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
@@ -161,8 +166,8 @@ struct DefaultModelRegistryTests {
 
     @Test("search delegates to HuggingFace client")
     func searchDelegatesToHF() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let mock = MockNetworkService()
         mock.resultData = """
@@ -189,8 +194,8 @@ struct DefaultModelRegistryTests {
 
     @Test("search without format uses gguf default")
     func searchWithoutFormat() async throws {
-        let (store, dir) = makeTempStore()
-        defer { cleanup(dir) }
+        let (store, paths) = try makeTempStore()
+        let dir = paths.root
 
         let mock = MockNetworkService()
         mock.resultData = "[]".data(using: .utf8)!
