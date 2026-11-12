@@ -188,7 +188,8 @@ extension AIServerAddress {
     /// `URLComponents` hands back an IPv6 literal without its brackets on some
     /// inputs and with them on others; both spellings are one host.
     private static func normalised(_ host: String) -> String {
-        let bare = host
+        let bare =
+            host
             .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
             .lowercased()
         return bare.split(separator: "%", maxSplits: 1).first.map(String.init) ?? bare
