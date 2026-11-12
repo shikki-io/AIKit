@@ -142,6 +142,11 @@ let package = Package(
                 "AIKit",
                 .product(name: "NetKit", package: "NetKit"),
                 .product(name: "CoreKit", package: "CoreKit"),
+                // W23: the suite builds its path layer over a run-scoped
+                // scratch root (`TestScratch`) and holds every
+                // `VirtualNodeNaming` enum to CoreKit's own
+                // `VirtualNodeNamingRatchet`, instead of re-writing either.
+                .product(name: "CoreKitTestSupport", package: "CoreKit"),
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS, .linux])),
@@ -156,6 +161,8 @@ let package = Package(
             dependencies: [
                 "AIKitMLX",
                 "AIKit",
+                .product(name: "CoreKit", package: "CoreKit"),
+                .product(name: "CoreKitTestSupport", package: "CoreKit"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
             ]
         ),

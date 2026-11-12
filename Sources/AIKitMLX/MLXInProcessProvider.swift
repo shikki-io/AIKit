@@ -22,6 +22,13 @@ public enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
     case insufficientRAM(model: String, required: Double, available: Double)
     /// MLX evaluates on the Apple GPU and has no CPU fallback.
     case unsupportedHardware(String)
+    /// The weights are not on disk and no downloader was injected.
+    ///
+    /// W23 of spec ai-layer-aikit-core-2026-10-31 removed `ModelStore`'s own
+    /// idea of a cache root — the host's path layer owns it — so there is no
+    /// default downloader left to fall back to. Saying so by name beats
+    /// inventing a directory to write 4 GB into.
+    case noDownloader(model: String)
 
     public var errorDescription: String? {
         switch self {
@@ -34,6 +41,12 @@ public enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
             )
         case .unsupportedHardware(let reason):
             "On-device MLX is unavailable: \(reason)"
+        case .noDownloader(let model):
+            """
+            \(model) is not on disk and no downloader was injected. AIKit has \
+            no default model root: build one from the host's path layer — \
+            MLXHubDownloader(store: ModelStore(paths: paths)) — and pass it in.
+            """
         }
     }
 }
@@ -127,6 +140,9 @@ public actor MLXInProcessProvider: AIProvider {
     ///   - displayName: defaults to the model's name behind "Apple MLX".
     ///   - capabilities: what to advertise to `ProviderRouter`. Defaults to
     ///     text generation and synthesis, matching what an MLX LLM serves.
+    ///   - downloader: how to fetch weights that are not on disk yet. No
+    ///     default: it carries the `ModelStore` the host's path layer resolved
+    ///     (W23). A model with a `localPath` needs none.
     ///   - loadSession: how to load the weights. Defaults to
     ///     `MLXContainerSession`, the real in-process runtime.
     public init(
@@ -135,6 +151,7 @@ public actor MLXInProcessProvider: AIProvider {
         id: String? = nil,
         displayName: String? = nil,
         capabilities: AICapabilities = [.textGeneration, .synthesis],
+        downloader: (any Downloader)? = nil,
         loadSession: MLXSessionLoader? = nil
     ) {
         self.model = model
@@ -144,7 +161,8 @@ public actor MLXInProcessProvider: AIProvider {
         self.capabilities = capabilities
         self.loadSession =
             loadSession ?? { descriptor, progress in
-                try await MLXContainerSession.load(descriptor, progress: progress)
+                try await MLXContainerSession.load(
+                    descriptor, downloader: downloader, progress: progress)
             }
         // Reported before anything is asked of it, so a router can skip a
         // provider this device cannot serve instead of discovering it by
@@ -289,13 +307,17 @@ public struct MLXContainerSession: MLXModelSession {
     ///
     /// `downloader` and `tokenizerLoader` are parameters because mlx-swift-lm
     /// 3.x made both protocols with no shipped conformance (W13 of spec
-    /// ai-layer-aikit-core-2026-10-31). The defaults are AIKit's own:
-    /// `MLXHubDownloader` keeps one verified cache root, and
-    /// `TransformersTokenizerLoader` reads the tokenizer out of the snapshot it
-    /// verified. 2.x took a `HubApi` here and defaulted it to a second cache.
+    /// ai-layer-aikit-core-2026-10-31). `tokenizerLoader` defaults to AIKit's
+    /// `TransformersTokenizerLoader`, which reads the tokenizer out of the
+    /// snapshot that was verified. `downloader` has NO default since W23: an
+    /// `MLXHubDownloader` carries a `ModelStore`, and a `ModelStore` carries
+    /// the host's path layer, so a default here would be a cache root invented
+    /// by a kit — which is how 2.x's `HubApi` default produced a second cache
+    /// in the first place. A model that is not on disk and has no downloader is
+    /// refused by name (``MLXProviderError/noDownloader(model:)``).
     public static func load(
         _ model: ModelDescriptor,
-        downloader: any Downloader = MLXHubDownloader(),
+        downloader: (any Downloader)? = nil,
         tokenizerLoader: any TokenizerLoader = TransformersTokenizerLoader(),
         progress: @Sendable @escaping (Double) -> Void
     ) async throws -> any MLXModelSession {
@@ -319,6 +341,9 @@ public struct MLXContainerSession: MLXModelSession {
             container = try await loadModelContainer(from: directory, using: tokenizerLoader)
             progress(1)
         } else {
+            guard let downloader else {
+                throw MLXProviderError.noDownloader(model: model.id.modelId)
+            }
             container = try await loadModelContainer(
                 from: downloader,
                 using: tokenizerLoader,
