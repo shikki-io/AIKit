@@ -1,3 +1,4 @@
+import AIKitTestSupport
 import CoreKit
 import Foundation
 import Testing
@@ -71,7 +72,8 @@ struct AIKitAssemblyTests {
         AIKitAssembly(
             settings: try settings(toml),
             factory: factory ?? stubFactory(),
-            source: fixtureFile
+            source: fixtureFile,
+            mockProvider: AIKitAssembly.mockProvider
         ).assemble(container: container, environment: environment)
         return container
     }
@@ -128,6 +130,20 @@ struct AIKitAssemblyTests {
         #expect(providers.allSatisfy { $0 is MockAIProvider })
         #expect(providers.map(\.id) == ["lmstudio-local", "claude-api", "lmstudio-desk"])
         #expect(!providers.contains { $0 is HTTPAIProvider })
+    }
+
+    @Test("a .mock container with no injected mock provider serves nothing and says what to add")
+    func mockWithoutTestSupportRefuses() throws {
+        // The doubles live in AIKitTestSupport, so the product cannot default
+        // to one. Serving nothing, loudly, beats serving a real provider in a
+        // container that asked for mocks.
+        let container = Container(name: "aikit-w22-nomock-\(UUID().uuidString)")
+        AIKitAssembly(settings: try Self.settings(Self.threeProviders), factory: Self.stubFactory(), source: Self.fixtureFile)
+            .assemble(container: container, environment: .mock)
+        let set = try container.resolve(AIProviderSet.self)
+        #expect(set.providers.isEmpty)
+        #expect(set.unavailable.map(\.providerID) == ["lmstudio-local", "claude-api", "lmstudio-desk"])
+        #expect(set.unavailable.allSatisfy { $0.cause.contains("AIKitTestSupport") })
     }
 
     @Test("a mock answer still names who answered")
