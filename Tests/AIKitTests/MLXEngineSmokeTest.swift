@@ -35,6 +35,12 @@ private func smallLLMDescriptor() -> ModelDescriptor {
     )
 }
 
+// W21 of spec ai-layer-aikit-core-2026-10-31: the engine takes its
+// `mlx_lm.server` root as an argument now, and there is no
+// `?? "http://localhost:8080"` behind it any more (BR-AIL-18). A structural
+// test that only wants the PROVIDER the engine builds therefore has to say
+// where the server would be, and says it through the one fixture constant,
+// like every other suite.
 @Suite("MLXEngine — W4 Integration Smoke", .tags(.mlxSmoke))
 struct MLXEngineSmokeTest {
 
@@ -43,7 +49,7 @@ struct MLXEngineSmokeTest {
     #if canImport(Darwin) && arch(arm64)
         @Test("loadModel LLM domain returns provider with mlx/ id prefix")
         func loadModelLLMDomainProviderIdPrefix() async throws {
-            let engine = MLXEngine()
+            let engine = MLXEngine(lmServerRoot: fixtureServerRoot)
             let descriptor = smallLLMDescriptor()
 
             let provider = try await engine.loadModel(descriptor)
@@ -56,7 +62,7 @@ struct MLXEngineSmokeTest {
 
         @Test("loadModel LLM domain returns provider advertising synthesis capability")
         func loadModelLLMDomainAdvertisesSynthesis() async throws {
-            let engine = MLXEngine()
+            let engine = MLXEngine(lmServerRoot: fixtureServerRoot)
             let descriptor = smallLLMDescriptor()
 
             let provider = try await engine.loadModel(descriptor)
@@ -71,7 +77,7 @@ struct MLXEngineSmokeTest {
 
         @Test("loadModel registers model in loadedModels")
         func loadModelRegistersInLoadedModels() async throws {
-            let engine = MLXEngine()
+            let engine = MLXEngine(lmServerRoot: fixtureServerRoot)
             let descriptor = smallLLMDescriptor()
 
             _ = try await engine.loadModel(descriptor)
@@ -84,7 +90,7 @@ struct MLXEngineSmokeTest {
 
         @Test("ProviderRouter routeSmart synthesis fast-path selects MLX provider")
         func routeSmartSynthesisFastPathSelectsMLX() async throws {
-            let engine = MLXEngine()
+            let engine = MLXEngine(lmServerRoot: fixtureServerRoot)
             let descriptor = smallLLMDescriptor()
             let mlxProvider = try await engine.loadModel(descriptor)
 

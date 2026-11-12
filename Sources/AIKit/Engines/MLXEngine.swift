@@ -14,10 +14,19 @@
         private let pythonPath: String
         /// Python module for video generation.
         private let mlxVideoModule: String
+        /// Where `mlx_lm.server` was configured to be, if a caller said.
+        private let lmServerRoot: String?
         /// Currently loaded model identifiers.
         private var _loadedModels: [ModelIdentifier] = []
 
-        public init(pythonPath: String? = nil) {
+        /// - Parameters:
+        ///   - pythonPath: Python binary. Auto-detected when nil.
+        ///   - lmServerRoot: Server ROOT of a running `mlx_lm.server`, with no
+        ///     path (BR-AIL-09). Falls back to env `MLX_LM_BASE_URL`; there is
+        ///     no third fallback, so a caller that configures neither gets a
+        ///     named error from ``loadModel(_:)`` rather than a request to its
+        ///     own loopback.
+        public init(pythonPath: String? = nil, lmServerRoot: String? = nil) {
             // Auto-detect python3 path if not provided.
             if let path = pythonPath {
                 self.pythonPath = path
@@ -27,6 +36,7 @@
                 self.pythonPath = "/usr/bin/python3"
             }
             self.mlxVideoModule = "mlx_video"
+            self.lmServerRoot = lmServerRoot
         }
 
         public var isAvailable: Bool {
@@ -38,7 +48,7 @@
             #endif
         }
 
-        /// Server ROOT for the mlx_lm.server HTTP endpoint.
+        /// Server ROOT for the mlx_lm.server HTTP endpoint, validated.
         ///
         /// The `/v1` this used to carry is gone: the route belongs to
         /// ``OpenAIEndPoint``, and an address that carried `/v1` would have been
@@ -46,13 +56,29 @@
         /// to forbid, and the one ``AIServerAddress`` now refuses outright
         /// (AIKit#18, panel finding on `MLXEngine.swift:44`).
         ///
+        /// The `?? "http://localhost:8080"` that used to close this expression
+        /// is gone too (BR-AIL-18). It was the worse half of the two: an
+        /// operator who had never started `mlx_lm.server` was handed a port on
+        /// their own machine, and the connection refusal that followed read as
+        /// "the model is down" rather than "nothing is configured".
+        ///
         /// FIXME(spec 8badc87f-e9e0-4bfd-913f-a52f52ba70fc W22): the environment read stays for now. BR-AIL-20 forbids a
         /// library initializer reading one, and W22 of spec
         /// ai-layer-aikit-core-2026-10-31 deletes `MLX_LM_BASE_URL` here along with
         /// `LMSTUDIO_URL` and `LMSTUDIO_MODEL`, replacing all three with a settings
-        /// entry injected through CoreKit DI.
-        private static var mlxLMBaseURL: String {
-            ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"] ?? "http://localhost:8080"
+        /// entry injected through CoreKit DI. The injected `lmServerRoot` is the
+        /// seam that already works that way.
+        ///
+        /// - Throws: ``AIKitError/serverAddressNotConfigured(setting:)`` when
+        ///   no caller and no environment named a server.
+        private func lmServerAddress() throws(AIKitError) -> AIServerAddress {
+            guard
+                let configured = lmServerRoot
+                    ?? ProcessInfo.processInfo.environment["MLX_LM_BASE_URL"]
+            else {
+                throw .serverAddressNotConfigured(setting: "MLX_LM_BASE_URL")
+            }
+            return try AIServerAddress(validating: configured)
         }
 
         /// Detect installed MLX models/capabilities.
@@ -97,11 +123,12 @@
                 // LLM domain — HTTP-server mode via mlx_lm.server OpenAI-compat endpoint.
                 // In-process (MLX Swift bindings) is a future enhancement (spec OQ2).
                 let llmCaps: AICapabilities = [.textGeneration, .synthesis]
+                let address = try lmServerAddress()
                 provider = try HTTPAIProvider(
                     entry: AIProviderEntry(
                         id: "\(id)/\(descriptor.id.modelId)",
                         family: .openAIChat,
-                        address: Self.mlxLMBaseURL,
+                        address: address,
                         model: descriptor.huggingFaceId ?? descriptor.id.modelId
                     ),
                     displayName: "\(displayName) — \(descriptor.name)",

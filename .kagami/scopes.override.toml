@@ -29,10 +29,16 @@ timeout_seconds = 300
 # codec-refusal and one-entry-point suites (EndPointRouteTests, WireCodecTests,
 # HTTPAIProviderTests, AIServerAddressTests), which is a net +99.
 #
+# RE-MEASURED 2026-11-12 at the W21 commit: 596/596 (run
+# 07E0A071-5958-4B05-AAF1-47EA59ECF88A). The W20 head itself measured 578 — the
+# 512 above was its floor, not its count — and W21 adds 18:
+# AIServerAddressReachTests, NoLocalhostFallbackRatchetTests, and the two
+# catalogue suites that prove a LAN model is not a cloud model.
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 512
+expected_test_min = 596
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -91,3 +97,39 @@ test_target_name = "AIKitLiveTests"
 type_patterns = ["VoiceLoopbackLiveTests"]
 pre_pr_default = false
 timeout_seconds = 180
+
+# W21 of spec ai-layer-aikit-core-2026-10-31 (T-AIL-44). BR-AIL-18's enforcer:
+# `?? "http"`, `?? "127.0.0.1"` and `?? "localhost"` are gone from Sources, and
+# a route literal stays inside an `Endpoints/` directory. Its own scope rather
+# than a line in AIKitAll, because a rule like this is cited in reviews by name
+# and has to be runnable alone: `kagami test --scope AIKitNoLocalhostFallback`.
+[[scopes]]
+name = "AIKitNoLocalhostFallback"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitTests"
+type_patterns = ["NoLocalhostFallbackRatchetTests"]
+test_file_patterns = ["**/AIKitTests/Wire/NoLocalhostFallbackRatchetTests.swift"]
+timeout_seconds = 120
+# Measured 2026-11-12 at the W21 commit: 4/4. The suite is the ratchet itself
+# (2 rules), its self-check, and the proof the scan read the tree.
+expected_test_min = 4
+description = "BR-AIL-18 ratchet: no localhost fallback, no route literal outside Endpoints/. Run: kagami test --scope AIKitNoLocalhostFallback"
+
+# W21, T-AIL-43. The address type on its own: the panel's ten inputs, the
+# refusals that name the value, and `reach` — which is what stopped a LAN Mac
+# from being reported as a cloud model.
+[[scopes]]
+name = "AIKitServerAddress"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitTests"
+type_patterns = ["AIServerAddressTests", "AIServerAddressReachTests"]
+test_file_patterns = ["**/AIKitTests/Wire/AIServerAddress*Tests.swift"]
+timeout_seconds = 120
+# Measured 2026-11-12 at the W21 commit: 28/28 (run
+# E9768783-2A2A-473A-9439-CD20BFFD4935). kagami counts test FUNCTIONS, not the
+# cases a parameterised one expands to, so this is lower than the number of
+# addresses the suite actually classifies.
+expected_test_min = 28
+description = "AIServerAddress: validated once, nothing defaulted, reach classified (BR-AIL-18). Run: kagami test --scope AIKitServerAddress"
