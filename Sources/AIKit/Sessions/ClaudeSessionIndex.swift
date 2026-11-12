@@ -141,7 +141,9 @@ public enum ClaudeSessionIndex {
         for slug in projectDirs {
             let dir = "\(rootPath)/\(slug)"
             var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue, let files = try? fm.contentsOfDirectory(atPath: dir) else { continue }
+            guard fm.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue,
+                let files = try? fm.contentsOfDirectory(atPath: dir)
+            else { continue }
             for file in files where file.hasSuffix(".jsonl") {
                 let path = "\(dir)/\(file)"
                 guard let entry = makeEntry(jsonlPath: path, projectSlug: slug) else { continue }
@@ -239,12 +241,13 @@ public enum ClaudeSessionIndex {
             let segment = dotPrefix + tokens[idx..<end].joined(separator: "-")
             let candidate = joinPath(prefix, segment)
             var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: candidate, isDirectory: &isDir), isDir.boolValue, let deeper = walk(
-                tokens: tokens,
-                index: end,
-                prefix: candidate,
-                fileManager: fileManager
-            ) {
+            if fileManager.fileExists(atPath: candidate, isDirectory: &isDir), isDir.boolValue,
+                let deeper = walk(
+                    tokens: tokens,
+                    index: end,
+                    prefix: candidate,
+                    fileManager: fileManager
+                ) {
                 return deeper
             }
             end -= 1
@@ -280,7 +283,8 @@ public enum ClaudeSessionIndex {
             if cwd == nil, let extracted = extractStringField(json: str, key: "cwd") {
                 cwd = extracted
             }
-            if topic == nil, str.contains("\"type\":\"user\""), let content = extractStringField(json: str, key: "content") {
+            if topic == nil, str.contains("\"type\":\"user\""),
+                let content = extractStringField(json: str, key: "content") {
                 topic = shortenTopic(content)
             }
             if cwd != nil, topic != nil { break }
