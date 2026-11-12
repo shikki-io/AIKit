@@ -26,4 +26,4 @@ Depends on NetKit.
 
 ## License
 
-AGPL-3.0-or-later — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
