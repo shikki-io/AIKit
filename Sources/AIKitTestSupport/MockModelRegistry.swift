@@ -1,6 +1,11 @@
+import AIKit
 import Foundation
 
 /// In-memory mock model registry for testing.
+///
+/// **A test double.** It serves whatever `models` it was handed and downloads
+/// nothing. Lives in `AIKitTestSupport`, not `AIKit`, so a shipping target
+/// cannot name it (W26, r4500328752).
 public final class MockModelRegistry: ModelRegistry, @unchecked Sendable {
     public var models: [ModelDescriptor]
 

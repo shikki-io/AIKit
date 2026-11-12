@@ -14,12 +14,10 @@ public struct ProviderRouter: Sendable {
     /// Select best provider for the given capabilities.
     /// Returns the first provider whose capabilities are a superset of the requested ones.
     public func route(capabilities: AICapabilities) async -> (any AIProvider)? {
-        for provider in providers {
-            if provider.capabilities.contains(capabilities) {
-                let status = await provider.status
-                if case .ready = status {
-                    return provider
-                }
+        for provider in providers where provider.capabilities.contains(capabilities) {
+            let status = await provider.status
+            if case .ready = status {
+                return provider
             }
         }
         return nil

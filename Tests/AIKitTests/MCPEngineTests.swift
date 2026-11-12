@@ -9,7 +9,7 @@ struct MCPEngineTests {
 
     @Test("Koharu preset has correct URL")
     func koharuPreset() {
-        let engine = MCPEngine.koharu()
+        let engine = MCPEngine.localKoharu()
         #expect(engine.id == "koharu")
         #expect(engine.displayName == "Koharu")
         #expect(engine.isAvailable)
@@ -17,13 +17,13 @@ struct MCPEngineTests {
 
     @Test("Koharu preset with custom port")
     func koharuCustomPort() {
-        let engine = MCPEngine.koharu(port: 8888)
+        let engine = MCPEngine.localKoharu(port: 8888)
         #expect(engine.id == "koharu")
     }
 
     @Test("LM Studio MCP preset has correct URL")
     func lmStudioMCPPreset() {
-        let engine = MCPEngine.lmStudioMCP()
+        let engine = MCPEngine.localLMStudio()
         #expect(engine.id == "lmstudio-mcp")
         #expect(engine.displayName == "LM Studio MCP")
         #expect(engine.isAvailable)
@@ -31,7 +31,7 @@ struct MCPEngineTests {
 
     @Test("LM Studio MCP preset with custom port")
     func lmStudioCustomPort() {
-        let engine = MCPEngine.lmStudioMCP(port: 5678)
+        let engine = MCPEngine.localLMStudio(port: 5678)
         #expect(engine.id == "lmstudio-mcp")
     }
 
@@ -52,7 +52,7 @@ struct MCPEngineTests {
         ])
         mockNetwork.resultData = try JSONEncoder().encode(toolsResponse)
 
-        let engine = MCPEngine.koharu(networkService: mockNetwork)
+        let engine = MCPEngine.localKoharu(networkService: mockNetwork)
         let tools = try await engine.discoverTools()
 
         #expect(tools.count == 3)
@@ -70,7 +70,7 @@ struct MCPEngineTests {
         ])
         mockNetwork.resultData = try JSONEncoder().encode(toolResult)
 
-        let engine = MCPEngine.koharu(networkService: mockNetwork)
+        let engine = MCPEngine.localKoharu(networkService: mockNetwork)
         let result = try await engine.callTool(
             name: "translate",
             arguments: ["input": "Hello world", "target": "fr"]
