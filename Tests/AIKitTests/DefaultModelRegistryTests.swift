@@ -107,10 +107,9 @@ struct DefaultModelRegistryTests {
     @Test("getModel falls back to HuggingFace for remote")
     func getModelFallsBackToHF() async throws {
         let (store, paths) = try makeTempStore()
-        let dir = paths.root
 
         let mock = MockNetworkService()
-        mock.resultData = """
+        let json = """
             {
                 "modelId": "nvidia/nemotron-3-nano-4b",
                 "author": "nvidia",
@@ -120,7 +119,8 @@ struct DefaultModelRegistryTests {
                 "pipeline_tag": "text-generation",
                 "library_name": "transformers"
             }
-            """.data(using: .utf8)!
+            """
+        mock.resultData = Data(json.utf8)
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
@@ -134,7 +134,6 @@ struct DefaultModelRegistryTests {
     @Test("getModel throws for unknown non-HF provider")
     func getModelThrowsForUnknownProvider() async throws {
         let (store, paths) = try makeTempStore()
-        let dir = paths.root
 
         let mock = MockNetworkService()
         let client = HuggingFaceClient(networkService: mock)
@@ -168,10 +167,9 @@ struct DefaultModelRegistryTests {
     @Test("search delegates to HuggingFace client")
     func searchDelegatesToHF() async throws {
         let (store, paths) = try makeTempStore()
-        let dir = paths.root
 
         let mock = MockNetworkService()
-        mock.resultData = """
+        let json = """
             [
                 {
                     "modelId": "test/llama-7b",
@@ -182,7 +180,8 @@ struct DefaultModelRegistryTests {
                     "pipeline_tag": "text-generation"
                 }
             ]
-            """.data(using: .utf8)!
+            """
+        mock.resultData = Data(json.utf8)
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
@@ -196,10 +195,9 @@ struct DefaultModelRegistryTests {
     @Test("search without format uses gguf default")
     func searchWithoutFormat() async throws {
         let (store, paths) = try makeTempStore()
-        let dir = paths.root
 
         let mock = MockNetworkService()
-        mock.resultData = "[]".data(using: .utf8)!
+        mock.resultData = Data("[]".utf8)
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
