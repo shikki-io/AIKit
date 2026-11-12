@@ -505,7 +505,8 @@ public struct DeviceCapability: Sendable, Equatable {
     ) -> DeviceClass {
         // Longest prefix first, so a longer row can never be shadowed by a
         // shorter one that happens to prefix it.
-        let matched = deviceTable
+        let matched =
+            deviceTable
             .flatMap { row in row.machinePrefixes.map { (prefix: $0, deviceClass: row.deviceClass) } }
             .sorted { $0.prefix.count > $1.prefix.count }
             .first { machineIdentifier.hasPrefix($0.prefix) }

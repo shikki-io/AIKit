@@ -161,10 +161,10 @@ public struct MLXVideoPreset: Sendable, Codable, Hashable {
 
 #if canImport(Darwin)
 
-    public extension MLXEngine {
+    extension MLXEngine {
 
         /// Wan2.1 Text-to-Video 1.3B — fits in 8GB unified memory, 480p, fast.
-        static let wan21_t2v_1_3b = ModelDescriptor(
+        public static let wan21_t2v_1_3b = ModelDescriptor(
             id: ModelIdentifier(provider: "mlx", modelId: "wan2.1-t2v-1.3b"),
             name: "Wan2.1 T2V 1.3B",
             author: "Alibaba",
@@ -181,7 +181,7 @@ public struct MLXVideoPreset: Sendable, Codable, Hashable {
         )
 
         /// Wan2.1 Text-to-Video 14B — needs 40GB+ unified memory, 720p, cinema quality.
-        static let wan21_t2v_14b = ModelDescriptor(
+        public static let wan21_t2v_14b = ModelDescriptor(
             id: ModelIdentifier(provider: "mlx", modelId: "wan2.1-t2v-14b"),
             name: "Wan2.1 T2V 14B",
             author: "Alibaba",
@@ -198,7 +198,7 @@ public struct MLXVideoPreset: Sendable, Codable, Hashable {
         )
 
         /// LTX-2 — 19B (Q4 distilled ~10B), 720p-1080p.
-        static let ltx2 = ModelDescriptor(
+        public static let ltx2 = ModelDescriptor(
             id: ModelIdentifier(provider: "mlx", modelId: "ltx-2"),
             name: "LTX-2",
             author: "Lightricks",
@@ -215,7 +215,7 @@ public struct MLXVideoPreset: Sendable, Codable, Hashable {
         )
 
         /// Wan2.1 Image-to-Video 14B — animate still images.
-        static let wan21_i2v_14b = ModelDescriptor(
+        public static let wan21_i2v_14b = ModelDescriptor(
             id: ModelIdentifier(provider: "mlx", modelId: "wan2.1-i2v-14b"),
             name: "Wan2.1 I2V 14B",
             author: "Alibaba",
@@ -232,7 +232,7 @@ public struct MLXVideoPreset: Sendable, Codable, Hashable {
         )
 
         /// Video model catalog for the model library UI.
-        static var videoModelCatalog: [ModelDescriptor] {
+        public static var videoModelCatalog: [ModelDescriptor] {
             [wan21_t2v_1_3b, wan21_t2v_14b, ltx2, wan21_i2v_14b]
         }
     }
