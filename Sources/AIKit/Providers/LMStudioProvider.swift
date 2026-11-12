@@ -175,6 +175,19 @@ public struct LMStudioProvider: AgentProviding, Sendable {
             return .invalidResponse("Empty response body")
         case .wsError(let description):
             return .invalidResponse(description)
+        case .invalidURL(let description):
+            // NetKit 3.0.0: the endpoint formed no URL, so NOTHING was sent.
+            // Deliberately NOT fallback-eligible — this is a misconfigured
+            // address, and trying the next provider would hide the settings
+            // bug behind a working one. W21 moves the check to settings load
+            // (BR-AIL-18), where it names the file and the entry; until then
+            // it surfaces here as the server's own refusal shape would.
+            return .invalidResponse("Endpoint formed no URL: \(description)")
+        case .bodyEncodingFailed(let cause):
+            // Also never sent, and never a server's fault: a request body JSON
+            // cannot represent. Falling back would send the same bad body to
+            // the next provider and report its refusal instead of this cause.
+            return .invalidResponse("Request body could not be encoded: \(cause)")
         case .unknown(let underlying):
             // NetKit wraps a transport failure here, and `URLError` inside it is
             // exactly what decides fallback — so unwrap instead of reporting

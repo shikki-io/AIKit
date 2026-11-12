@@ -255,8 +255,13 @@ extension AIWireStandard {
         }
         let elapsed = start.duration(to: .now)
         let latencyMs = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+        // `try?` on purpose, and only here: the request this labels has
+        // already been sent and answered, so rebuilding it cannot fail for a
+        // reason the caller could act on, and a label is not worth turning a
+        // good reply into a thrown error. The composed description is the
+        // fallback, as it was when NetKit 3.0.0 made this builder throwing.
         let requestURL =
-            networkService.createRequest(endPoint: endpoint).url?.absoluteString
+            (try? networkService.createRequest(endPoint: endpoint))?.url?.absoluteString
             ?? "\(target.server.description)\(path)"
         return try map(latencyMs, requestURL)
     }
