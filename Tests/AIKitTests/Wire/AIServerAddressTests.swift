@@ -50,9 +50,11 @@ struct AIServerAddressTests {
         #expect(try AIServerAddress(validating: "HTTPS://api.openai.com").scheme == "https")
     }
 
-    @Test("a private-network host is a perfectly good address", arguments: [
-        "http://192.168.1.42:1234", "http://studio.local:1234", "http://10.0.0.7:11434",
-    ])
+    @Test(
+        "a private-network host is a perfectly good address",
+        arguments: [
+            "http://192.168.1.42:1234", "http://studio.local:1234", "http://10.0.0.7:11434",
+        ])
     func aLANHostIsFine(root: String) throws {
         // The LAN Mac running LM Studio. W21 classifies it as
         // `.privateNetwork`; here it simply must not be refused.
@@ -85,10 +87,12 @@ struct AIServerAddressTests {
         #expect(error?.errorDescription?.contains("openai/v1") == true)
     }
 
-    @Test("something that is not an address is refused by name", arguments: [
-        "", "   ", "not a url at all", "127.0.0.1:1234", "http:///v1", "://host", "ftp://host",
-        "http://:1234", "localhost",
-    ])
+    @Test(
+        "something that is not an address is refused by name",
+        arguments: [
+            "", "   ", "not a url at all", "127.0.0.1:1234", "http:///v1", "://host", "ftp://host",
+            "http://:1234", "localhost",
+        ])
     func aNonAddressIsRefused(input: String) throws {
         let error = #expect(throws: AIKitError.self) {
             _ = try AIServerAddress(validating: input)

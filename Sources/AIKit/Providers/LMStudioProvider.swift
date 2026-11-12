@@ -178,7 +178,8 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     public func unload(model: String) async throws {
         let address = try AIServerAddress(validating: baseURL)
         try await send(
-            LMStudioEndPoint.unloadModel(address: address, credential: nil, body: LMStudioModelUnloadRequest(model: model)),
+            LMStudioEndPoint.unloadModel(
+                address: address, credential: nil, body: LMStudioModelUnloadRequest(model: model)),
             address: address
         )
     }

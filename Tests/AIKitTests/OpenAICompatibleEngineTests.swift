@@ -1,6 +1,7 @@
 import Foundation
 import NetKit
 import Testing
+
 @testable import AIKit
 
 @Suite("OpenAICompatibleEngine")
@@ -48,13 +49,13 @@ struct OpenAICompatibleEngineTests {
     func discoverModelsParsesList() async throws {
         let mock = MockHTTPTransport()
         let modelsJSON = """
-        {
-            "data": [
-                {"id": "gpt-4", "owned_by": "openai", "created": 1700000000},
-                {"id": "text-embedding-ada-002", "owned_by": "openai", "created": 1699000000}
-            ]
-        }
-        """
+            {
+                "data": [
+                    {"id": "gpt-4", "owned_by": "openai", "created": 1700000000},
+                    {"id": "text-embedding-ada-002", "owned_by": "openai", "created": 1699000000}
+                ]
+            }
+            """
         mock.body = Data(modelsJSON.utf8)
 
         let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-test", transport: mock)
@@ -74,8 +75,8 @@ struct OpenAICompatibleEngineTests {
     func discoverModelsDetectsVision() async throws {
         let mock = MockHTTPTransport()
         let modelsJSON = """
-        {"data": [{"id": "llava-1.5-7b", "owned_by": "local"}]}
-        """
+            {"data": [{"id": "llava-1.5-7b", "owned_by": "local"}]}
+            """
         mock.body = Data(modelsJSON.utf8)
 
         let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
@@ -128,16 +129,16 @@ struct OpenAICompatibleEngineTests {
     func providerCompleteParsesResponse() async throws {
         let mock = MockHTTPTransport()
         let responseJSON = """
-        {
-            "id": "chatcmpl-123",
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": "Hello, world!"},
-                "finish_reason": "stop"
-            }],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
-        }
-        """
+            {
+                "id": "chatcmpl-123",
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Hello, world!"},
+                    "finish_reason": "stop"
+                }],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+            }
+            """
         mock.body = Data(responseJSON.utf8)
 
         let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
@@ -181,8 +182,8 @@ struct OpenAICompatibleEngineTests {
     func providerCompleteIncludesAPIKey() async throws {
         let mock = MockHTTPTransport()
         let responseJSON = """
-        {"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
-        """
+            {"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
+            """
         mock.body = Data(responseJSON.utf8)
 
         let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-secret-key", transport: mock)
@@ -210,24 +211,24 @@ struct OpenAICompatibleEngineTests {
     func providerCompleteHandlesToolCalls() async throws {
         let mock = MockHTTPTransport()
         let responseJSON = """
-        {
-            "id": "chatcmpl-456",
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": null,
-                    "tool_calls": [{
-                        "id": "call_1",
-                        "type": "function",
-                        "function": {"name": "get_weather", "arguments": "{\\"city\\":\\"Paris\\"}"}
-                    }]
-                },
-                "finish_reason": "tool_calls"
-            }],
-            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30}
-        }
-        """
+            {
+                "id": "chatcmpl-456",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": null,
+                        "tool_calls": [{
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "get_weather", "arguments": "{\\"city\\":\\"Paris\\"}"}
+                        }]
+                    },
+                    "finish_reason": "tool_calls"
+                }],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30}
+            }
+            """
         mock.body = Data(responseJSON.utf8)
 
         let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
@@ -245,10 +246,13 @@ struct OpenAICompatibleEngineTests {
         )
 
         let provider = try await engine.loadModel(descriptor)
-        let response = try await provider.complete(request: AIRequest(
-            messages: [AIMessage(role: .user, content: "What's the weather?")],
-            tools: [AITool(name: "get_weather", description: "Get weather", parametersSchema: "{\"type\":\"object\"}")]
-        ))
+        let response = try await provider.complete(
+            request: AIRequest(
+                messages: [AIMessage(role: .user, content: "What's the weather?")],
+                tools: [
+                    AITool(name: "get_weather", description: "Get weather", parametersSchema: "{\"type\":\"object\"}")
+                ]
+            ))
 
         #expect(response.content == "")
         #expect(response.toolCalls?.count == 1)
@@ -260,8 +264,8 @@ struct OpenAICompatibleEngineTests {
     func providerCompleteThrowsOnEmptyChoices() async throws {
         let mock = MockHTTPTransport()
         let responseJSON = """
-        {"id":"x","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
-        """
+            {"id":"x","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
+            """
         mock.body = Data(responseJSON.utf8)
 
         let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
@@ -287,9 +291,10 @@ struct OpenAICompatibleEngineTests {
     @Test("Provider status is always ready")
     func providerStatusIsReady() async throws {
         let mock = MockHTTPTransport()
-        mock.body = Data("""
-        {"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
-        """.utf8)
+        mock.body = Data(
+            """
+            {"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
+            """.utf8)
 
         let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
         let descriptor = ModelDescriptor(

@@ -1,6 +1,7 @@
 import Foundation
 import NetKit
 import Testing
+
 @testable import AIKit
 
 @Suite("MCPEngine")
@@ -65,7 +66,7 @@ struct MCPEngineTests {
     func toolCall() async throws {
         let mockNetwork = MockNetworkService()
         let toolResult = MCPToolResult(content: [
-            MCPContent(type: "text", text: "Translated: Bonjour le monde"),
+            MCPContent(type: "text", text: "Translated: Bonjour le monde")
         ])
         mockNetwork.resultData = try JSONEncoder().encode(toolResult)
 
@@ -83,7 +84,7 @@ struct MCPEngineTests {
     func mcpProviderComplete() async throws {
         let mockNetwork = MockNetworkService()
         let toolResult = MCPToolResult(content: [
-            MCPContent(type: "text", text: "Response from MCP"),
+            MCPContent(type: "text", text: "Response from MCP")
         ])
         mockNetwork.resultData = try JSONEncoder().encode(toolResult)
 
@@ -160,9 +161,11 @@ struct MCPEngineTests {
         #expect(try NetworkService().createRequest(endPoint: endpoint).url?.path == "/mcp/tools/list")
     }
 
-    @Test("an MCP address with no scheme or host is refused, never defaulted", arguments: [
-        "", "127.0.0.1:9999", "not a url", "ftp://host/mcp",
-    ])
+    @Test(
+        "an MCP address with no scheme or host is refused, never defaulted",
+        arguments: [
+            "", "127.0.0.1:9999", "not a url", "ftp://host/mcp",
+        ])
     func aBadMCPAddressIsRefused(input: String) throws {
         // What this replaces defaulted a missing scheme to `http` and a missing
         // host to `127.0.0.1`, sending the call to the local machine instead of

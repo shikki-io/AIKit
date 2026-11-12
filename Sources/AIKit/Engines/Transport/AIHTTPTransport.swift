@@ -2,7 +2,7 @@ import Foundation
 import NetKit
 
 #if canImport(FoundationNetworking)
-import FoundationNetworking
+    import FoundationNetworking
 #endif
 
 // MARK: - AIHTTPReply
@@ -145,7 +145,8 @@ public struct URLSessionHTTPTransport: AIHTTPTransport {
                 collected.append(byte)
                 if collected.count >= lineByteCap { break }
             }
-            let text = String(data: collected, encoding: .utf8)?
+            let text =
+                String(data: collected, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return .rejected(status: http.statusCode, body: text)
         }

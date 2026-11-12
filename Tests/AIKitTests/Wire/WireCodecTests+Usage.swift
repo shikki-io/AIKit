@@ -17,7 +17,8 @@ private struct NoUsageCase: Sendable, CustomTestStringConvertible {
 private let noUsageCases: [NoUsageCase] = [
     NoUsageCase(
         family: .openAIChat,
-        reply: #"{"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}"#
+        reply:
+            #"{"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}"#
     ),
     NoUsageCase(
         family: .openAIResponses,

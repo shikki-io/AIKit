@@ -264,7 +264,8 @@ enum MCPEndPoint: EndPoint {
         case .toolsList:
             return nil
         case .callTool(_, let name, let arguments):
-            return try encodeWireJSONObject(MCPCallToolRequest(name: name, arguments: arguments), label: "MCPCallToolRequest")
+            return try encodeWireJSONObject(
+                MCPCallToolRequest(name: name, arguments: arguments), label: "MCPCallToolRequest")
         }
     }
 }

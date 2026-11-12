@@ -326,9 +326,11 @@ struct WireCodecRoundTripTests {
         #expect(try family.codec().family == family)
     }
 
-    @Test("a local family has no codec, and says so", arguments: [
-        AIProviderFamily.cliSubprocess, .mlxInProcess, .coreML,
-    ])
+    @Test(
+        "a local family has no codec, and says so",
+        arguments: [
+            AIProviderFamily.cliSubprocess, .mlxInProcess, .coreML,
+        ])
     func aLocalFamilyHasNoCodec(family: AIProviderFamily) {
         #expect(!family.isHTTP)
         #expect(throws: AIKitError.self) { _ = try family.codec() }
