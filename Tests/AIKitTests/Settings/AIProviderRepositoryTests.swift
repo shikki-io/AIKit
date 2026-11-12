@@ -143,20 +143,21 @@ struct AIProviderRepositoryTests {
 
     @Test("a bad address refuses the whole file and names the entry and the value")
     func aBadAddressRefusesTheFile() throws {
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id      = "good"
-            family  = "openai-chat"
-            address = "http://127.0.0.1:1234"
-            model   = "m"
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id      = "good"
+                family  = "openai-chat"
+                address = "http://127.0.0.1:1234"
+                model   = "m"
 
-            [[providers]]
-            id      = "bad"
-            family  = "openai-chat"
-            address = "https://proxy.corp/openai/v1"
-            model   = "m"
-            """
+                [[providers]]
+                id      = "bad"
+                family  = "openai-chat"
+                address = "https://proxy.corp/openai/v1"
+                model   = "m"
+                """
         )
         #expect(refusal.file == Self.fixtureFile)
         #expect(refusal.entry == "bad")
@@ -181,14 +182,15 @@ struct AIProviderRepositoryTests {
         // Six of these ten were EXECUTED against the wrong server by the shape
         // this replaces, one of them carrying a bearer key (AIKit#18
         // r4500281951). Here each one refuses the document.
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id      = "entry-under-test"
-            family  = "openai-chat"
-            address = "\(address)"
-            model   = "m"
-            """
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id      = "entry-under-test"
+                family  = "openai-chat"
+                address = "\(address)"
+                model   = "m"
+                """
         )
         #expect(refusal.entry == "entry-under-test")
         #expect(refusal.file == Self.fixtureFile)
@@ -198,13 +200,14 @@ struct AIProviderRepositoryTests {
     func anHTTPRowNeedsAnAddress() throws {
         // The `?? "127.0.0.1"` this replaces turned a row with no address into
         // a request against the local machine.
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id     = "no-address"
-            family = "openai-chat"
-            model  = "m"
-            """
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id     = "no-address"
+                family = "openai-chat"
+                model  = "m"
+                """
         )
         #expect(refusal.entry == "no-address")
         #expect(refusal.reason.contains("names no address"))
@@ -212,14 +215,15 @@ struct AIProviderRepositoryTests {
 
     @Test("an unknown family is refused, and the error lists the ones that exist")
     func anUnknownFamilyIsRefused() throws {
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id      = "mystery"
-            family  = "gemini-whatever"
-            address = "https://example.test"
-            model   = "m"
-            """
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id      = "mystery"
+                family  = "gemini-whatever"
+                address = "https://example.test"
+                model   = "m"
+                """
         )
         #expect(refusal.entry == "mystery")
         for family in AIProviderFamily.allCases {
@@ -231,20 +235,21 @@ struct AIProviderRepositoryTests {
     func duplicateIDsAreRefused() throws {
         // The second row silently wins every lookup keyed by id, so the first
         // is configured and unreachable.
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id      = "lmstudio"
-            family  = "openai-chat"
-            address = "http://127.0.0.1:1234"
-            model   = "a"
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id      = "lmstudio"
+                family  = "openai-chat"
+                address = "http://127.0.0.1:1234"
+                model   = "a"
 
-            [[providers]]
-            id      = "lmstudio"
-            family  = "openai-chat"
-            address = "http://127.0.0.1:1235"
-            model   = "b"
-            """
+                [[providers]]
+                id      = "lmstudio"
+                family  = "openai-chat"
+                address = "http://127.0.0.1:1235"
+                model   = "b"
+                """
         )
         #expect(refusal.entry == "lmstudio")
         #expect(refusal.reason.contains("one provider"))
@@ -287,15 +292,16 @@ struct AIProviderRepositoryTests {
         // Reading it names the row rather than returning a placeholder.
         #expect(throws: AIKitError.self) { try entry.serverAddress() }
 
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id      = "claude-code"
-            family  = "cli-subprocess"
-            address = "http://127.0.0.1:1234"
-            model   = "sonnet"
-            binary  = "claude"
-            """
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id      = "claude-code"
+                family  = "cli-subprocess"
+                address = "http://127.0.0.1:1234"
+                model   = "sonnet"
+                binary  = "claude"
+                """
         )
         #expect(refusal.entry == "claude-code")
         #expect(refusal.reason.contains("runs on this host"))
@@ -303,13 +309,14 @@ struct AIProviderRepositoryTests {
 
     @Test("a cli-subprocess row with no binary is refused")
     func aCLIRowNeedsABinary() throws {
-        let refusal = try Self.refusal(of:
-            """
-            [[providers]]
-            id     = "claude-code"
-            family = "cli-subprocess"
-            model  = "sonnet"
-            """
+        let refusal = try Self.refusal(
+            of:
+                """
+                [[providers]]
+                id     = "claude-code"
+                family = "cli-subprocess"
+                model  = "sonnet"
+                """
         )
         #expect(refusal.entry == "claude-code")
         #expect(refusal.reason.contains("binary"))
