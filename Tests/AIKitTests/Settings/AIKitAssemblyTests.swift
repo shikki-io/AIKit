@@ -138,8 +138,10 @@ struct AIKitAssemblyTests {
         // to one. Serving nothing, loudly, beats serving a real provider in a
         // container that asked for mocks.
         let container = Container(name: "aikit-w22-nomock-\(UUID().uuidString)")
-        AIKitAssembly(settings: try Self.settings(Self.threeProviders), factory: Self.stubFactory(), source: Self.fixtureFile)
-            .assemble(container: container, environment: .mock)
+        AIKitAssembly(
+            settings: try Self.settings(Self.threeProviders), factory: Self.stubFactory(), source: Self.fixtureFile
+        )
+        .assemble(container: container, environment: .mock)
         let set = try container.resolve(AIProviderSet.self)
         #expect(set.providers.isEmpty)
         #expect(set.unavailable.map(\.providerID) == ["lmstudio-local", "claude-api", "lmstudio-desk"])
