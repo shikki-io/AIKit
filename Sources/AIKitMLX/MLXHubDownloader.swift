@@ -58,6 +58,8 @@ struct MLXHubDownloader: Downloader {
     typealias HashProgress = @Sendable (String, Int64, Int64) -> Void
 
     private let store: ModelStore
+    private let planner: ModelDownloadPlanner
+    private let consent: ModelDownloadConsent
     private let index: FileIndex
     private let transfer: FileTransfer
     private let onHashProgress: HashProgress?
@@ -67,6 +69,12 @@ struct MLXHubDownloader: Downloader {
     ///     Injected with no default: W23 of spec
     ///     ai-layer-aikit-core-2026-10-31 removed `ModelStore`'s own idea of a
     ///     root, so there is nothing for a default to name.
+    ///   - planner: the download policy (W33, BR-AIL-23). Defaults to the
+    ///     shipped one, so a host that configures nothing still refuses a
+    ///     snapshot that cannot fit and still asks before spending on a metered
+    ///     path. A host that reads `[models.download]` passes a planner built
+    ///     from it.
+    ///   - consent: an answer the operator already gave for this download.
     ///   - index: how to list a repository's files. Defaults to
     ///     ``ModelStore/publishedFiles(repository:revision:)``.
     ///   - transfer: how to fetch one file. Defaults to
@@ -78,11 +86,15 @@ struct MLXHubDownloader: Downloader {
     ///   - onHashProgress: told how far a verification has read.
     init(
         store: ModelStore,
+        planner: ModelDownloadPlanner = ModelDownloadPlanner(),
+        consent: ModelDownloadConsent = .none,
         index: FileIndex? = nil,
         transfer: FileTransfer? = nil,
         onHashProgress: HashProgress? = nil
     ) {
         self.store = store
+        self.planner = planner
+        self.consent = consent
         self.index =
             index ?? { repository, revision in
                 try await ModelStore.publishedFiles(repository: repository, revision: revision)
@@ -138,6 +150,20 @@ struct MLXHubDownloader: Downloader {
 
         let held = try store.heldPaths(among: files, ofRepository: id)
         let pending = files.filter { !held.contains($0.path) }
+
+        // PLANNED before a byte is fetched (W33, BR-AIL-23). The published
+        // sizes are already in `files`; this is where they are finally compared
+        // with the free space on the volume `directory` sits on and with the
+        // network path. A snapshot that does not fit, or a metered path nobody
+        // allowed, throws here — with the figures — and no transfer starts.
+        let plan = await planner.plan(
+            repository: id,
+            files: files,
+            alreadyHeld: held,
+            into: directory
+        )
+        try plan.authorize(consent: consent)
+
         // The unit is BYTES, not a count of files: nine small JSON files and
         // one 4 GB weights file is not "90% done" after the JSON.
         let totalBytes = pending.totalBytes

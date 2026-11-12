@@ -8,19 +8,34 @@ import Testing
 @Suite("DefaultModelRegistry")
 struct DefaultModelRegistryTests {
 
-    /// A store over a run-scoped path layer.
+    /// The manifest store, the verified file store, and the layer both resolve
+    /// against.
     ///
-    /// The `TestPathLayer` is RETURNED, not discarded: it owns the scratch tree
-    /// and sweeps it in `deinit`, so dropping it here would delete the
-    /// directory the store is still resolving against. W23 of spec
-    /// ai-layer-aikit-core-2026-10-31.
-    private func makeTempStore(
-        scope: String = "default-model-registry"
-    ) throws -> (LocalModelStore, TestPathLayer) {
-        let paths = try TestPathLayer(scope: scope)
-        try FileManager.default.createDirectory(
-            at: paths.layer.base(of: AIKitNode.models), withIntermediateDirectories: true)
-        return (try LocalModelStore(paths: paths.layer), paths)
+    /// A class that HOLDS the `TestPathLayer` rather than a tuple that returns
+    /// it: the layer owns the scratch tree and sweeps it in `deinit`, so
+    /// dropping it would delete the directory the stores are still resolving
+    /// against. W23 of spec ai-layer-aikit-core-2026-10-31, and the shape every
+    /// other suite in this target uses.
+    ///
+    /// Both stores come from ONE layer, which is the point: W33 gave the
+    /// registry a `ModelStore` so a download can be planned and verified, and
+    /// two stores over two roots is the duplicate-4 GB defect W13 measured.
+    private final class Fixture {
+        let paths: TestPathLayer
+        let localStore: LocalModelStore
+        let modelStore: ModelStore
+
+        /// The scratch root, for a file a test pretends to have downloaded.
+        var root: URL { paths.root }
+
+        init(scope: String = "default-model-registry") throws {
+            let paths = try TestPathLayer(scope: scope)
+            try FileManager.default.createDirectory(
+                at: paths.layer.base(of: AIKitNode.models), withIntermediateDirectories: true)
+            self.paths = paths
+            self.localStore = try LocalModelStore(paths: paths.layer)
+            self.modelStore = ModelStore(paths: paths.layer)
+        }
     }
 
     private func sampleDescriptor(
@@ -45,17 +60,21 @@ struct DefaultModelRegistryTests {
 
     @Test("listModels returns local models")
     func listModelsReturnsLocal() async throws {
-        let (store, paths) = try makeTempStore()
-        let dir = paths.root
+        let fixture = try Fixture()
+        let dir = fixture.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
         FileManager.default.createFile(atPath: fakePath.path, contents: Data(count: 1024))
-        try store.register(descriptor, at: fakePath)
+        try fixture.localStore.register(descriptor, at: fakePath)
 
         let mock = MockNetworkService()
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         let models = try await registry.listModels(filter: nil)
         #expect(models.count == 1)
@@ -64,17 +83,21 @@ struct DefaultModelRegistryTests {
 
     @Test("listModels applies filter")
     func listModelsFilters() async throws {
-        let (store, paths) = try makeTempStore()
-        let dir = paths.root
+        let fixture = try Fixture()
+        let dir = fixture.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
         FileManager.default.createFile(atPath: fakePath.path, contents: Data(count: 1024))
-        try store.register(descriptor, at: fakePath)
+        try fixture.localStore.register(descriptor, at: fakePath)
 
         let mock = MockNetworkService()
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         // Filter that doesn't match
         let filter = ModelFilter(format: .mlx)
@@ -84,18 +107,22 @@ struct DefaultModelRegistryTests {
 
     @Test("getModel finds local model first")
     func getModelFindsLocal() async throws {
-        let (store, paths) = try makeTempStore()
-        let dir = paths.root
+        let fixture = try Fixture()
+        let dir = fixture.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
         FileManager.default.createFile(atPath: fakePath.path, contents: Data(count: 1024))
-        try store.register(descriptor, at: fakePath)
+        try fixture.localStore.register(descriptor, at: fakePath)
 
         let mock = MockNetworkService()
         // Intentionally don't set resultData — if it hits network, it would fail
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         let model = try await registry.getModel(id: descriptor.id)
         #expect(model.id == descriptor.id)
@@ -106,13 +133,17 @@ struct DefaultModelRegistryTests {
 
     @Test("getModel falls back to HuggingFace for remote")
     func getModelFallsBackToHF() async throws {
-        let (store, paths) = try makeTempStore()
+        let fixture = try Fixture()
 
         let mock = MockNetworkService()
         mock.resultData = try mintHFModelReply(makeFixtureHFModel(tags: ["gguf"]))
 
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         let id = ModelIdentifier(provider: "huggingface", modelId: "nvidia/nemotron-3-nano-4b")
         let model = try await registry.getModel(id: id)
@@ -122,11 +153,15 @@ struct DefaultModelRegistryTests {
 
     @Test("getModel throws for unknown non-HF provider")
     func getModelThrowsForUnknownProvider() async throws {
-        let (store, paths) = try makeTempStore()
+        let fixture = try Fixture()
 
         let mock = MockNetworkService()
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         let id = ModelIdentifier(provider: "unknown", modelId: "some-model")
         await #expect(throws: AIKitError.self) {
@@ -136,26 +171,30 @@ struct DefaultModelRegistryTests {
 
     @Test("deleteLocal removes from store")
     func deleteLocalRemoves() async throws {
-        let (store, paths) = try makeTempStore()
-        let dir = paths.root
+        let fixture = try Fixture()
+        let dir = fixture.root
 
         let descriptor = sampleDescriptor()
         let fakePath = dir.appendingPathComponent("model.gguf")
         FileManager.default.createFile(atPath: fakePath.path, contents: Data(count: 1024))
-        try store.register(descriptor, at: fakePath)
+        try fixture.localStore.register(descriptor, at: fakePath)
 
         let mock = MockNetworkService()
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
-        #expect(try store.isDownloaded(descriptor.id))
+        #expect(try fixture.localStore.isDownloaded(descriptor.id))
         try await registry.deleteLocal(id: descriptor.id)
-        #expect(!(try store.isDownloaded(descriptor.id)))
+        #expect(!(try fixture.localStore.isDownloaded(descriptor.id)))
     }
 
     @Test("search delegates to HuggingFace client")
     func searchDelegatesToHF() async throws {
-        let (store, paths) = try makeTempStore()
+        let fixture = try Fixture()
 
         let mock = MockNetworkService()
         mock.resultData = try mintHFSearchReply([
@@ -171,7 +210,11 @@ struct DefaultModelRegistryTests {
         ])
 
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         let results = try await registry.search(query: "llama", format: .gguf)
         #expect(results.count == 1)
@@ -181,13 +224,17 @@ struct DefaultModelRegistryTests {
 
     @Test("search without format uses gguf default")
     func searchWithoutFormat() async throws {
-        let (store, paths) = try makeTempStore()
+        let fixture = try Fixture()
 
         let mock = MockNetworkService()
         mock.resultData = try mintHFSearchReply([])
 
         let client = HuggingFaceClient(networkService: mock)
-        let registry = DefaultModelRegistry(localStore: store, hfClient: client)
+        let registry = DefaultModelRegistry(
+            localStore: fixture.localStore,
+            modelStore: fixture.modelStore,
+            hfClient: client
+        )
 
         let results = try await registry.search(query: "anything", format: nil)
         #expect(results.isEmpty)

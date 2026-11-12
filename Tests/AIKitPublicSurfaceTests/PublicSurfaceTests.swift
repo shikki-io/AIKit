@@ -234,7 +234,14 @@ struct PublicSurfaceTests {
         #expect(
             mlx == [
                 "enum  AIKitMLX",
-                "type.method  AIKitMLX.register(into:store:device:)",
+                // W33 (BR-AIL-23) widened the registration's signature, and
+                // did NOT widen the surface: still one registration, now
+                // carrying the download policy and the operator's consent. It
+                // has to be a parameter — without it the shipped default would
+                // be the only policy an MLX download could ever run under, so
+                // `models.download.allow_expensive_network` could never reach
+                // the on-device path.
+                "type.method  AIKitMLX.register(into:store:device:downloadPlanner:downloadConsent:)",
                 "type.property  AIKitMLX.family",
             ],
             """

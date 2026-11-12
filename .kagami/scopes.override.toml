@@ -62,10 +62,25 @@ timeout_seconds = 300
 # AIServerAddressTests' host-platform identity test. Nothing was removed: the
 # migrated suites kept every assertion and gained the wire-key ones.
 #
+# RE-MEASURED 2026-11-12 at the W33 commit: 707/707, passed equal to examined
+# (run F7EDC72B-B68F-43EA-BB8B-54F5F4880C83; the first run of the same tree,
+# 5680563C-C4A1-44E9-B39A-8713CFE193BB, measured the same). +47 on W27's 660,
+# and the 47 are exactly the `@Test` functions W33's one new file adds
+# (`grep -c '^    @Test' Tests/AIKitTests/ModelDownloadPlanTests.swift` = 47),
+# which is also the cross-check that 660 was not stale: had the base been
+# anything else, the arithmetic would not close. The suites are
+# ModelDownloadPlanSpaceAndNetworkTests (T-AIL-60's space, margin, verified
+# subtraction, consent and ordering), ModelDownloadProbeTests (the two SHIPPED
+# probes, not the injected ones), ModelDownloadSettingsTests
+# (`[models.download]` read out of the providers document),
+# DefaultModelRegistryPlanTests (the plan enforced where the bytes would move:
+# a refusal counted as zero transfers) and ModelDownloaderResumeTests
+# (T-AIL-61).
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 660  # W27 moved its own suite to AIKitPublicSurfaceTests, so this is unchanged
+expected_test_min = 707
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
