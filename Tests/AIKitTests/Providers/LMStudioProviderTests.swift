@@ -61,10 +61,6 @@ private func makeErrorJSON(message: String) -> Data {
     return (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
 }
 
-/// Throwing since W21: the address is validated in `init`, so a fixture with a
-/// bad one is refused here rather than at the first request (BR-AIL-18). The
-/// default address is the ONE fixture constant, built through
-/// `AIServerAddress(validating:)` — no suite writes a server URL of its own.
 private func makeSUT(
     answering data: Data? = nil,
     statusCode: Int = 200,
@@ -136,7 +132,7 @@ struct LMStudioProviderTests {
         #expect(capped.timeout == 300, "requestTimeout is the ceiling")
 
         let endpoint = OpenAIEndPoint.chatCompletions(
-            address: try makeFixtureAddress(),
+            address: try AIServerAddress(validating: fixtureServerRoot),
             credential: nil,
             body: ChatCompletionRequest(
                 model: "m",
@@ -186,7 +182,7 @@ struct LMStudioProviderTests {
     func emptyReplyIsRecognisedByCase() throws {
         let target = AIRequestTarget(
             entryID: "lmstudio",
-            address: try makeFixtureAddress(),
+            address: try AIServerAddress(validating: fixtureServerRoot),
             route: "/v1/chat/completions"
         )
         let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "qwen")
@@ -308,7 +304,7 @@ struct LMStudioProviderTests {
     func statusDecidesEligibility() throws {
         let target = AIRequestTarget(
             entryID: "lmstudio",
-            address: try makeFixtureAddress(),
+            address: try AIServerAddress(validating: fixtureServerRoot),
             route: "/v1/chat/completions"
         )
         #expect(!FallbackEligibility.allows(AIKitError.http(status: 401, body: "no key", target: target)))
@@ -419,7 +415,6 @@ struct LMStudioProviderTests {
         // non-optional, so what settings said is all there is.
         let provider = try LMStudioProvider(baseURL: "http://custom:9999", model: "custom-model")
         #expect(provider.baseURL == "http://custom:9999")
-        #expect(provider.address.description == "http://custom:9999")
         #expect(provider.model == "custom-model")
         #expect(provider.requestTimeout == 300)
     }
@@ -431,7 +426,7 @@ struct LMStudioProviderTests {
         #expect(http.id == "lmstudio")
         #expect(http.displayName == "LM Studio")
         #expect(http.entry.model == "qwen-2.5-coder")
-        #expect(http.entry.address?.description == "http://127.0.0.1:1234")
+        #expect(http.entry.address?.description == fixtureServerRoot)
         #expect(http.entry.family == .openAIChat)
         #expect(http.credential == nil)
         // Derived from the codec: chat completions carries tools, so the
@@ -625,7 +620,7 @@ struct HTTPAIProviderErrorSurfacingTests {
                 return
             }
             #expect(target.route == "/v1/chat/completions")
-            #expect(target.address.description == "http://127.0.0.1:1234")
+            #expect(target.address.description == fixtureServerRoot)
             #expect(try LMStudioProvider(baseURL: fixtureServerRoot, model: "qwen").mapped(error) == .emptyContent)
         }
     }

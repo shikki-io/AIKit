@@ -36,12 +36,6 @@ private func smallLLMDescriptor() -> ModelDescriptor {
     )
 }
 
-// W21 of spec ai-layer-aikit-core-2026-10-31: the engine takes its
-// `mlx_lm.server` root as an argument now, and there is no
-// `?? "http://localhost:8080"` behind it any more (BR-AIL-18). A structural
-// test that only wants the PROVIDER the engine builds therefore has to say
-// where the server would be, and says it through the one fixture constant,
-// like every other suite.
 @Suite("MLXEngine — W4 Integration Smoke", .tags(.mlxSmoke))
 struct MLXEngineSmokeTest {
 
