@@ -101,6 +101,7 @@ public enum AIKitError: Error, LocalizedError, Equatable {
             "Not a server address: '\(value)' — \(reason)"
         case .settings(let file, let entry, let reason):
             entry.map { "\(file): provider '\($0)' — \(reason)" } ?? "\(file): \(reason)"
+
         case .unsupported(let field, let family):
             "\(family.displayName) cannot carry '\(field)', so nothing was sent"
         case .http(let status, let body, let target):

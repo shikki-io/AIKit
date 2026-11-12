@@ -61,11 +61,15 @@ private func makeErrorJSON(message: String) -> Data {
     return (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
 }
 
+/// Throwing since W21: the address is validated in `init`, so a fixture with a
+/// bad one is refused here rather than at the first request (BR-AIL-18). The
+/// default address is the ONE fixture constant, built through
+/// `AIServerAddress(validating:)` — no suite writes a server URL of its own.
 private func makeSUT(
     answering data: Data? = nil,
     statusCode: Int = 200,
     failingWith error: (any Error)? = nil,
-    baseURL: String = "http://127.0.0.1:1234",
+    baseURL: String = fixtureServerRoot,
     model: String = "qwen-2.5-coder",
     requestTimeout: TimeInterval = 300
 ) throws -> (provider: LMStudioProvider, network: MockHTTPTransport) {
@@ -123,7 +127,7 @@ struct LMStudioProviderTests {
         // one. The transport the provider builds for a call carries the timeout
         // instead — this asserts the override is the one that runs, not that it
         // merely exists.
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", requestTimeout: 300)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", requestTimeout: 300)
 
         let within = try #require(provider.provider(timeout: 120).network as? URLSessionHTTPTransport)
         #expect(within.timeout == 120)
@@ -132,7 +136,7 @@ struct LMStudioProviderTests {
         #expect(capped.timeout == 300, "requestTimeout is the ceiling")
 
         let endpoint = OpenAIEndPoint.chatCompletions(
-            address: try AIServerAddress(validating: "http://127.0.0.1:1234"),
+            address: try makeFixtureAddress(),
             credential: nil,
             body: ChatCompletionRequest(
                 model: "m",
@@ -182,10 +186,10 @@ struct LMStudioProviderTests {
     func emptyReplyIsRecognisedByCase() throws {
         let target = AIRequestTarget(
             entryID: "lmstudio",
-            address: try AIServerAddress(validating: "http://127.0.0.1:1234"),
+            address: try makeFixtureAddress(),
             route: "/v1/chat/completions"
         )
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "qwen")
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "qwen")
         #expect(provider.mapped(AIKitError.emptyReply(target: target)) == .emptyContent)
         // And the verdict does not depend on what the sentence happens to say.
         #expect(!FallbackProviderChain.isFallbackEligible(LMStudioProvider.LMStudioError.emptyContent))
@@ -304,7 +308,7 @@ struct LMStudioProviderTests {
     func statusDecidesEligibility() throws {
         let target = AIRequestTarget(
             entryID: "lmstudio",
-            address: try AIServerAddress(validating: "http://127.0.0.1:1234"),
+            address: try makeFixtureAddress(),
             route: "/v1/chat/completions"
         )
         #expect(!FallbackEligibility.allows(AIKitError.http(status: 401, body: "no key", target: target)))
@@ -390,12 +394,12 @@ struct LMStudioProviderTests {
         // waited for the first `run`. Either way nothing is sent — and the
         // mapping below proves the verdict did not change with the timing.
         #expect(throws: AIKitError.self) {
-            try makeSUT(baseURL: "http://127.0.0.1:1234/v1")
+            try makeSUT(baseURL: "\(fixtureServerRoot)/v1")
         }
 
         let working = try makeSUT().provider
         let error = working.mapped(
-            AIKitError.invalidServerAddress(value: "http://127.0.0.1:1234/v1", reason: "it carries the path '/v1'")
+            AIKitError.invalidServerAddress(value: "\(fixtureServerRoot)/v1", reason: "it carries the path '/v1'")
         )
         guard case .invalidResponse(let message) = error else {
             Issue.record("Expected invalidResponse, got \(error)")
@@ -415,6 +419,7 @@ struct LMStudioProviderTests {
         // non-optional, so what settings said is all there is.
         let provider = try LMStudioProvider(baseURL: "http://custom:9999", model: "custom-model")
         #expect(provider.baseURL == "http://custom:9999")
+        #expect(provider.address.description == "http://custom:9999")
         #expect(provider.model == "custom-model")
         #expect(provider.requestTimeout == 300)
     }
@@ -436,7 +441,7 @@ struct LMStudioProviderTests {
 
     @Test("the entry it serves carries the provider's own timeout")
     func theEntryCarriesTheTimeout() throws {
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", requestTimeout: 90)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", requestTimeout: 90)
         #expect(provider.entry.requestTimeout == 90)
     }
 
@@ -468,7 +473,7 @@ struct LMStudioModelManagementTests {
         network.body = Data(
             #"{"data":[{"id":"devstral","type":"llm","is_loaded":true},{"id":"nomic","type":"embeddings"}]}"#.utf8
         )
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
 
         let models = try await provider.hostedModels()
         #expect(models.map(\.id) == ["devstral", "nomic"])
@@ -480,7 +485,7 @@ struct LMStudioModelManagementTests {
     func loadPostsToTheLoadRoute() async throws {
         let network = MockHTTPTransport()
         network.body = Data("{}".utf8)
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
 
         try await provider.load(model: "devstral", contextLength: 8192, ttl: 600)
 
@@ -497,7 +502,7 @@ struct LMStudioModelManagementTests {
     func loadOmitsAbsentOptions() async throws {
         let network = MockHTTPTransport()
         network.body = Data("{}".utf8)
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
 
         try await provider.load(model: "devstral")
 
@@ -510,7 +515,7 @@ struct LMStudioModelManagementTests {
     func unloadPostsToTheUnloadRoute() async throws {
         let network = MockHTTPTransport()
         network.body = Data("{}".utf8)
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
 
         try await provider.unload(model: "devstral")
 
@@ -523,7 +528,7 @@ struct LMStudioModelManagementTests {
         let network = MockHTTPTransport()
         network.status = 404
         network.body = Data(#"{"error":{"message":"model not found"}}"#.utf8)
-        let provider = try LMStudioProvider(baseURL: "http://127.0.0.1:1234", model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
 
         let error = await #expect(throws: AIKitError.self) {
             try await provider.load(model: "no-such-model")
