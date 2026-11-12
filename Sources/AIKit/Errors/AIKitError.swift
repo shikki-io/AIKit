@@ -235,7 +235,7 @@ public enum FallbackEligibility {
         switch error {
         // MARK: Facts about THIS provider — the next one gets its turn
 
-        case // This engine cannot run here — an MLX provider on iOS, Core ML off
+        case  // This engine cannot run here — an MLX provider on iOS, Core ML off
         // an Apple platform. Exactly what a fallback list exists for.
         .engineUnavailable,
             // The provider refuses the capability itself: `whisper.cpp` is not
@@ -270,7 +270,7 @@ public enum FallbackEligibility {
 
         // MARK: Not worth asking again
 
-        case // The server answered. Whatever it sent is the news; the next
+        case  // The server answered. Whatever it sent is the news; the next
         // provider's answer would replace this evidence rather than add to
         // it.
         .emptyReply, .replyUndecodable, .streamLineTooLong,

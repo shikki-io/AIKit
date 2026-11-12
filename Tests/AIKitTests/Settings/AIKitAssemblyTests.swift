@@ -162,9 +162,11 @@ struct AIKitAssemblyTests {
 
     @Test("a host with no broker gets providers with no credential, not an invented one")
     func noBrokerNoCredential() throws {
-        let container = try Self.assembled(.production, factory: AIProviderFactory(transport: { _ in
-            MockHTTPTransport()
-        }))
+        let container = try Self.assembled(
+            .production,
+            factory: AIProviderFactory(transport: { _ in
+                MockHTTPTransport()
+            }))
         let cloud = try #require(
             try container.resolve((any AIProvider).self, name: "claude-api") as? HTTPAIProvider
         )
@@ -355,7 +357,9 @@ struct AIKitAssemblyTests {
             for line in file.text.split(separator: "\n", omittingEmptySubsequences: false) {
                 let code = line.trimmingCharacters(in: .whitespaces)
                 // A comment reads nothing.
-                guard !code.hasPrefix("//"), !code.hasPrefix("///"), let after = code.range(of: "environment[\"") else { continue }
+                guard !code.hasPrefix("//"), !code.hasPrefix("///"), let after = code.range(of: "environment[\"") else {
+                    continue
+                }
                 let rest = code[after.upperBound...]
                 guard let close = rest.range(of: "\"") else { continue }
                 found.append((file.path, String(rest[rest.startIndex..<close.lowerBound])))
