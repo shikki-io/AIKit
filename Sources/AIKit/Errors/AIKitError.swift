@@ -25,6 +25,20 @@ public enum AIKitError: Error, LocalizedError, Equatable {
     /// which is the single place an address is read.
     case invalidServerAddress(value: String, reason: String)
 
+    /// No server address is configured at all (BR-AIL-18).
+    ///
+    /// The other half of the rule. ``invalidServerAddress(value:reason:)``
+    /// covers an address that was written badly; this covers one that was
+    /// never written, and it exists because the alternative is what W21
+    /// deleted: `?? "http://127.0.0.1:1234"` and `?? "http://localhost:8080"`
+    /// answered the absence by pointing at the local machine, so a host that
+    /// had configured nothing got a connection-refused from its own loopback
+    /// instead of being told what to set (AIKit#18 r4500281951, r4500300887).
+    ///
+    /// `setting` names what to fill in — an environment variable today, a
+    /// settings-file key once W22 lands — so the message is actionable.
+    case serverAddressNotConfigured(setting: String)
+
     /// The request carries something this family's wire cannot express
     /// (BR-AIL-17).
     ///
@@ -90,6 +104,10 @@ public enum AIKitError: Error, LocalizedError, Equatable {
             AIProviderAttempt.summary(of: attempts)
         case .invalidServerAddress(let value, let reason):
             "Not a server address: '\(value)' — \(reason)"
+        case .serverAddressNotConfigured(let setting):
+            """
+            No server address is configured: set '\(setting)' to a server root such as             http://host:1234. AIKit does not default to the local machine (BR-AIL-18)
+            """
         case .unsupported(let field, let family):
             "\(family.displayName) cannot carry '\(field)', so nothing was sent"
         case .http(let status, let body, let target):
@@ -265,8 +283,10 @@ public enum FallbackEligibility {
         .emptyReply, .replyUndecodable, .streamLineTooLong,
             // A settings mistake, and NOT eligible on purpose: trying the next
             // provider would hide a misconfigured address behind a working one,
-            // and the operator would keep an entry that never works.
-            .invalidServerAddress,
+            // and the operator would keep an entry that never works. An absent
+            // address reads the same way — it is the operator's file that has
+            // to change, not the provider that gets asked.
+            .invalidServerAddress, .serverAddressNotConfigured,
             // A registry transfer, not a completion attempt. Retrying the
             // request elsewhere does not finish a download.
             .downloadFailed,

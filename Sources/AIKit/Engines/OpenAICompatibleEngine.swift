@@ -74,14 +74,14 @@ public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
                 sizeBytes: 0,
                 architecture: "unknown",
                 domain: inferDomain(from: model.id),
-                // FIXME(spec 8badc87f-e9e0-4bfd-913f-a52f52ba70fc W21): a substring test on the host calls a LAN Mac
-                // running LM Studio "cloud" (AIKit#18, panel finding on
-                // `OpenAICompatibleEngine.swift:62`). W21 of spec
-                // ai-layer-aikit-core-2026-10-31 replaces it with
-                // `AIServerAddress.reach`, which classifies loopback, private
-                // network (RFC 1918, link-local, `.local`) and remote from the
-                // host. Kept as-is here so this wave changes one thing.
-                isLocal: address.host == "127.0.0.1" || address.host == "localhost",
+                // The model does not leave this network, which is what a
+                // reader of `isLocal` is asking. Read from
+                // ``AIServerAddress/reach``, not from a substring test on the
+                // host: `host == "127.0.0.1" || host == "localhost"` called
+                // the Mac on the desk at `192.168.1.42` — or at
+                // `studio.local` — a cloud model (AIKit#18, panel finding on
+                // `OpenAICompatibleEngine.swift:62`).
+                isLocal: address.reach != .remote,
                 tags: []
             )
         }

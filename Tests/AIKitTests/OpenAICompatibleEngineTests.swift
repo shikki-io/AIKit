@@ -87,6 +87,43 @@ struct OpenAICompatibleEngineTests {
         #expect(models[0].isLocal)
     }
 
+    // MARK: - W21: where the server is decides what "local" means
+
+    @Test(
+        "a model on this network is local, wherever on this network it is",
+        arguments: [
+            "http://127.0.0.1:1234",  // this machine
+            "http://192.168.1.42:1234",  // the Mac on the desk
+            "http://studio.local:1234",  // the same Mac, as Bonjour spells it
+            "http://10.0.0.7:11434",  // a server in the rack
+        ])
+    func aModelOnThisNetworkIsLocal(root: String) async throws {
+        // T-AIL-43 at the consumer. `isLocal` used to be
+        // `host == "127.0.0.1" || host == "localhost"`, so the three
+        // non-loopback rows here were reported as CLOUD models in the
+        // catalogue the operator picks from — a LAN Mac running LM Studio read
+        // as something that costs money and sends the prompt off the network
+        // (AIKit#18, panel finding on `OpenAICompatibleEngine.swift:62`).
+        let mock = MockHTTPTransport()
+        mock.body = Data(#"{"data": [{"id": "devstral", "owned_by": "local"}]}"#.utf8)
+
+        let engine = try OpenAICompatibleEngine(id: "lan", baseURL: root, transport: mock)
+        let models = try await engine.discoverModels()
+
+        #expect(try #require(models.first).isLocal, "\(root) is on this network")
+    }
+
+    @Test("a model on a cloud server is not local")
+    func aCloudModelIsNotLocal() async throws {
+        let mock = MockHTTPTransport()
+        mock.body = Data(#"{"data": [{"id": "gpt-4", "owned_by": "openai"}]}"#.utf8)
+
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: TestCredential.openAI, transport: mock)
+        let models = try await engine.discoverModels()
+
+        #expect(!(try #require(models.first).isLocal))
+    }
+
     // MARK: - Load / Unload
 
     @Test("loadModel creates provider and tracks it")

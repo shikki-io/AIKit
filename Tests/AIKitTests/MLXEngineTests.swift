@@ -128,7 +128,7 @@ struct MLXEngineTests {
     #if canImport(Darwin) && arch(arm64)
     @Test("loadModel LLM domain returns provider advertising synthesis")
     func loadModelLLMDomain() async throws {
-        let engine = MLXEngine()
+        let engine = MLXEngine(lmServerRoot: fixtureServerRoot)  // no localhost default since W21 (BR-AIL-18)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "mlx", modelId: "llama-3.2-3b-instruct-4bit"),
             name: "Llama 3.2 3B Instruct 4bit",
