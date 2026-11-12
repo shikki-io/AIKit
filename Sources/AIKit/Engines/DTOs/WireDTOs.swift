@@ -166,7 +166,7 @@ enum ResponsesReply: Decodable, Sendable {
 }
 
 /// A successful `/v1/responses` reply.
-struct ResponsesResponseDTO: Decodable, Sendable {
+struct ResponsesResponseDTO: Codable, Sendable, Equatable {
     let id: String
     /// `completed`, or `incomplete` when the token budget cut the answer off.
     let status: String?
@@ -194,20 +194,20 @@ struct ResponsesResponseDTO: Decodable, Sendable {
 }
 
 /// One item in a `/v1/responses` reply's `output` array.
-struct ResponsesOutputItem: Decodable, Sendable {
+struct ResponsesOutputItem: Codable, Sendable, Equatable {
     let type: String
     let role: String?
     let content: [ResponsesContentPart]?
 }
 
 /// One content part inside a `/v1/responses` output item.
-struct ResponsesContentPart: Decodable, Sendable {
+struct ResponsesContentPart: Codable, Sendable, Equatable {
     let type: String
     let text: String?
 }
 
 /// Token usage on `/v1/responses`.
-struct ResponsesUsage: Decodable, Sendable {
+struct ResponsesUsage: Codable, Sendable, Equatable {
     let inputTokens: Int?
     let outputTokens: Int?
 
@@ -233,7 +233,7 @@ struct ResponsesUsage: Decodable, Sendable {
 ///
 /// The `event:` label repeats the payload's own `type`, so the payload alone is
 /// enough and nothing has to track which event it is inside.
-struct ResponsesStreamEvent: Decodable, Sendable {
+struct ResponsesStreamEvent: Codable, Sendable, Equatable {
     let type: String
     /// Present on `response.output_text.delta`, and only there.
     let delta: String?
@@ -299,7 +299,7 @@ enum AnthropicMessagesReply: Decodable, Sendable {
 }
 
 /// A successful `/v1/messages` reply.
-struct AnthropicMessagesResponseDTO: Decodable, Sendable {
+struct AnthropicMessagesResponseDTO: Codable, Sendable, Equatable {
     let id: String
     let role: String?
     /// The model that answered; see `ResponsesResponseDTO.model`.
@@ -323,13 +323,13 @@ struct AnthropicMessagesResponseDTO: Decodable, Sendable {
 }
 
 /// One block in a `/v1/messages` reply's `content` array.
-struct AnthropicContentBlock: Decodable, Sendable {
+struct AnthropicContentBlock: Codable, Sendable, Equatable {
     let type: String
     let text: String?
 }
 
 /// Token usage on `/v1/messages`.
-struct AnthropicUsage: Decodable, Sendable {
+struct AnthropicUsage: Codable, Sendable, Equatable {
     let inputTokens: Int?
     let outputTokens: Int?
 
@@ -352,7 +352,7 @@ struct AnthropicUsage: Decodable, Sendable {
 ///
 /// `message_start`, `content_block_start`, `content_block_stop` and
 /// `message_delta` also arrive and carry no answer text.
-struct AnthropicStreamEvent: Decodable, Sendable {
+struct AnthropicStreamEvent: Codable, Sendable, Equatable {
     let type: String
     let delta: AnthropicStreamDelta?
 
@@ -362,7 +362,7 @@ struct AnthropicStreamEvent: Decodable, Sendable {
 
 /// The `delta` of a `content_block_delta`. `text` is nil for a delta that is
 /// not a `text_delta` — a `thinking_delta` or an `input_json_delta`.
-struct AnthropicStreamDelta: Decodable, Sendable {
+struct AnthropicStreamDelta: Codable, Sendable, Equatable {
     let type: String?
     let text: String?
 }
@@ -467,7 +467,7 @@ enum LMStudioNativeReply: Decodable, Sendable {
 /// carries `content` as a plain string here, where the responses surface nests
 /// `content[].text`. Folding the two would mean one optional-riddled shape that
 /// matches neither server.
-struct LMStudioNativeResponseDTO: Decodable, Sendable {
+struct LMStudioNativeResponseDTO: Codable, Sendable, Equatable {
     let responseId: String?
     /// The loaded model instance that answered — this surface's `model` field.
     let modelInstanceId: String?
@@ -487,13 +487,13 @@ struct LMStudioNativeResponseDTO: Decodable, Sendable {
 }
 
 /// One item in an `/api/v1/chat` reply's `output` array.
-struct LMStudioNativeOutputItem: Decodable, Sendable {
+struct LMStudioNativeOutputItem: Codable, Sendable, Equatable {
     let type: String
     let content: String?
 }
 
 /// Token counts on `/api/v1/chat`, which calls them stats.
-struct LMStudioNativeStats: Decodable, Sendable {
+struct LMStudioNativeStats: Codable, Sendable, Equatable {
     let inputTokens: Int?
     let totalOutputTokens: Int?
 
@@ -516,7 +516,7 @@ struct LMStudioNativeStats: Decodable, Sendable {
 /// event: chat.end
 /// data: {"type":"chat.end","result":{…}}
 /// ```
-struct LMStudioStreamEvent: Decodable, Sendable {
+struct LMStudioStreamEvent: Codable, Sendable, Equatable {
     let type: String
     /// Present on `message.delta`, and only there.
     let content: String?

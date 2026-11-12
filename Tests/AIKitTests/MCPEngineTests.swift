@@ -91,7 +91,7 @@ struct MCPEngineTests {
         let engine = MCPEngine(
             id: "test-mcp",
             displayName: "Test MCP",
-            baseURL: "http://127.0.0.1:9999/mcp",
+            baseURL: "\(fixtureMCPServerRoot)/mcp",
             networkService: mockNetwork
         )
 
@@ -118,7 +118,7 @@ struct MCPEngineTests {
 
     @Test("Engine conforms to RuntimeEngine")
     func runtimeEngineConformance() {
-        let engine = MCPEngine(baseURL: "http://127.0.0.1:9999")
+        let engine = MCPEngine(baseURL: fixtureMCPServerRoot)
         #expect(engine.supportedFormats == [.api])
         #expect(engine.loadedModels().isEmpty)
     }
@@ -139,7 +139,7 @@ struct MCPEngineTests {
 
     @Test("MCPEndPoint.toolsList is a bodyless GET on /tools/list at the server")
     func endPointToolsList() throws {
-        let endpoint = MCPEndPoint.toolsList(server: try MCPServerLocation(validating: "http://127.0.0.1:9999"))
+        let endpoint = MCPEndPoint.toolsList(server: try MCPServerLocation(validating: fixtureMCPServerRoot))
         #expect(endpoint.method == .GET)
         #expect(endpoint.path == "/tools/list")
         #expect(endpoint.host == "127.0.0.1")
@@ -155,7 +155,7 @@ struct MCPEngineTests {
         // AI wire families whose routes are absolute. That is why it has its
         // own validated location type and not `AIServerAddress`.
         let endpoint = MCPEndPoint.toolsList(
-            server: try MCPServerLocation(validating: "http://127.0.0.1:9999/mcp")
+            server: try MCPServerLocation(validating: "\(fixtureMCPServerRoot)/mcp")
         )
         #expect(endpoint.apiPath == "/mcp")
         #expect(try NetworkService().createRequest(endPoint: endpoint).url?.path == "/mcp/tools/list")
@@ -182,7 +182,7 @@ struct MCPEngineTests {
     @Test("MCPEndPoint.callTool is a POST on /tools/call carrying name and arguments")
     func endPointCallTool() throws {
         let endpoint = MCPEndPoint.callTool(
-            server: try MCPServerLocation(validating: "http://127.0.0.1:9999"),
+            server: try MCPServerLocation(validating: fixtureMCPServerRoot),
             name: "ocr",
             arguments: ["page": "1"]
         )

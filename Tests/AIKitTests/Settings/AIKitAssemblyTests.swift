@@ -28,7 +28,7 @@ struct AIKitAssemblyTests {
         [[providers]]
         id      = "lmstudio-local"
         family  = "openai-chat"
-        address = "http://127.0.0.1:1234"
+        address = "\(fixtureServerRoot)"
         model   = "devstral-small-2507"
 
         [[providers]]
@@ -233,7 +233,7 @@ struct AIKitAssemblyTests {
                 [[providers]]
                 id      = "lmstudio-local"
                 family  = "openai-chat"
-                address = "http://127.0.0.1:1234"
+                address = "\(fixtureServerRoot)"
                 model   = "devstral-small-2507"
 
                 [[providers]]

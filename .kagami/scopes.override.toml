@@ -52,10 +52,20 @@ timeout_seconds = 300
 #     FallbackProviderChainTests' deadline, cancellation and provider-id cases
 #     (T-AIL-47).
 #
+# RE-MEASURED 2026-11-12 at the W24 commit: 660/660 (run
+# D6A3FEC3-70F0-450F-A142-D1B4075EF36F). +17 on W22's 643, all of them W24's
+# own: FixturePinTests (the captured-reply pin, the stream pin, and the four
+# proofs that the minting layer is read by the real codecs),
+# FixtureLiteralRatchetTests (the raw-JSON rule, its detector self-check and
+# its declaration checks), FixtureAddressSSoTTests (the fixture-address rule
+# and its self-check), WireCodecTests+Usage's new minted-omission test, and
+# AIServerAddressTests' host-platform identity test. Nothing was removed: the
+# migrated suites kept every assertion and gained the wire-key ones.
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 643
+expected_test_min = 660
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -125,13 +135,18 @@ name = "AIKitNoLocalhostFallback"
 language = "swift"
 package_path = "."
 test_target_name = "AIKitTests"
-type_patterns = ["NoLocalhostFallbackRatchetTests"]
+type_patterns = ["NoLocalhostFallbackRatchetTests", "FixtureAddressSSoTTests"]
 test_file_patterns = ["**/AIKitTests/Wire/NoLocalhostFallbackRatchetTests.swift"]
 timeout_seconds = 120
-# Measured 2026-11-12 at the W21 commit: 4/4. The suite is the ratchet itself
-# (2 rules), its self-check, and the proof the scan read the tree.
-expected_test_min = 4
-description = "BR-AIL-18 ratchet: no localhost fallback, no route literal outside Endpoints/. Run: kagami test --scope AIKitNoLocalhostFallback"
+# Measured 2026-11-12 at the W21 commit: 4/4 — the ratchet itself (2 rules),
+# its self-check, and the proof the scan read the tree.
+#
+# W24 adds `FixtureAddressSSoTTests` to the same file and the same scope: it is
+# the Tests-side half of the same idea (the operator's LM Studio address is
+# written once), and it shares this file's scanner rather than carrying a
+# second copy of it. RE-MEASURED at the W24 commit: 6/6.
+expected_test_min = 6
+description = "BR-AIL-18 ratchet: no localhost fallback, no route literal outside Endpoints/, and the fixture address declared once. Run: kagami test --scope AIKitNoLocalhostFallback"
 
 # W21, T-AIL-43. The address type on its own: the panel's ten inputs, the
 # refusals that name the value, and `reach` — which is what stopped a LAN Mac
@@ -148,5 +163,23 @@ timeout_seconds = 120
 # E9768783-2A2A-473A-9439-CD20BFFD4935). kagami counts test FUNCTIONS, not the
 # cases a parameterised one expands to, so this is lower than the number of
 # addresses the suite actually classifies.
+#
+# LEFT AT 28 BY W24, DELIBERATELY, and this scope is RED — read this before
+# changing the number.
+#
+# Measured at W24's base commit 73608c9, with none of W24's changes applied:
+# 26/26 tests PASS and `kagami test --scope AIKitServerAddress --strict` exits
+# 2 on `expected_test_min = 28 but only 26 test(s) executed` (run
+# 212BEDF3-C715-40F9-9FAC-B68A5ADEE6B2). So the shortfall PREDATES W24: the
+# floor was authored at 28 against a 28-test measurement at the W21 commit,
+# and two test functions left the two files afterwards without the floor
+# following them. W24 adds one (`AIRequestTarget`'s host platform is printed
+# but is not part of its identity), taking the run to 27/27 — still two short.
+#
+# W24 does NOT lower this to 27. A floor is a coverage contract, and lowering
+# one to make a run green grandfathers a loss nobody has explained — which is
+# the exact move BR-EC-01 forbids. The two missing functions have to be found
+# and either restored or accounted for, by the wave that owns them. W24's own
+# declared gate is `AIKitAll`, which is green at 660/660.
 expected_test_min = 28
 description = "AIServerAddress: validated once, nothing defaulted, reach classified (BR-AIL-18). Run: kagami test --scope AIKitServerAddress"

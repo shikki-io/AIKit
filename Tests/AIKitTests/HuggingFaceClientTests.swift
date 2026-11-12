@@ -7,56 +7,29 @@ import Testing
 @Suite("HuggingFaceClient")
 struct HuggingFaceClientTests {
 
-    // MARK: - HFModelInfo decoding
+    // MARK: - Fixtures
+    //
+    // W24: these payloads are MINTED from `HFModelInfo`, which already owns
+    // the mapping for the two keys that are not property names
+    // (`pipeline_tag`, `library_name`). A hand-written payload stated that
+    // mapping a second time, and only the DTO's copy was ever updated.
 
-    private func sampleJSON() -> Data {
-        let json = """
-            [
-                {
-                    "modelId": "nvidia/nemotron-3-nano-4b",
-                    "author": "nvidia",
-                    "tags": ["gguf", "text-generation"],
-                    "downloads": 50000,
-                    "likes": 1200,
-                    "lastModified": "2025-11-20T10:30:00.000Z",
-                    "pipeline_tag": "text-generation",
-                    "library_name": "transformers"
-                },
-                {
-                    "modelId": "meta-llama/Llama-3-8B",
-                    "author": "meta-llama",
-                    "tags": ["safetensors", "text-generation"],
-                    "downloads": 200000,
-                    "likes": 5000,
-                    "lastModified": "2025-10-15T08:00:00.000Z",
-                    "pipeline_tag": "text-generation",
-                    "library_name": "transformers"
-                }
-            ]
-            """
-        return Data(json.utf8)
-    }
-
-    private func singleModelJSON() -> Data {
-        let json = """
-            {
-                "modelId": "nvidia/nemotron-3-nano-4b",
-                "author": "nvidia",
-                "tags": ["gguf", "text-generation"],
-                "downloads": 50000,
-                "likes": 1200,
-                "lastModified": "2025-11-20T10:30:00.000Z",
-                "pipeline_tag": "text-generation",
-                "library_name": "transformers"
-            }
-            """
-        return Data(json.utf8)
-    }
+    private let models = [
+        makeFixtureHFModel(),
+        makeFixtureHFModel(
+            modelId: "meta-llama/Llama-3-8B",
+            author: "meta-llama",
+            tags: ["safetensors", "text-generation"],
+            downloads: 200_000,
+            likes: 5_000,
+            lastModified: "2025-10-15T08:00:00.000Z"
+        ),
+    ]
 
     @Test("Search parses response from mock network")
     func searchParsesResponse() async throws {
         let mock = MockNetworkService()
-        mock.resultData = sampleJSON()
+        mock.resultData = try mintHFSearchReply(models)
 
         let client = HuggingFaceClient(networkService: mock)
         let results = try await client.search(query: "nemotron")
@@ -73,7 +46,7 @@ struct HuggingFaceClientTests {
     @Test("GetModel parses single model from mock network")
     func getModelParsesResponse() async throws {
         let mock = MockNetworkService()
-        mock.resultData = singleModelJSON()
+        mock.resultData = try mintHFModelReply(makeFixtureHFModel())
 
         let client = HuggingFaceClient(networkService: mock)
         let model = try await client.getModel(id: "nvidia/nemotron-3-nano-4b")
@@ -144,7 +117,7 @@ struct HuggingFaceClientTests {
     @Test("Search with filter builds request")
     func searchWithFilter() async throws {
         let mock = MockNetworkService()
-        mock.resultData = Data("[]".utf8)
+        mock.resultData = try mintHFSearchReply([])
 
         let client = HuggingFaceClient(networkService: mock)
         let filter = HFSearchFilter(

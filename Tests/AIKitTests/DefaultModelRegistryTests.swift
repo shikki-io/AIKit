@@ -109,18 +109,7 @@ struct DefaultModelRegistryTests {
         let (store, paths) = try makeTempStore()
 
         let mock = MockNetworkService()
-        let json = """
-            {
-                "modelId": "nvidia/nemotron-3-nano-4b",
-                "author": "nvidia",
-                "tags": ["gguf"],
-                "downloads": 50000,
-                "likes": 1200,
-                "pipeline_tag": "text-generation",
-                "library_name": "transformers"
-            }
-            """
-        mock.resultData = Data(json.utf8)
+        mock.resultData = try mintHFModelReply(makeFixtureHFModel(tags: ["gguf"]))
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
@@ -169,19 +158,17 @@ struct DefaultModelRegistryTests {
         let (store, paths) = try makeTempStore()
 
         let mock = MockNetworkService()
-        let json = """
-            [
-                {
-                    "modelId": "test/llama-7b",
-                    "author": "test",
-                    "tags": ["gguf"],
-                    "downloads": 100,
-                    "likes": 10,
-                    "pipeline_tag": "text-generation"
-                }
-            ]
-            """
-        mock.resultData = Data(json.utf8)
+        mock.resultData = try mintHFSearchReply([
+            makeFixtureHFModel(
+                modelId: "test/llama-7b",
+                author: "test",
+                tags: ["gguf"],
+                downloads: 100,
+                likes: 10,
+                lastModified: nil,
+                library: nil
+            ),
+        ])
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
@@ -197,7 +184,7 @@ struct DefaultModelRegistryTests {
         let (store, paths) = try makeTempStore()
 
         let mock = MockNetworkService()
-        mock.resultData = Data("[]".utf8)
+        mock.resultData = try mintHFSearchReply([])
 
         let client = HuggingFaceClient(networkService: mock)
         let registry = DefaultModelRegistry(localStore: store, hfClient: client)
