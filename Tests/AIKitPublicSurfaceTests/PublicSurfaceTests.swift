@@ -3,6 +3,20 @@ import AIKitTestSupport
 import Foundation
 import Testing
 
+/// Whether this host's package graph is the one `AIKitPublicAPI.txt` was
+/// measured from — the host that declares `AIKitMLX`.
+///
+/// At file scope and not inside the suite: a trait on `@Suite` cannot name a
+/// static member of the type it is attached to, which the macro reports as a
+/// circular reference.
+private let hostDeclaresTheWholeGraph: Bool = {
+    #if canImport(Darwin)
+        return true
+    #else
+        return false
+    #endif
+}()
+
 /// T-AIL-52 and T-AIL-53, W27 of spec ai-layer-aikit-core-2026-10-31,
 /// BR-AIL-21: AIKit's public surface is four doors, and adding a fifth means
 /// editing a checked-in file.
@@ -40,7 +54,24 @@ import Testing
 /// agreement is asserted). The script runs `swift build --target AIKit` and
 /// `--target AIKitMLX` with `-emit-symbol-graph` under ITS OWN scratch path, so
 /// it does not contend with the `swift test` build that is running it.
-@Suite("AIKit's public surface is four doors (W27)")
+///
+/// APPLE HOSTS ONLY, by a trait that names the reason (W30). The allowlist is
+/// a MEASUREMENT, and what it measured includes `AIKitMLX`'s symbols and the
+/// symbols AIKit exports only where CryptoKit, CoreML and `canImport(Darwin)`
+/// resolve. On Linux the MLX target is not even in the graph — Package.swift
+/// declares it only on an Apple host, because mlx-swift is Metal — so
+/// `scripts/public-api.sh` would fail on an unknown target, and a Linux-shaped
+/// graph diffed against a macOS-shaped allowlist would fail on a hundred lines
+/// that are not a regression. The suite is skipped there rather than deleted
+/// or weakened, and the Linux pipeline states the same reason beside its
+/// filter.
+@Suite(
+    "AIKit's public surface is four doors (W27)",
+    .enabled(
+        if: hostDeclaresTheWholeGraph,
+        "the public-API allowlist is measured on an Apple host: it holds AIKitMLX's symbols, and Package.swift declares that target only where mlx-swift can build"
+    )
+)
 struct PublicSurfaceTests {
 
     // MARK: - Running the one code path

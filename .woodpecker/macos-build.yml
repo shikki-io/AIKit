@@ -1,0 +1,61 @@
+# .woodpecker/macos-build.yml — AIKit's own gate, run by CI and not by one Mac.
+#
+# W30 of spec ai-layer-aikit-core-2026-10-31: *"Also add a macOS job that runs
+# the gate below, so the epic stops depending on one machine."* Until this
+# file, every AIKit wave was proven by `kagami test --scope AIKitAll --strict`
+# on the operator's laptop and nowhere else — a green that no one else could
+# reproduce and that no PR carried.
+#
+# darwin/arm64 and not a Linux `swift:` image: this is the half of AIKit that
+# needs the Apple SDKs — CryptoKit, CoreML, and the `AIKitMLX` target whose
+# Metal kernels compile from source. The sibling file proves the rest on Linux.
+#
+# Modelled on the fleet's existing macOS pipeline (shikki-io/shikki-client
+# .woodpecker/ci.yml): same agent class, and kagami built from shi-qa in the
+# workspace rather than assumed to be installed on the agent.
+#
+# HONEST GAP, stated rather than papered over: this file being correct does not
+# mean it is RUNNING. Registering shikki-io/AIKit with the fleet's Woodpecker
+# server is a server-side operator action, and no pipeline id for this commit
+# exists until that happens. The same note sits on shikki-client's ci.yml for
+# the same reason.
+
+when:
+  event: [pull_request, push, manual]
+  branch: [main, develop, "epic/*", "feat/*", "fix/*", "agent/*", "story/*"]
+
+steps:
+  # The whole package, including the targets the Linux job cannot have:
+  # AIKitMLX and its suite.
+  build:
+    platform: darwin/arm64
+    image: bash
+    commands:
+      - swift --version
+      - swift build --build-tests
+
+  # kagami, never a raw `swift test`: the fleet's runner is what records a run,
+  # and a scope's `expected_test_min` floor is what makes a silently shrunken
+  # suite a failure instead of a pass. `--strict` is the wave gate's own form.
+  #
+  # kagami is built from shi-qa into the workspace, so the agent needs no
+  # preinstalled copy and the version used is the one that repo ships.
+  kagami-test:
+    platform: darwin/arm64
+    image: bash
+    commands:
+      - test -d "${CI_WORKSPACE}/kagami" || git clone --depth 1 https://github.com/shikki-io/shi-qa.git "${CI_WORKSPACE}/kagami"
+      - swift build --product kagami --package-path "${CI_WORKSPACE}/kagami"
+      - "${CI_WORKSPACE}/kagami/.build/debug/kagami test --scope AIKitAll --strict"
+    depends_on: [build]
+
+  # The public-surface ratchet (W27, BR-AIL-21), its own scope because it runs
+  # `scripts/public-api.sh` and a cold run of that compiles mlx-swift. It is
+  # Apple-only by construction — the allowlist holds AIKitMLX's symbols — so
+  # this job is the only place it can run.
+  public-surface:
+    platform: darwin/arm64
+    image: bash
+    commands:
+      - "${CI_WORKSPACE}/kagami/.build/debug/kagami test --scope AIKitPublicSurface --strict"
+    depends_on: [kagami-test]

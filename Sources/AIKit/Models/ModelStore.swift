@@ -1,6 +1,17 @@
 import CoreKit
-import CryptoKit
 import Foundation
+
+// SHA-256 and SHA-1 from whichever module this platform has (W30 of spec
+// ai-layer-aikit-core-2026-10-31). CryptoKit is Apple-only; swift-crypto's
+// `Crypto` is its API-compatible stand-in, and the two hashes used here
+// (`SHA256`, `Insecure.SHA1`) have the same spelling in both. Importing both
+// where both exist would make every `SHA256` ambiguous, hence `#if`/`#else`
+// and not two unconditional imports.
+#if canImport(CryptoKit)
+    import CryptoKit
+#else
+    import Crypto
+#endif
 
 // MARK: - The tree AIKit declares
 
