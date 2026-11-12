@@ -106,7 +106,8 @@ final class MockHTTPTransport: AIHTTPTransport, @unchecked Sendable {
         guard 200..<300 ~= status else {
             // Mirrors the production transport: a non-2xx reply is read, up to
             // the cap, and nothing is streamed.
-            let text = String(data: body.prefix(lineByteCap), encoding: .utf8)?
+            let text =
+                String(data: body.prefix(lineByteCap), encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return .rejected(status: status, body: text)
         }

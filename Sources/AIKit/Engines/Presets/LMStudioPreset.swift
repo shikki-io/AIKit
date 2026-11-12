@@ -9,9 +9,9 @@ import NetKit
 // where it is written, instead of being defaulted to the local machine at call
 // time (BR-AIL-18).
 
-public extension OpenAICompatibleEngine {
+extension OpenAICompatibleEngine {
     /// Pre-configured for LM Studio local server.
-    static func lmStudio(
+    public static func lmStudio(
         baseURL: String = "http://127.0.0.1:1234",
         transport: (any AIHTTPTransport)? = nil
     ) throws(AIKitError) -> OpenAICompatibleEngine {
@@ -25,7 +25,7 @@ public extension OpenAICompatibleEngine {
     }
 
     /// Pre-configured for Ollama.
-    static func ollama(
+    public static func ollama(
         baseURL: String = "http://127.0.0.1:11434",
         transport: (any AIHTTPTransport)? = nil
     ) throws(AIKitError) -> OpenAICompatibleEngine {
@@ -39,7 +39,7 @@ public extension OpenAICompatibleEngine {
     }
 
     /// Pre-configured for OpenAI API.
-    static func openAI(
+    public static func openAI(
         apiKey: String,
         transport: (any AIHTTPTransport)? = nil
     ) throws(AIKitError) -> OpenAICompatibleEngine {
@@ -53,7 +53,7 @@ public extension OpenAICompatibleEngine {
     }
 
     /// Pre-configured for Anthropic Claude (via OpenAI-compatible proxy).
-    static func anthropic(
+    public static func anthropic(
         apiKey: String,
         baseURL: String = "https://api.anthropic.com",
         transport: (any AIHTTPTransport)? = nil

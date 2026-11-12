@@ -289,9 +289,11 @@ struct HTTPAIProviderFamilyTests {
         #expect(AIProviderFamily(kind: "no-such-family") == nil)
     }
 
-    @Test("an entry naming a local family refuses to build an HTTP provider", arguments: [
-        AIProviderFamily.cliSubprocess, .mlxInProcess, .coreML,
-    ])
+    @Test(
+        "an entry naming a local family refuses to build an HTTP provider",
+        arguments: [
+            AIProviderFamily.cliSubprocess, .mlxInProcess, .coreML,
+        ])
     func aLocalFamilyRefusesAnHTTPProvider(family: AIProviderFamily) throws {
         let entry = try makeFixtureEntry(family: family)
         #expect(throws: AIKitError.self) {
