@@ -2,6 +2,123 @@
 
 import PackageDescription
 
+// MARK: - The MLX half of the package exists only on an Apple host
+
+// W30 of spec ai-layer-aikit-core-2026-10-31. BR-AIL-14 already said on-device
+// inference is optional — a separate product, so an app wanting only remote
+// providers links no MLX. Proving AIKit on Linux turns that from a linking
+// choice into a manifest one, because `swift test` has no per-target build:
+// it builds EVERY test target in the graph, so leaving `AIKitMLXTests`
+// declared on Linux means compiling mlx-swift there, and mlx-swift is Metal
+// and Accelerate — it does not build on Linux at all.
+//
+// This `#if` is therefore a HOST condition, not a target-platform one: a
+// package manifest is compiled and run by the toolchain of the machine doing
+// the resolving. On macOS (including when that macOS is building FOR iOS) the
+// MLX product, target, suite and three dependencies are all declared exactly
+// as before, so nothing about an Apple build changes. On Linux they are absent
+// from the graph: a cold `swift build --target AIKit` there materialises
+// exactly CoreKit, NetKit, ShellKit, TOMLKit, swift-asn1, swift-crypto and
+// swift-log under `.build/checkouts`, and compiles no MLX module (measured,
+// 718 tasks, 50s). SwiftPM does still reach the network for the pins listed in
+// Package.resolved before pruning them, so this saves the Linux agent a
+// compile, not a fetch.
+//
+// `.when(platforms:)` cannot do this job: a platform condition on a dependency
+// still declares the dependency, and a target cannot be conditioned away at
+// all. The alternative — declaring MLX everywhere and asking CI to build only
+// some targets — is not available from `swift test`.
+//
+// KNOWN LIMIT, stated rather than discovered later: because the condition is
+// on the HOST, cross-compiling to Linux FROM a Mac (`--swift-sdk
+// x86_64-swift-linux-musl`) keeps MLX in the graph and would fail to build it.
+// The Linux pipeline compiles natively on a Linux agent, so nothing in CI
+// takes that path. Making this a target condition instead would mean guarding
+// every file of `AIKitMLX` with `#if canImport(MLXLMCommon)`, which is a
+// change to W7/W13's code and not this wave's.
+#if canImport(Darwin)
+    let mlxIsAvailableOnThisHost = true
+#else
+    let mlxIsAvailableOnThisHost = false
+#endif
+
+let mlxDependencies: [Package.Dependency] =
+    mlxIsAvailableOnThisHost
+    ? [
+        // mlx-swift-lm — in-process on-device inference, reached only by the
+        // AIKitMLX target. `from: "3.32.3"` and never a pin: W13 of spec
+        // ai-layer-aikit-core-2026-10-31 moved this off `from: "2.31.3"`,
+        // which admits no 3.x at all.
+        //
+        // 3.x is a breaking release: Downloader, Tokenizer and TokenizerLoader
+        // became protocols with no shipped conformance, so AIKitMLX supplies
+        // both (MLXHubDownloader, TransformersTokenizerLoader). In exchange
+        // the package no longer depends on a Hub client at all, which is what
+        // lets AIKit own the one cache root.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.32.3"),
+        // mlx-swift, declared here rather than taken transitively, because
+        // AIKitMLX imports `MLX` itself (MLX.Memory.cacheLimit). `from:` and
+        // never `exact:` or `.upToNextMinor`.
+        //
+        // mlx-swift-lm 3.32.3 caps this at `.upToNextMinor(from: "0.32.3")`,
+        // so 0.33 stays out of the graph until upstream moves. That cap is
+        // upstream's shared constraint and is not ours to widen here: the
+        // intersection with this range resolves to 0.32.3.
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.32.3"),
+        // swift-transformers — `Tokenizers.AutoTokenizer`, the concrete
+        // tokenizer mlx-swift-lm 3.x no longer carries. AIKitMLX only: AIKit
+        // itself tokenizes nothing.
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.5"),
+    ]
+    : []
+
+let mlxProducts: [Product] =
+    mlxIsAvailableOnThisHost
+    ? [
+        // A SEPARATE product on purpose (BR-AIL-14, W7 of spec
+        // ai-layer-aikit-core-2026-10-31): on-device inference is optional, so
+        // an app that wants only remote providers depends on `AIKit` alone and
+        // links no MLX, no Metal shaders and no swift-transformers.
+        .library(
+            name: "AIKitMLX",
+            targets: ["AIKitMLX"]
+        ),
+    ]
+    : []
+
+let mlxTargets: [Target] =
+    mlxIsAvailableOnThisHost
+    ? [
+        // On-device MLX, extracted from shikki-client's
+        // Sources/ShikkiAppKit/Engine/MLXEngine.swift (W7). Depends on AIKit,
+        // never the reverse: AIKit stays MLX-free so BR-AIL-14 holds.
+        .target(
+            name: "AIKitMLX",
+            dependencies: [
+                "AIKit",
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ]
+        ),
+        // The MLX provider's own suite. It reaches MLX through the
+        // `MLXModelSession` seam and stubs it, so `swift test` never asks for
+        // a Metal device: SPM does not bundle MLX's metallib, and a test that
+        // touched the real runtime would crash rather than fail.
+        .testTarget(
+            name: "AIKitMLXTests",
+            dependencies: [
+                "AIKitMLX",
+                "AIKit",
+                .product(name: "CoreKit", package: "CoreKit"),
+                .product(name: "CoreKitTestSupport", package: "CoreKit"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+            ]
+        ),
+    ]
+    : []
+
 let package = Package(
     name: "AIKit",
     platforms: [
@@ -12,14 +129,6 @@ let package = Package(
         .library(
             name: "AIKit",
             targets: ["AIKit"]
-        ),
-        // A SEPARATE product on purpose (BR-AIL-14, W7 of spec
-        // ai-layer-aikit-core-2026-10-31): on-device inference is optional, so
-        // an app that wants only remote providers depends on `AIKit` alone and
-        // links no MLX, no Metal shaders and no swift-transformers.
-        .library(
-            name: "AIKitMLX",
-            targets: ["AIKitMLX"]
         ),
         // The test doubles, in their OWN product (W26 of spec
         // ai-layer-aikit-core-2026-10-31, T-AIL-51, thread AIKit#18
@@ -33,7 +142,7 @@ let package = Package(
             name: "AIKitTestSupport",
             targets: ["AIKitTestSupport"]
         ),
-    ],
+    ] + mlxProducts,
     dependencies: [
         // NetKit 3.0.0 — the fleet's current transport (W19 of spec
         // ai-layer-aikit-core-2026-10-31). Two things moved at once:
@@ -95,31 +204,33 @@ let package = Package(
         // a versioned dependency graph. 0.6.0 moved it to `from: "0.0.2"`, and
         // `from: "0.5.5"` resolves there.
         .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.5"),
-        // mlx-swift-lm — in-process on-device inference, reached only by the
-        // AIKitMLX target. `from: "3.32.3"` and never a pin: W13 of spec
-        // ai-layer-aikit-core-2026-10-31 moved this off `from: "2.31.3"`, which
-        // admits no 3.x at all.
+        // swift-crypto — SHA-256 and `Insecure.SHA1` on a platform with no
+        // CryptoKit (W30). `ModelStore` verifies a downloaded weights file
+        // against the digest Hugging Face publishes, which is the one piece of
+        // AIKit that needs a hash function, and CryptoKit is Apple-only: a
+        // Linux build of `--product AIKit` failed on
+        // `no such module 'CryptoKit'` before this line existed.
         //
-        // 3.x is a breaking release: Downloader, Tokenizer and TokenizerLoader
-        // became protocols with no shipped conformance, so AIKitMLX supplies
-        // both (MLXHubDownloader, TransformersTokenizerLoader). In exchange the
-        // package no longer depends on a Hub client at all, which is what lets
-        // AIKit own the one cache root.
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.32.3"),
-        // mlx-swift, declared here rather than taken transitively, because
-        // AIKitMLX imports `MLX` itself (MLX.Memory.cacheLimit). `from:` and
-        // never `exact:` or `.upToNextMinor`.
+        // AIKit IMPORTS it only off Apple (see the two targets below), because
+        // on an Apple platform CryptoKit is in the SDK; swift-crypto's
+        // `Crypto` module is API-identical for both hashes used here, so the
+        // source difference is one conditional `import`.
         //
-        // mlx-swift-lm 3.32.3 caps this at `.upToNextMinor(from: "0.32.3")`, so
-        // 0.33 stays out of the graph until upstream moves. That cap is
-        // upstream's shared constraint and is not ours to widen here: the
-        // intersection with this range resolves to 0.32.3.
-        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.32.3"),
-        // swift-transformers — `Tokenizers.AutoTokenizer`, the concrete
-        // tokenizer mlx-swift-lm 3.x no longer carries. AIKitMLX only: AIKit
-        // itself tokenizes nothing.
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.5"),
-    ],
+        // That condition is about AIKit's own import and NOT about keeping the
+        // module out of an Apple build: CoreKit links `Crypto` on every
+        // platform, so a clean
+        // `xcodebuild -scheme AIKit -destination generic/platform=iOS` built
+        // `Crypto-product` before this declaration existed and still does —
+        // measured, the explicit dependency is CoreKit's.
+        //
+        // Already in this graph transitively, through CoreKit (and through
+        // swift-transformers on an Apple host): `swift package
+        // show-dependencies` resolves 4.5.2 either way, so declaring it costs
+        // no new fetch. It is declared anyway, for the same reason CoreKit
+        // itself is declared rather than taken through NetKit — a package
+        // whose types appear in our sources is our dependency.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+    ] + mlxDependencies,
     targets: [
         .target(
             name: "AIKit",
@@ -129,19 +240,13 @@ let package = Package(
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS, .linux])),
-            ]
-        ),
-        // On-device MLX, extracted from shikki-client's
-        // Sources/ShikkiAppKit/Engine/MLXEngine.swift (W7). Depends on AIKit,
-        // never the reverse: AIKit stays MLX-free so BR-AIL-14 holds.
-        .target(
-            name: "AIKitMLX",
-            dependencies: [
-                "AIKit",
-                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-                .product(name: "MLXLLM", package: "mlx-swift-lm"),
-                .product(name: "MLX", package: "mlx-swift"),
-                .product(name: "Tokenizers", package: "swift-transformers"),
+                // Off Apple only: CryptoKit ships in the Apple SDKs, and a
+                // platform that has both would see an ambiguous `SHA256`.
+                .product(
+                    name: "Crypto",
+                    package: "swift-crypto",
+                    condition: .when(platforms: [.linux, .android, .windows, .wasi])
+                ),
             ]
         ),
         // The test doubles (W26). A library target, not a test target, because
@@ -177,6 +282,13 @@ let package = Package(
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS, .linux])),
+                // `ModelStoreTests` computes the digests it asserts against,
+                // so the suite needs the same hash module the source does.
+                .product(
+                    name: "Crypto",
+                    package: "swift-crypto",
+                    condition: .when(platforms: [.linux, .android, .windows, .wasi])
+                ),
             ]
         ),
         // The public-surface ratchet (W27, T-AIL-52/T-AIL-53), in its OWN
@@ -196,19 +308,5 @@ let package = Package(
                 "AIKitTestSupport",
             ]
         ),
-        // The MLX provider's own suite. It reaches MLX through the
-        // `MLXModelSession` seam and stubs it, so `swift test` never asks for a
-        // Metal device: SPM does not bundle MLX's metallib, and a test that
-        // touched the real runtime would crash rather than fail.
-        .testTarget(
-            name: "AIKitMLXTests",
-            dependencies: [
-                "AIKitMLX",
-                "AIKit",
-                .product(name: "CoreKit", package: "CoreKit"),
-                .product(name: "CoreKitTestSupport", package: "CoreKit"),
-                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
-            ]
-        ),
-    ]
+    ] + mlxTargets
 )

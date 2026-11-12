@@ -1,7 +1,12 @@
 import Foundation
 import NetKit
-
 @testable import AIKit
+
+// `URLRequest` lives in FoundationNetworking on a swift-corelibs platform
+// (W30 of spec ai-layer-aikit-core-2026-10-31).
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 
 /// A stub ``AIHTTPTransport``: answers with what a test configured, and records
 /// every request it was asked to send.

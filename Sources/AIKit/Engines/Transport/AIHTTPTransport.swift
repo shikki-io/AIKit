@@ -128,30 +128,56 @@ struct URLSessionHTTPTransport: AIHTTPTransport {
     }
 
     func open(_ request: URLRequest, lineByteCap: Int) async throws -> AIHTTPStream {
-        // `bytes(for:)` resolves as soon as the response HEAD has arrived, so
-        // the status below is read before any body byte is consumed. That
-        // ordering is the whole point of BR-AIL-19 on the streaming path.
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw AIHTTPTransportError.notAnHTTPResponse
-        }
+        #if canImport(FoundationNetworking)
+            // swift-corelibs-foundation has no `URLSession.bytes(for:)` and no
+            // `URLSession.AsyncBytes` (measured on swift:6.3-jammy, W30:
+            // `value of type 'URLSession' has no member 'bytes'`). The delegate
+            // below is the same contract built from the pieces that platform
+            // does have, and it resolves on the response HEAD exactly as
+            // `bytes(for:)` does.
+            let (status, bytes) = try await Self.openByDelegate(request, timeout: timeout)
+            return try await Self.reading(status: status, bytes: bytes, cap: lineByteCap)
+        #else
+            // `bytes(for:)` resolves as soon as the response HEAD has arrived,
+            // so the status below is read before any body byte is consumed.
+            // That ordering is the whole point of BR-AIL-19 on the streaming
+            // path.
+            let (bytes, response) = try await session.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw AIHTTPTransportError.notAnHTTPResponse
+            }
+            return try await Self.reading(status: http.statusCode, bytes: bytes, cap: lineByteCap)
+        #endif
+    }
 
-        guard 200..<300 ~= http.statusCode else {
+    /// Turns a status and a byte sequence into the stream a caller sees.
+    ///
+    /// Generic over the sequence so the two platform paths above share every
+    /// decision that follows the HEAD: what counts as open, how much of a
+    /// rejected body is read, and where the line splitting happens. A platform
+    /// difference that reached past this point would be a behaviour
+    /// difference, and this is the seam that stops it.
+    private static func reading<Bytes: AsyncSequence & Sendable>(
+        status: Int,
+        bytes: Bytes,
+        cap: Int
+    ) async throws -> AIHTTPStream where Bytes.Element == UInt8 {
+        guard 200..<300 ~= status else {
             // Read what the server said INSTEAD of a stream, bounded by the
             // same cap, then stop. The connection is dropped by letting the
             // sequence go out of scope.
             var collected = Data()
             for try await byte in bytes {
                 collected.append(byte)
-                if collected.count >= lineByteCap { break }
+                if collected.count >= cap { break }
             }
             let text =
                 String(data: collected, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return .rejected(status: http.statusCode, body: text)
+            return .rejected(status: status, body: text)
         }
 
-        return .open(status: http.statusCode, lines: Self.lines(of: bytes, cap: lineByteCap))
+        return .open(status: status, lines: Self.lines(of: bytes, cap: cap))
     }
 
     /// Splits a byte sequence into newline-terminated lines, refusing a line
@@ -160,10 +186,10 @@ struct URLSessionHTTPTransport: AIHTTPTransport {
     /// The cap is what makes the buffer bounded: a server that answers 200 and
     /// then sends a megabyte of JSON on one line is stopped at the cap instead
     /// of being accumulated forever and re-parsed per chunk.
-    private static func lines(
-        of bytes: URLSession.AsyncBytes,
+    private static func lines<Bytes: AsyncSequence & Sendable>(
+        of bytes: Bytes,
         cap: Int
-    ) -> AsyncThrowingStream<String, any Error> {
+    ) -> AsyncThrowingStream<String, any Error> where Bytes.Element == UInt8 {
         AsyncThrowingStream { continuation in
             let task = Task {
                 var line = Data()
@@ -202,6 +228,154 @@ struct URLSessionHTTPTransport: AIHTTPTransport {
         return String(data: bytes, encoding: .utf8) ?? ""
     }
 }
+
+// MARK: - The corelibs byte stream
+
+#if canImport(FoundationNetworking)
+
+    extension URLSessionHTTPTransport {
+
+        /// Sends `request` and resolves when the response HEAD arrives, with
+        /// the status and a live byte stream of the body (W30).
+        ///
+        /// This is `URLSession.bytes(for:)` rebuilt from what
+        /// swift-corelibs-foundation has. Two properties matter and both are
+        /// kept:
+        ///
+        ///  * **The status arrives before any body byte.** The continuation
+        ///    below is resumed from `didReceive response:`, which corelibs
+        ///    calls before the first `didReceive data:` — so BR-AIL-19 holds
+        ///    here exactly as it does on Apple, and a 401 fails a stream
+        ///    instead of finishing it empty.
+        ///  * **The body really streams.** `session.data(for:)` would have
+        ///    compiled on Linux with no `#if` at all, and would have buffered
+        ///    the whole answer before returning: a chat stream would arrive in
+        ///    one lump at the end, looking like a slow success. That is the
+        ///    silent degradation this delegate exists to avoid.
+        ///
+        /// The injected `session` is NOT used on this path: a delegate can
+        /// only be given to a session at construction, so this makes its own
+        /// and invalidates it when the task completes or the stream is
+        /// dropped. Nothing in the suite depends on the injected session for
+        /// streaming — tests reach a mock transport, never URLSession
+        /// (BR-AIL-12).
+        fileprivate static func openByDelegate(
+            _ request: URLRequest,
+            timeout: TimeInterval
+        ) async throws -> (status: Int, bytes: AsyncThrowingStream<UInt8, any Error>) {
+            let (bytes, continuation) = AsyncThrowingStream<UInt8, any Error>.makeStream()
+            let delegate = ByteStreamDelegate(continuation: continuation)
+
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = timeout
+            let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+            let task = session.dataTask(with: request)
+
+            // A caller that stops reading — a `break`, a cancelled Task, the
+            // bounded read of a rejected body above — must not leave the
+            // connection open or the session retained.
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+                session.invalidateAndCancel()
+            }
+
+            let status: Int = try await withCheckedThrowingContinuation { head in
+                delegate.awaitHead(head)
+                task.resume()
+            }
+            return (status, bytes)
+        }
+    }
+
+    /// Feeds a byte stream from `URLSessionDataDelegate` callbacks, and
+    /// resolves the status once.
+    ///
+    /// `@unchecked Sendable` with an explicit lock, in the shape
+    /// `ModelDownloader`'s delegate already uses in this package: the
+    /// callbacks arrive on a delegate queue this type does not own, so its two
+    /// pieces of state are guarded rather than isolated.
+    private final class ByteStreamDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+
+        private let lock = NSLock()
+        private let continuation: AsyncThrowingStream<UInt8, any Error>.Continuation
+
+        /// The waiting caller, before the HEAD arrives.
+        private var head: CheckedContinuation<Int, any Error>?
+        /// The HEAD's verdict, if it arrived before anyone waited on it.
+        private var settled: Result<Int, any Error>?
+
+        init(continuation: AsyncThrowingStream<UInt8, any Error>.Continuation) {
+            self.continuation = continuation
+            super.init()
+        }
+
+        /// Takes the caller's continuation, or resumes it at once if the HEAD
+        /// already landed. The task is resumed after this returns, so the
+        /// second case should not happen — it is handled anyway, because a
+        /// `CheckedContinuation` that is never resumed hangs forever and a
+        /// delegate queue is not ours to reason about.
+        func awaitHead(_ continuation: CheckedContinuation<Int, any Error>) {
+            lock.lock()
+            if let settled {
+                lock.unlock()
+                continuation.resume(with: settled)
+                return
+            }
+            head = continuation
+            lock.unlock()
+        }
+
+        /// Resumes the waiting caller exactly once; later calls do nothing.
+        private func settle(_ result: Result<Int, any Error>) {
+            lock.lock()
+            guard settled == nil else {
+                lock.unlock()
+                return
+            }
+            settled = result
+            let waiting = head
+            head = nil
+            lock.unlock()
+            waiting?.resume(with: result)
+        }
+
+        func urlSession(
+            _ session: URLSession,
+            dataTask: URLSessionDataTask,
+            didReceive response: URLResponse,
+            completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+        ) {
+            guard let http = response as? HTTPURLResponse else {
+                settle(.failure(AIHTTPTransportError.notAnHTTPResponse))
+                completionHandler(.cancel)
+                return
+            }
+            settle(.success(http.statusCode))
+            completionHandler(.allow)
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            for byte in data {
+                continuation.yield(byte)
+            }
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+            if let error {
+                // A connection refused or a timeout BEFORE any HEAD: the
+                // caller is still waiting on the status, and must get the
+                // transport error rather than hang.
+                settle(.failure(error))
+                continuation.finish(throwing: error)
+            } else {
+                settle(.failure(AIHTTPTransportError.notAnHTTPResponse))
+                continuation.finish()
+            }
+            session.finishTasksAndInvalidate()
+        }
+    }
+
+#endif
 
 // MARK: - TimeoutNetworkService
 

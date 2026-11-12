@@ -1,6 +1,13 @@
 import CoreKit
 import Foundation
 
+// `URLSession` and `URLRequest` live in FoundationNetworking on a
+// swift-corelibs platform, and in Foundation on an Apple one (W30 of spec
+// ai-layer-aikit-core-2026-10-31).
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
 /// Progress information for an ongoing download.
 struct DownloadProgress: Sendable {
     let bytesDownloaded: Int64
