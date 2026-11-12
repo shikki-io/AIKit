@@ -189,9 +189,11 @@ struct FixturePinTests {
         }
     }
 
-    @Test("a local family has no reply to mint, and says so", arguments: [
-        AIProviderFamily.cliSubprocess, .mlxInProcess, .coreML,
-    ])
+    @Test(
+        "a local family has no reply to mint, and says so",
+        arguments: [
+            AIProviderFamily.cliSubprocess, .mlxInProcess, .coreML,
+        ])
     func aLocalFamilyCannotBeMinted(family: AIProviderFamily) {
         // Minting is a WIRE concern. A local family has no reply envelope, so
         // asking for one is a typed refusal rather than an empty string that
@@ -401,7 +403,7 @@ struct FixtureLiteralRatchetTests {
         NoLocalhostFallbackRatchetTests.stringLiterals(in: code).filter { hit in
             let text = hit.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard text.hasPrefix("{") || text.hasPrefix("["),
-                  let data = text.data(using: .utf8),
+                let data = text.data(using: .utf8),
                 let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
             else { return false }
             return value is [String: Any] || value is [Any]

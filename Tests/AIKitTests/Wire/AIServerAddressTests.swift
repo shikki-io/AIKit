@@ -175,7 +175,7 @@ struct AIServerAddressTests {
         #expect(
             target.description
                 == "devstral-local at http://127.0.0.1:1234/v1/chat/completions, from "
-                    + HostPlatform.current.rawValue
+                + HostPlatform.current.rawValue
         )
         #expect(target.hostPlatform == .current)
     }
