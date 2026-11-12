@@ -482,7 +482,13 @@ struct DeviceCapabilityTests {
     func currentDetectsMac() {
         let capability = DeviceCapability.current()
         #if os(macOS)
-            let macClasses: Set<DeviceClass> = [.macM1, .macM2, .macM3, .macM4, .macM5]
+            // Read from the table rather than listed here (W25): a new Mac
+            // class must not make this fail on the machine that has it.
+            let macClasses = Set(
+                DeviceCapability.deviceTable
+                    .filter { $0.platform == .macOS }
+                    .map(\.deviceClass)
+            )
             #expect(
                 macClasses.contains(capability.deviceClass),
                 "expected a macMx class on macOS, got \(capability.deviceClass.rawValue)"

@@ -458,8 +458,18 @@ extension AIRequest {
 
         // MARK: - Config resolution
 
+        /// The executables this provider can run, newest name first.
+        ///
+        /// The names come from ``HostExecutable`` (W25) rather than being
+        /// spelled here, so the binary vocabulary has one home and a Windows
+        /// host gets the `.exe` suffix it needs.
+        public static let executables: [HostExecutable] = CLIProviderFamily.whisperCLI.executables
+
         /// Binary names whisper.cpp has shipped under, newest first.
-        public static let binaryNames = ["whisper-cli", "whisper-cpp"]
+        ///
+        /// Derived from ``executables``: the file names as this host spells
+        /// them.
+        public static var binaryNames: [String] { executables.map(\.fileName) }
 
         /// Weights in descending preference.
         ///
@@ -480,16 +490,34 @@ extension AIRequest {
         ]
 
         /// Where whisper.cpp keeps its weights once installed.
+        ///
+        /// Composed component by component (W25), not from a
+        /// `".local/share/whisper-cpp/models"` literal: a string with
+        /// separators in it is a POSIX path pretending to be portable, and it
+        /// is wrong on a Windows host. `URL.appending(path:)` spells no
+        /// separator at all, so the same code is correct everywhere.
         public static var defaultWeightsDirectories: [URL] {
             let home = FileManager.default.homeDirectoryForCurrentUser
             return [
-                home.appendingPathComponent(".local/share/whisper-cpp/models", isDirectory: true),
-                home.appendingPathComponent(".aikit/whisper-models", isDirectory: true),
+                home
+                    .appending(path: ".local")
+                    .appending(path: "share")
+                    .appending(path: "whisper-cpp")
+                    .appending(path: "models", directoryHint: .isDirectory),
+                home
+                    .appending(path: ".aikit")
+                    .appending(path: "whisper-models", directoryHint: .isDirectory),
             ]
         }
 
         /// The first `whisper-cli` on `searchPaths`, or `nil` when whisper.cpp
         /// is not installed.
+        ///
+        /// Resolution itself lives in ``HostExecutable/resolve(_:in:)`` (W25),
+        /// so this provider and any other CLI provider find a binary the same
+        /// way. Directories are tried in order and each directory is tried
+        /// against every candidate name, so an earlier directory wins over a
+        /// better name in a later one — a PATH is a precedence list.
         ///
         /// Returns an optional on purpose: a bare binary name handed to the
         /// init would fail later as a launch error, where "not installed" is
@@ -497,13 +525,10 @@ extension AIRequest {
         public static func resolveBinary(
             searchPaths: [String] = Self.pathEntries()
         ) -> String? {
-            for directory in searchPaths {
-                for name in binaryNames {
-                    let candidate = URL(fileURLWithPath: directory).appendingPathComponent(name).path
-                    if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
-                }
-            }
-            return nil
+            HostExecutable.resolve(
+                executables,
+                in: searchPaths.map { URL(fileURLWithPath: $0) }
+            )
         }
 
         /// The most preferred weights present in `directories`, or `nil`.
@@ -521,10 +546,15 @@ extension AIRequest {
         }
 
         /// `PATH`, split into directories.
+        ///
+        /// Split on ``SearchPathSeparator/native`` (W25) rather than a `":"`
+        /// literal: Windows separates `PATH` entries with `;`, so the literal
+        /// returned the whole variable as one bogus directory there and every
+        /// binary read as not installed.
         public static func pathEntries(
             _ path: String? = ProcessInfo.processInfo.environment["PATH"]
         ) -> [String] {
-            (path ?? "").split(separator: ":").map(String.init).filter { !$0.isEmpty }
+            HostExecutable.searchPaths(path).map(\.path)
         }
 
         private static func expandingTilde(_ path: String) -> String {
