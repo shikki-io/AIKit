@@ -1,4 +1,5 @@
 import Foundation
+import NetKit
 
 // MARK: - ProviderHealthCheck
 
@@ -26,20 +27,34 @@ public struct ProviderHealthCheck: Sendable {
 
     // MARK: - Check
 
-    /// Ping the provider's base URL to check availability.
-    /// Uses GET /v1/models as a lightweight health endpoint (OpenAI-compatible).
+    /// Ping a provider's server root to check availability.
+    ///
+    /// Calls ``OpenAIEndPoint/models`` — `GET /v1/models` — as a lightweight
+    /// health route. The URL is BUILT by that endpoint, not concatenated: a
+    /// `"\(baseURL)/v1/models"` interpolation produced
+    /// `http://host:1234/v1/v1/models` for any address that still carried
+    /// `/v1`, and silently reported the server as down (AIKit#18, panel finding
+    /// on `ProviderHealthCheck.swift:37`).
+    ///
     /// - Parameters:
-    ///   - baseURL: The provider base URL (e.g. `http://127.0.0.1:1234`).
+    ///   - baseURL: The provider's server ROOT (e.g. `http://127.0.0.1:1234`),
+    ///     with no path (BR-AIL-09).
     ///   - timeout: Maximum wait time in seconds (default 5).
-    /// - Returns: A `HealthStatus` with availability and latency.
+    /// - Returns: A `HealthStatus` with availability and latency. An address
+    ///   that is not a root is reported unavailable, naming why.
     public static func check(baseURL: String, timeout: TimeInterval = 5) async -> HealthStatus {
-        guard let url = URL(string: "\(baseURL)/v1/models") else {
-            return HealthStatus(available: false, latencyMs: nil, message: "Invalid URL: \(baseURL)")
+        let request: URLRequest
+        do {
+            let address = try AIServerAddress(validating: baseURL)
+            request = try URLSessionHTTPTransport(timeout: timeout)
+                .createRequest(endPoint: OpenAIEndPoint.models(address: address, credential: nil))
+        } catch {
+            return HealthStatus(
+                available: false,
+                latencyMs: nil,
+                message: AIProviderAttempt.describe(error)
+            )
         }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = timeout
 
         let start = CFAbsoluteTimeGetCurrent()
 

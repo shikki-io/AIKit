@@ -52,7 +52,7 @@ public final class DefaultModelRegistry: ModelRegistry, @unchecked Sendable {
 
         // Find a GGUF file to download (convention: look for *.gguf)
         let filename = "\(info.modelId.components(separatedBy: "/").last ?? "model").gguf"
-        let downloadURL = hfClient.downloadURL(repoId: info.modelId, filename: filename)
+        let downloadURL = try hfClient.downloadURL(repoId: info.modelId, filename: filename)
         let destinationPath = localStore.modelPath(for: id)
             .appendingPathComponent(filename)
 

@@ -1,7 +1,7 @@
 import Foundation
+import NetKit
 import Testing
 @testable import AIKit
-import NetKit
 
 @Suite("OpenAICompatibleEngine")
 struct OpenAICompatibleEngineTests {
@@ -9,8 +9,8 @@ struct OpenAICompatibleEngineTests {
     // MARK: - Preset Defaults
 
     @Test("LM Studio preset has correct defaults")
-    func lmStudioPresetDefaults() {
-        let engine = OpenAICompatibleEngine.lmStudio()
+    func lmStudioPresetDefaults() throws {
+        let engine = try OpenAICompatibleEngine.lmStudio()
         #expect(engine.id == "lmstudio")
         #expect(engine.displayName == "LM Studio")
         #expect(engine.isAvailable)
@@ -20,8 +20,8 @@ struct OpenAICompatibleEngineTests {
     }
 
     @Test("Ollama preset has correct defaults")
-    func ollamaPresetDefaults() {
-        let engine = OpenAICompatibleEngine.ollama()
+    func ollamaPresetDefaults() throws {
+        let engine = try OpenAICompatibleEngine.ollama()
         #expect(engine.id == "ollama")
         #expect(engine.displayName == "Ollama")
         #expect(engine.isAvailable)
@@ -29,15 +29,15 @@ struct OpenAICompatibleEngineTests {
     }
 
     @Test("OpenAI preset includes API key")
-    func openAIPresetIncludesKey() {
-        let engine = OpenAICompatibleEngine.openAI(apiKey: "sk-test-123")
+    func openAIPresetIncludesKey() throws {
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-test-123")
         #expect(engine.id == "openai")
         #expect(engine.displayName == "OpenAI")
     }
 
     @Test("Anthropic preset configures correctly")
-    func anthropicPresetDefaults() {
-        let engine = OpenAICompatibleEngine.anthropic(apiKey: "sk-ant-test")
+    func anthropicPresetDefaults() throws {
+        let engine = try OpenAICompatibleEngine.anthropic(apiKey: "sk-ant-test")
         #expect(engine.id == "anthropic")
         #expect(engine.displayName == "Anthropic")
     }
@@ -46,7 +46,7 @@ struct OpenAICompatibleEngineTests {
 
     @Test("discoverModels parses /v1/models response")
     func discoverModelsParsesList() async throws {
-        let mock = MockNetworkService()
+        let mock = MockHTTPTransport()
         let modelsJSON = """
         {
             "data": [
@@ -55,9 +55,9 @@ struct OpenAICompatibleEngineTests {
             ]
         }
         """
-        mock.resultData = Data(modelsJSON.utf8)
+        mock.body = Data(modelsJSON.utf8)
 
-        let engine = OpenAICompatibleEngine.openAI(apiKey: "sk-test", networkService: mock)
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-test", transport: mock)
         let models = try await engine.discoverModels()
 
         #expect(models.count == 2)
@@ -72,13 +72,13 @@ struct OpenAICompatibleEngineTests {
 
     @Test("discoverModels detects vision models")
     func discoverModelsDetectsVision() async throws {
-        let mock = MockNetworkService()
+        let mock = MockHTTPTransport()
         let modelsJSON = """
         {"data": [{"id": "llava-1.5-7b", "owned_by": "local"}]}
         """
-        mock.resultData = Data(modelsJSON.utf8)
+        mock.body = Data(modelsJSON.utf8)
 
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: mock)
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
         let models = try await engine.discoverModels()
 
         #expect(models.count == 1)
@@ -90,8 +90,8 @@ struct OpenAICompatibleEngineTests {
 
     @Test("loadModel creates provider and tracks it")
     func loadModelCreatesProvider() async throws {
-        let mock = MockNetworkService()
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: mock)
+        let mock = MockHTTPTransport()
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
 
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "lmstudio", modelId: "qwen2.5-7b"),
@@ -117,7 +117,7 @@ struct OpenAICompatibleEngineTests {
 
     @Test("unloadModel is safe for unknown model")
     func unloadUnknownModel() async throws {
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: MockNetworkService())
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: MockHTTPTransport())
         try await engine.unloadModel(ModelIdentifier(provider: "lmstudio", modelId: "nonexistent"))
         #expect(engine.loadedModels().isEmpty)
     }
@@ -126,7 +126,7 @@ struct OpenAICompatibleEngineTests {
 
     @Test("Provider complete() sends correct request and parses response")
     func providerCompleteParsesResponse() async throws {
-        let mock = MockNetworkService()
+        let mock = MockHTTPTransport()
         let responseJSON = """
         {
             "id": "chatcmpl-123",
@@ -138,9 +138,9 @@ struct OpenAICompatibleEngineTests {
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
         }
         """
-        mock.resultData = Data(responseJSON.utf8)
+        mock.body = Data(responseJSON.utf8)
 
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: mock)
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "lmstudio", modelId: "test-model"),
             name: "test-model",
@@ -171,21 +171,21 @@ struct OpenAICompatibleEngineTests {
         #expect(response.latencyMs >= 0)
 
         // Verify endpoint was called correctly
-        #expect(mock.capturedRequests.count == 1)
-        let urlRequest = mock.capturedRequests[0]
+        #expect(mock.sentRequests.count == 1)
+        let urlRequest = try #require(mock.sentRequests.first)
         #expect(urlRequest.url?.path == "/v1/chat/completions")
         #expect(urlRequest.httpMethod == "POST")
     }
 
     @Test("Provider complete() includes API key in header")
     func providerCompleteIncludesAPIKey() async throws {
-        let mock = MockNetworkService()
+        let mock = MockHTTPTransport()
         let responseJSON = """
         {"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
         """
-        mock.resultData = Data(responseJSON.utf8)
+        mock.body = Data(responseJSON.utf8)
 
-        let engine = OpenAICompatibleEngine.openAI(apiKey: "sk-secret-key", networkService: mock)
+        let engine = try OpenAICompatibleEngine.openAI(apiKey: "sk-secret-key", transport: mock)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "openai", modelId: "gpt-4"),
             name: "gpt-4",
@@ -202,13 +202,13 @@ struct OpenAICompatibleEngineTests {
         let provider = try await engine.loadModel(descriptor)
         _ = try await provider.complete(request: AIRequest(messages: [AIMessage(role: .user, content: "test")]))
 
-        let urlRequest = mock.capturedRequests[0]
+        let urlRequest = try #require(mock.sentRequests.first)
         #expect(urlRequest.allHTTPHeaderFields?["Authorization"] == "Bearer sk-secret-key")
     }
 
     @Test("Provider complete() handles tool calls in response")
     func providerCompleteHandlesToolCalls() async throws {
-        let mock = MockNetworkService()
+        let mock = MockHTTPTransport()
         let responseJSON = """
         {
             "id": "chatcmpl-456",
@@ -228,9 +228,9 @@ struct OpenAICompatibleEngineTests {
             "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30}
         }
         """
-        mock.resultData = Data(responseJSON.utf8)
+        mock.body = Data(responseJSON.utf8)
 
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: mock)
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "lmstudio", modelId: "tool-model"),
             name: "tool-model",
@@ -258,13 +258,13 @@ struct OpenAICompatibleEngineTests {
 
     @Test("Provider complete() throws on empty choices")
     func providerCompleteThrowsOnEmptyChoices() async throws {
-        let mock = MockNetworkService()
+        let mock = MockHTTPTransport()
         let responseJSON = """
         {"id":"x","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}
         """
-        mock.resultData = Data(responseJSON.utf8)
+        mock.body = Data(responseJSON.utf8)
 
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: mock)
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "lmstudio", modelId: "empty"),
             name: "empty",
@@ -286,12 +286,12 @@ struct OpenAICompatibleEngineTests {
 
     @Test("Provider status is always ready")
     func providerStatusIsReady() async throws {
-        let mock = MockNetworkService()
-        mock.resultData = Data("""
+        let mock = MockHTTPTransport()
+        mock.body = Data("""
         {"id":"x","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
         """.utf8)
 
-        let engine = OpenAICompatibleEngine.lmStudio(networkService: mock)
+        let engine = try OpenAICompatibleEngine.lmStudio(transport: mock)
         let descriptor = ModelDescriptor(
             id: ModelIdentifier(provider: "lmstudio", modelId: "test"),
             name: "test",

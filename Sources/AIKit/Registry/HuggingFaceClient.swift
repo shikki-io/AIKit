@@ -170,9 +170,23 @@ public struct HuggingFaceClient: Sendable {
         return entries.filter { $0.type == "file" }.map(\.asModelFile)
     }
 
-    /// Build a download URL for a specific file in a model repo.
-    public func downloadURL(repoId: String, filename: String, revision: String = "main") -> URL {
-        URL(string: "https://huggingface.co/\(repoId)/resolve/\(revision)/\(filename)")!
+    /// The download URL for one file in a model repo.
+    ///
+    /// Built by ``HuggingFaceEndPoint/resolveFile(id:revision:filename:)``
+    /// through NetKit, not by interpolating a host and a path here
+    /// (AIKit#18 r4500469694). That also removes the force-unwrap this had: a
+    /// repo id or filename with a character a URL cannot carry used to crash
+    /// the process, and now reports itself.
+    ///
+    /// - Throws: `NetworkError.invalidURL` when the pieces form no URL.
+    public func downloadURL(repoId: String, filename: String, revision: String = "main") throws -> URL {
+        let request = try networkService.createRequest(
+            endPoint: HuggingFaceEndPoint.resolveFile(id: repoId, revision: revision, filename: filename)
+        )
+        guard let url = request.url else {
+            throw NetworkError.invalidURL(description: "model '\(repoId)', revision '\(revision)', file '\(filename)'")
+        }
+        return url
     }
 }
 

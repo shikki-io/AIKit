@@ -137,20 +137,49 @@ struct MCPEngineTests {
     // MARK: - MCPEndPoint
 
     @Test("MCPEndPoint.toolsList is a bodyless GET on /tools/list at the server")
-    func endPointToolsList() {
-        let endpoint = MCPEndPoint.toolsList(server: AIWireServer(scheme: "http", host: "127.0.0.1", port: 9999))
+    func endPointToolsList() throws {
+        let endpoint = MCPEndPoint.toolsList(server: try MCPServerLocation(validating: "http://127.0.0.1:9999"))
         #expect(endpoint.method == .GET)
         #expect(endpoint.path == "/tools/list")
         #expect(endpoint.host == "127.0.0.1")
         #expect(endpoint.port == 9999)
         #expect(endpoint.scheme == "http")
         #expect(endpoint.body == nil)
+        #expect(endpoint.apiPath.isEmpty, "a server at the root has no mount path")
+    }
+
+    @Test("a mounted MCP server keeps its mount path, and the tool routes hang off it")
+    func endPointHonoursAMountPath() throws {
+        // An MCP server is addressed WITH its mount (`/mcp`), unlike the four
+        // AI wire families whose routes are absolute. That is why it has its
+        // own validated location type and not `AIServerAddress`.
+        let endpoint = MCPEndPoint.toolsList(
+            server: try MCPServerLocation(validating: "http://127.0.0.1:9999/mcp")
+        )
+        #expect(endpoint.apiPath == "/mcp")
+        #expect(try NetworkService().createRequest(endPoint: endpoint).url?.path == "/mcp/tools/list")
+    }
+
+    @Test("an MCP address with no scheme or host is refused, never defaulted", arguments: [
+        "", "127.0.0.1:9999", "not a url", "ftp://host/mcp",
+    ])
+    func aBadMCPAddressIsRefused(input: String) throws {
+        // What this replaces defaulted a missing scheme to `http` and a missing
+        // host to `127.0.0.1`, sending the call to the local machine instead of
+        // reporting the mistake.
+        #expect(throws: AIKitError.self) { _ = try MCPServerLocation(validating: input) }
+    }
+
+    @Test("a trailing slash is not a mount path")
+    func aTrailingSlashIsNotAMount() throws {
+        #expect(try MCPServerLocation(validating: "http://host:9999/").mountPath.isEmpty)
+        #expect(try MCPServerLocation(validating: "http://host:9999/mcp/").mountPath == "/mcp")
     }
 
     @Test("MCPEndPoint.callTool is a POST on /tools/call carrying name and arguments")
     func endPointCallTool() throws {
         let endpoint = MCPEndPoint.callTool(
-            server: AIWireServer(scheme: "http", host: "127.0.0.1", port: 9999),
+            server: try MCPServerLocation(validating: "http://127.0.0.1:9999"),
             name: "ocr",
             arguments: ["page": "1"]
         )

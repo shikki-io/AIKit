@@ -287,3 +287,33 @@ private enum AnyCodable: Codable, Sendable {
         }
     }
 }
+
+// MARK: - Chat Completion Reply
+
+/// One reply from `/v1/chat/completions`, in either shape the surface answers
+/// with.
+///
+/// A completion is the normal shape. The other one is a 2xx carrying an error
+/// body, which an OpenAI-compatible server returns for a request it accepted
+/// and then could not serve — a model name it has not loaded, a `/v1` left in
+/// the server root. Asking for `ChatCompletionResponseDTO` alone turns that
+/// answer into a `DecodingError` and loses the server's own words. BR-AIL-10
+/// requires those words to reach the caller, so the reply type admits both
+/// shapes and `OpenAIChatCodec` decides which one is a failure.
+enum ChatCompletionReply: Decodable, Sendable {
+    /// The server answered with choices.
+    case completion(ChatCompletionResponseDTO)
+    /// The server answered 2xx and named what went wrong.
+    case serverError(message: String)
+
+    /// Error bodies are read by the shared `wireErrorMessage`, which tests for
+    /// an absent or null `error` explicitly and throws on a malformed one, so
+    /// a decode failure is never mistaken for "no error, so a completion".
+    init(from decoder: Decoder) throws {
+        if let message = try wireErrorMessage(in: decoder) {
+            self = .serverError(message: message)
+            return
+        }
+        self = .completion(try ChatCompletionResponseDTO(from: decoder))
+    }
+}
