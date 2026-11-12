@@ -1,3 +1,4 @@
+import CoreKit
 import Foundation
 
 /// Progress information for an ongoing download.
@@ -37,17 +38,31 @@ public struct DownloadProgress: Sendable {
 }
 
 /// Async model downloader with progress reporting.
+///
+/// W23 of spec ai-layer-aikit-core-2026-10-31 narrowed what it will write to.
+/// The destination is a ``ModelFileDestination``, which only ``ModelStore``
+/// mints and only by resolving a ``VirtualPathOwning`` declaration through the
+/// injected CoreKit path layer. A bare `URL` is no longer accepted, so the one
+/// type that moves bytes onto the disk cannot be handed a location somebody
+/// composed by hand — and the containment of that location is settled where it
+/// is RESOLVED (a `PathSegment` cannot hold `..` or a separator) rather than
+/// re-checked, or forgotten, here.
+///
+/// It still names no directory of its own: it creates the parent of the
+/// location it was given and nothing else. Resolution creates nothing, the
+/// writer creates what it needs (CoreKit BR-RP-01).
 public struct ModelDownloader: Sendable {
 
     public init() {}
 
-    /// Download a file from URL to local path with progress.
+    /// Download a file from URL to the resolved location, with progress.
     public func download(
         from url: URL,
-        to destination: URL,
+        to destination: ModelFileDestination,
         onProgress: @Sendable @escaping (DownloadProgress) -> Void
     ) async throws {
-        // Ensure parent directory exists
+        let destination = destination.url
+        // The writer creates the directory it writes into.
         let parentDir = destination.deletingLastPathComponent()
         if !FileManager.default.fileExists(atPath: parentDir.path) {
             try FileManager.default.createDirectory(
@@ -64,7 +79,8 @@ public struct ModelDownloader: Sendable {
         let (tempURL, response) = try await session.download(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse,
-              200..<400 ~= httpResponse.statusCode else {
+            200..<400 ~= httpResponse.statusCode
+        else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw AIKitError.downloadFailed("HTTP \(statusCode)")
         }

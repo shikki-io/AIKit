@@ -1,4 +1,6 @@
 import AIKit
+import CoreKit
+import CoreKitTestSupport
 import CryptoKit
 import Foundation
 import MLXLMCommon
@@ -78,7 +80,7 @@ struct MLXHubDownloaderTests {
 
                 let data = try #require(stored, "the stub was asked for a file it does not have")
                 try FileManager.default.createDirectory(
-                    at: destination.deletingLastPathComponent(),
+                    at: destination.url.deletingLastPathComponent(),
                     withIntermediateDirectories: true
                 )
 
@@ -90,33 +92,46 @@ struct MLXHubDownloaderTests {
                     written = min(written + Int64(chunk), total)
                     onBytes(written, total)
                 }
-                try data.write(to: destination)
+                try data.write(to: destination.url)
             }
         }
     }
 
-    /// A sandbox with a store root and an extra root, both empty.
+    /// A sandbox with a resolved store root and one external library, both
+    /// empty.
+    ///
+    /// W23 of spec ai-layer-aikit-core-2026-10-31: the store has no root of its
+    /// own any more, so the sandbox builds the PRODUCTION path layer
+    /// (`AIKitPaths.layer`) over a run-scoped `TestScratch` root and injects
+    /// it. The layer's `models` node IS the store's root.
     private final class Sandbox {
+        let scratch: TestScratch
         let base: URL
-        let root: URL
+        let layer: PathLayer
         let extraRoot: URL
         let store: ModelStore
 
-        init() throws {
-            base = FileManager.default.temporaryDirectory
-                .appendingPathComponent("aikit-hubdownloader-\(UUID().uuidString)")
-            root = base.appendingPathComponent("store")
-            extraRoot = base.appendingPathComponent("lmstudio")
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        /// Where the `models` node is served from — the store's own root.
+        var root: URL { layer.base(of: AIKitNode.models) }
+
+        init(scope: String = "mlx-hub-downloader") throws {
+            let scratch = TestScratch.forPackage()
+            let base = try scratch.makeScratchDir(scope: scope)
+            let layer = try AIKitPaths.layer(root: base)
+            let extraRoot = base.appendingPathComponent("lmstudio")
             try FileManager.default.createDirectory(
-                at: extraRoot,
-                withIntermediateDirectories: true
-            )
-            store = ModelStore(root: root, extraRoots: [extraRoot])
+                at: layer.base(of: AIKitNode.models), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: extraRoot, withIntermediateDirectories: true)
+            self.scratch = scratch
+            self.base = base
+            self.layer = layer
+            self.extraRoot = extraRoot
+            self.store = ModelStore(paths: layer, externalLibraries: [extraRoot])
         }
 
         deinit {
-            try? FileManager.default.removeItem(at: base)
+            try? scratch.removeScratchDir(base)
         }
     }
 
@@ -156,7 +171,7 @@ struct MLXHubDownloaderTests {
 
         // One root: the directory is under the store's root and nowhere else.
         #expect(directory.path.hasPrefix(sandbox.root.path))
-        #expect(directory == sandbox.store.directory(forRepository: Self.repository))
+        #expect(try directory == sandbox.store.directory(forRepository: Self.repository))
         for path in hub.files.map(\.path) {
             #expect(
                 FileManager.default.fileExists(
@@ -338,10 +353,10 @@ struct MLXHubDownloaderTests {
             index: hub.index,
             transfer: { _, _, _, destination, onBytes in
                 try FileManager.default.createDirectory(
-                    at: destination.deletingLastPathComponent(),
+                    at: destination.url.deletingLastPathComponent(),
                     withIntermediateDirectories: true
                 )
-                try corrupt.write(to: destination)
+                try corrupt.write(to: destination.url)
                 onBytes(Int64(corrupt.count), Int64(corrupt.count))
             }
         )
@@ -366,7 +381,7 @@ struct MLXHubDownloaderTests {
                 )
         )
 
-        let landed = sandbox.store
+        let landed = try sandbox.store
             .directory(forRepository: Self.repository)
             .appendingPathComponent("model.safetensors")
         #expect(!FileManager.default.fileExists(atPath: landed.path))
