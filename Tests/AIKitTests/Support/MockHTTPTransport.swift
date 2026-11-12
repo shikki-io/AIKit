@@ -134,3 +134,46 @@ final class MockHTTPTransport: AIHTTPTransport, @unchecked Sendable {
         )
     }
 }
+
+// MARK: - As a transport factory
+
+extension MockHTTPTransport {
+
+    /// A transport factory that hands the SAME stub whatever the deadline.
+    ///
+    /// W27 made `LMStudioProvider`'s transport a required factory rather than
+    /// `(any AIHTTPTransport)? = nil` (AIKit#18 r4500408737), so a test can no
+    /// longer leave the argument out and silently get `URLSession` — which is
+    /// what several tests in this target were doing against the operator's live
+    /// server on port 1234 (BR-AIL-12). The deadline is ignored on purpose: a
+    /// stub has nothing to time out, and a test asserting the deadline reads
+    /// `observedDeadlines` instead.
+    static func factory(_ transport: MockHTTPTransport = MockHTTPTransport())
+        -> @Sendable (TimeInterval) -> any AIHTTPTransport {
+        { _ in transport }
+    }
+
+    /// A factory that also RECORDS every deadline it was asked for, so a test
+    /// can prove the caller's shorter timeout still narrows the transport.
+    static func recordingFactory(
+        _ transport: MockHTTPTransport = MockHTTPTransport(),
+        into deadlines: DeadlineLog
+    ) -> @Sendable (TimeInterval) -> any AIHTTPTransport {
+        { deadline in
+            deadlines.record(deadline)
+            return transport
+        }
+    }
+}
+
+/// Every deadline a transport factory was asked for, in order.
+final class DeadlineLog: @unchecked Sendable {
+    private(set) var deadlines: [TimeInterval] = []
+    private let lock = NSLock()
+
+    func record(_ deadline: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        deadlines.append(deadline)
+    }
+}

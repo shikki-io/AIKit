@@ -176,7 +176,12 @@ struct FallbackProviderChainTests {
     func aRealProviderNamesItsEntry() throws {
         // The requirement has no default implementation on purpose, so each
         // conformer states its id — and these two are the ones a chain holds.
-        let lmStudio = try LMStudioProvider(id: "lmstudio-desk", baseURL: fixtureServerRoot, model: "m")
+        let lmStudio = try LMStudioProvider(
+            id: "lmstudio-desk",
+            baseURL: fixtureServerRoot,
+            model: "m",
+            transport: MockHTTPTransport.factory()
+        )
         #expect(lmStudio.id == "lmstudio-desk")
 
         let nested = FallbackProviderChain(providers: [], id: "local-first")
@@ -192,7 +197,8 @@ struct FallbackProviderChainTests {
                     address: nil,
                     model: "sonnet",
                     options: .cliSubprocess(AICLISubprocessOptions(binary: "claude"))
-                )
+                ),
+                transport: MockHTTPTransport.factory()
             )
         }
     }

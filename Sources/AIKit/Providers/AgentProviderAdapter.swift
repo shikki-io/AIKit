@@ -15,16 +15,16 @@ import Foundation
 ///
 /// This type touches no process API, so it compiles for iOS (BR-AIL-02); the
 /// backends that need `Process` stay behind their own platform gate.
-public struct AgentProviderAdapter: AIProvider, Sendable {
-    public let id: String
-    public let displayName: String
-    public let capabilities: AICapabilities
+struct AgentProviderAdapter: AIProvider, Sendable {
+    let id: String
+    let displayName: String
+    let capabilities: AICapabilities
     /// The model name every answer reports, as the caller knows it. A prompt
     /// backend does not name the model it used, so this is the only source for
     /// `AIResponse.model`.
-    public let modelName: String
+    let modelName: String
     /// Seconds a call may take, passed through to `AgentProviding.run`.
-    public let timeout: TimeInterval
+    let timeout: TimeInterval
 
     private let agent: any AgentProviding
 
@@ -39,7 +39,7 @@ public struct AgentProviderAdapter: AIProvider, Sendable {
     ///   - modelName: Model name to report on the way back.
     ///   - timeout: Seconds a call may take.
     ///   - agent: The backend.
-    public init(
+    init(
         id: String,
         displayName: String,
         capabilities: AICapabilities = .textGeneration,
@@ -55,11 +55,11 @@ public struct AgentProviderAdapter: AIProvider, Sendable {
         self.agent = agent
     }
 
-    public var status: AIProviderStatus {
+    var status: AIProviderStatus {
         get async { .ready }
     }
 
-    public func complete(request: AIRequest) async throws -> AIResponse {
+    func complete(request: AIRequest) async throws -> AIResponse {
         guard request.inputs.isEmpty else {
             // Refuse rather than drop: a prompt string cannot carry an audio
             // file, and a silently text-only answer to a request that sent one

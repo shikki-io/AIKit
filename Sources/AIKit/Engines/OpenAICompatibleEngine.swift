@@ -14,13 +14,13 @@ import NetKit
 /// with `?.host ?? "127.0.0.1"`, which turned any unparseable configuration
 /// into a request against the local machine, bearer key included
 /// (AIKit#18 r4500281951).
-public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
-    public let id: String
-    public let displayName: String
-    public let supportedFormats: [ModelFormat]
+final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
+    let id: String
+    let displayName: String
+    let supportedFormats: [ModelFormat]
 
     /// The server root. Validated, never defaulted (BR-AIL-18).
-    public let address: AIServerAddress
+    let address: AIServerAddress
     private let apiKey: String?
     /// The ONE transport: discovery sends on it, and so does every provider
     /// this engine builds.
@@ -38,26 +38,26 @@ public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
     /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)`` when
     ///   `baseURL` is not a server root — naming the value, so a configuration
     ///   mistake is reported where it was written rather than sent somewhere.
-    public init(
+    init(
         id: String = "openai-compatible",
         displayName: String = "OpenAI Compatible",
         baseURL: String,
         apiKey: String? = nil,
         supportedFormats: [ModelFormat] = [.api],
-        transport: (any AIHTTPTransport)? = nil
+        transport: any AIHTTPTransport
     ) throws(AIKitError) {
         self.id = id
         self.displayName = displayName
         self.address = try AIServerAddress(validating: baseURL)
         self.apiKey = apiKey
         self.supportedFormats = supportedFormats
-        self.transport = transport ?? URLSessionHTTPTransport()
+        self.transport = transport
     }
 
-    public var isAvailable: Bool { true }
+    var isAvailable: Bool { true }
 
     /// Discover models from `GET /v1/models`.
-    public func discoverModels() async throws -> [ModelDescriptor] {
+    func discoverModels() async throws -> [ModelDescriptor] {
         let endpoint = OpenAIEndPoint.models(address: address, credential: apiKey)
         let response: ModelsListResponseDTO = try await transport.sendRequest(endpoint: endpoint)
 
@@ -87,7 +87,7 @@ public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
         }
     }
 
-    public func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
+    func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
         let entry = AIProviderEntry(
             id: "\(id)/\(descriptor.id.modelId)",
             family: .openAIChat,
@@ -108,11 +108,11 @@ public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
         return provider
     }
 
-    public func unloadModel(_ id: ModelIdentifier) async throws {
+    func unloadModel(_ id: ModelIdentifier) async throws {
         _loadedModels.removeAll { $0 == id }
     }
 
-    public func loadedModels() -> [ModelIdentifier] {
+    func loadedModels() -> [ModelIdentifier] {
         _loadedModels
     }
 

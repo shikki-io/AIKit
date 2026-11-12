@@ -2,23 +2,23 @@ import CoreKit
 import Foundation
 
 /// Progress information for an ongoing download.
-public struct DownloadProgress: Sendable {
-    public let bytesDownloaded: Int64
-    public let totalBytes: Int64?
+struct DownloadProgress: Sendable {
+    let bytesDownloaded: Int64
+    let totalBytes: Int64?
 
-    public init(bytesDownloaded: Int64, totalBytes: Int64?) {
+    init(bytesDownloaded: Int64, totalBytes: Int64?) {
         self.bytesDownloaded = bytesDownloaded
         self.totalBytes = totalBytes
     }
 
     /// Fraction complete (0.0 to 1.0), or 0 if total is unknown.
-    public var fraction: Double {
+    var fraction: Double {
         guard let total = totalBytes, total > 0 else { return 0.0 }
         return Double(bytesDownloaded) / Double(total)
     }
 
     /// Human-readable size string, e.g. "4.23 GB".
-    public var formattedSize: String {
+    var formattedSize: String {
         Self.formatBytes(bytesDownloaded)
     }
 
@@ -51,12 +51,10 @@ public struct DownloadProgress: Sendable {
 /// It still names no directory of its own: it creates the parent of the
 /// location it was given and nothing else. Resolution creates nothing, the
 /// writer creates what it needs (CoreKit BR-RP-01).
-public struct ModelDownloader: Sendable {
-
-    public init() {}
+struct ModelDownloader: Sendable {
 
     /// Download a file from URL to the resolved location, with progress.
-    public func download(
+    func download(
         from url: URL,
         to destination: ModelFileDestination,
         onProgress: @Sendable @escaping (DownloadProgress) -> Void

@@ -7,7 +7,7 @@ import Foundation
 // FallbackProviderChain and LMStudioProvider, which implement it.
 
 /// Protocol for agent invocation (AI-provider agnostic).
-public protocol AgentProviding: Sendable {
+protocol AgentProviding: Sendable {
 
     /// What this backend is called, as settings name it.
     ///

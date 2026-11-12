@@ -18,14 +18,14 @@ import Foundation
 /// tree — here, and here only. Rebuild-only: never mutate a value, only
 /// append. Excluded from the current-family alias table on purpose: aliases
 /// always point at the CURRENT family.
-public enum HistoricalAnthropicId {
-    public static let opus46   = "claude-opus-4-6"
-    public static let opus48   = "claude-opus-4-8"
-    public static let sonnet46 = "claude-sonnet-4-6"
-    public static let haiku45Short = "claude-haiku-4-5"
+enum HistoricalAnthropicId {
+    static let opus46   = "claude-opus-4-6"
+    static let opus48   = "claude-opus-4-8"
+    static let sonnet46 = "claude-sonnet-4-6"
+    static let haiku45Short = "claude-haiku-4-5"
     /// Every historical id in one list — cost telemetry consumers walk this
     /// collection instead of hand-listing.
-    public static let all: [String] = [opus46, opus48, sonnet46, haiku45Short]
+    static let all: [String] = [opus46, opus48, sonnet46, haiku45Short]
 }
 
 // MARK: - Model family (the canonical ids)
@@ -35,7 +35,7 @@ public enum HistoricalAnthropicId {
 /// The right-hand string is the ONLY place a `claude-*` literal appears in
 /// this module. Historical rows stay for telemetry lookups; they are never
 /// deleted (a priced model row lasts forever).
-public enum AnthropicFamily: String, CaseIterable, Sendable, Codable, Hashable {
+enum AnthropicFamily: String, CaseIterable, Sendable, Codable, Hashable {
     /// Frontier tier. Alias `opus` / `claude-opus`.
     case opus5   = "claude-opus-5"
     /// Balanced tier. Alias `sonnet` / `claude-sonnet`.
@@ -52,11 +52,11 @@ public enum AnthropicFamily: String, CaseIterable, Sendable, Codable, Hashable {
 /// Cross-provider on purpose (Mistral, Anthropic, OpenAI): a router asks
 /// "is this model code-capable / frontier?", and the answer lives with the
 /// rest of model identity instead of inline in the router.
-public enum ProviderModelCapability {
+enum ProviderModelCapability {
     /// A model id containing one of these (lowercased) qualifies for code tasks.
-    public static let codeCapablePrefixes: [String] = ["devstral", "claude-", "gpt-4", "o3"]
+    static let codeCapablePrefixes: [String] = ["devstral", "claude-", "gpt-4", "o3"]
     /// A model id containing one of these (lowercased) qualifies for high-stakes tasks.
-    public static let frontierPrefixes: [String] = ["claude-opus", "gpt-4o", "o3"]
+    static let frontierPrefixes: [String] = ["claude-opus", "gpt-4o", "o3"]
 }
 
 // MARK: - ProviderModelCatalog
@@ -68,20 +68,20 @@ public enum ProviderModelCapability {
 ///   2. Operator overrides merge in through ``merging(operatorAliases:)``.
 ///      The typed wire shape for those overrides is owned by the caller;
 ///      this catalog is only the runtime lookup.
-public struct ProviderModelCatalog: Sendable, Equatable {
+struct ProviderModelCatalog: Sendable, Equatable {
 
     // MARK: State
 
     /// Canonical id per family member.
-    public let canonical: [AnthropicFamily: String]
+    let canonical: [AnthropicFamily: String]
 
     /// Alias → canonical id. Populated with both the short (`opus`) and the
     /// operator-friendly `claude-<tier>` names used in provider config today.
-    public let aliases: [String: String]
+    let aliases: [String: String]
 
     // MARK: Init
 
-    public init(
+    init(
         canonical: [AnthropicFamily: String],
         aliases: [String: String]
     ) {
@@ -94,7 +94,7 @@ public struct ProviderModelCatalog: Sendable, Equatable {
     /// The shipped catalog. Every canonical id comes from ``AnthropicFamily``
     /// — no literal is written anywhere in this module outside that enum's
     /// raw values above.
-    public static let `default`: ProviderModelCatalog = {
+    static let `default`: ProviderModelCatalog = {
         let canonical: [AnthropicFamily: String] = {
             var map: [AnthropicFamily: String] = [:]
             for family in AnthropicFamily.allCases { map[family] = family.rawValue }
@@ -116,7 +116,7 @@ public struct ProviderModelCatalog: Sendable, Equatable {
     // MARK: Lookup
 
     /// The canonical model id for a family member.
-    public func canonical(for family: AnthropicFamily) -> String {
+    func canonical(for family: AnthropicFamily) -> String {
         canonical[family] ?? family.rawValue
     }
 
@@ -126,14 +126,14 @@ public struct ProviderModelCatalog: Sendable, Equatable {
     /// - A raw canonical id already in the catalog (`claude-opus-5`) → itself.
     /// - Anything else → `nil` (callers decide whether that is a passthrough
     ///   or a failure; ``ModelAliasMap`` still handles per-provider passthrough).
-    public func resolve(_ alias: String) -> String? {
+    func resolve(_ alias: String) -> String? {
         if let hit = aliases[alias] { return hit }
         if canonical.values.contains(alias) { return alias }
         return nil
     }
 
     /// Every canonical id in the catalog. Order is `AnthropicFamily.allCases`.
-    public var allCanonicalIds: [String] {
+    var allCanonicalIds: [String] {
         AnthropicFamily.allCases.map { canonical(for: $0) }
     }
 
@@ -142,7 +142,7 @@ public struct ProviderModelCatalog: Sendable, Equatable {
     /// Merge `operatorAliases` on top of the catalog's aliases (right wins).
     /// Canonical ids stay untouched — an operator can only rebind an alias,
     /// never invent a canonical id that has no `AnthropicFamily` behind it.
-    public func merging(operatorAliases: [String: String]) -> ProviderModelCatalog {
+    func merging(operatorAliases: [String: String]) -> ProviderModelCatalog {
         var merged = aliases
         for (key, value) in operatorAliases { merged[key] = value }
         return ProviderModelCatalog(canonical: canonical, aliases: merged)

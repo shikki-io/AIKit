@@ -8,17 +8,17 @@ import NetKit
 // MARK: - AIHTTPReply
 
 /// One complete HTTP answer: the status, and the bytes, both kept.
-public struct AIHTTPReply: Sendable, Equatable {
-    public let status: Int
-    public let body: Data
+struct AIHTTPReply: Sendable, Equatable {
+    let status: Int
+    let body: Data
 
-    public init(status: Int, body: Data) {
+    init(status: Int, body: Data) {
         self.status = status
         self.body = body
     }
 
     /// The body as text, for an error that has to carry the server's own words.
-    public var text: String {
+    var text: String {
         String(data: body, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 }
@@ -27,7 +27,7 @@ public struct AIHTTPReply: Sendable, Equatable {
 
 /// What opening a streaming request produced, decided by the status BEFORE any
 /// body byte is handed to a caller (BR-AIL-19).
-public enum AIHTTPStream: Sendable {
+enum AIHTTPStream: Sendable {
     /// 2xx: the line stream is live.
     case open(status: Int, lines: AsyncThrowingStream<String, any Error>)
     /// Non-2xx: nothing was streamed, and this is what the server said
@@ -38,7 +38,7 @@ public enum AIHTTPStream: Sendable {
 // MARK: - AIHTTPTransportError
 
 /// What the transport itself can fail at, as opposed to what a server says.
-public enum AIHTTPTransportError: Error, Sendable, Equatable {
+enum AIHTTPTransportError: Error, Sendable, Equatable {
     /// One line passed the byte cap with no newline in sight. The provider
     /// re-throws this as ``AIKitError/streamLineTooLong(cap:target:)``, which
     /// can name where the request went.
@@ -67,7 +67,7 @@ public enum AIHTTPTransportError: Error, Sendable, Equatable {
 /// 429 keep its Retry-After text and a 401 fail a stream instead of finishing
 /// it empty. Adding a byte stream to NetKit is a change to a shared package
 /// and would go through its own reviewed PR.
-public protocol AIHTTPTransport: NetworkProtocol {
+protocol AIHTTPTransport: NetworkProtocol {
 
     /// Sends a request and returns the status with the whole body.
     ///
@@ -92,10 +92,10 @@ public protocol AIHTTPTransport: NetworkProtocol {
 /// replaces was a delegate holding a growing `Data` buffer that it re-decoded
 /// from the start on every chunk, and that could not report a status because a
 /// delegate is handed bytes after the fact.
-public struct URLSessionHTTPTransport: AIHTTPTransport {
+struct URLSessionHTTPTransport: AIHTTPTransport {
 
     /// Seconds a single request may take.
-    public let timeout: TimeInterval
+    let timeout: TimeInterval
     /// The `URLSession` requests go out on. Its own `timeoutIntervalForRequest`
     /// is left alone; the per-request value below is what applies.
     private let session: URLSession
@@ -103,7 +103,7 @@ public struct URLSessionHTTPTransport: AIHTTPTransport {
     /// override it, so URL, header and body construction stay in one place.
     private let builder = NetworkService()
 
-    public init(timeout: TimeInterval = AIProviderEntry.defaultRequestTimeout, session: URLSession = .shared) {
+    init(timeout: TimeInterval = AIProviderEntry.defaultRequestTimeout, session: URLSession = .shared) {
         self.timeout = timeout
         self.session = session
     }
@@ -113,13 +113,13 @@ public struct URLSessionHTTPTransport: AIHTTPTransport {
     /// of trapping on the first and dropping the second. This override only
     /// adds the timeout, so it forwards that typed error untouched rather than
     /// deciding anything about it.
-    public func createRequest(endPoint: EndPoint) throws(NetworkError) -> URLRequest {
+    func createRequest(endPoint: EndPoint) throws(NetworkError) -> URLRequest {
         var request = try builder.createRequest(endPoint: endPoint)
         request.timeoutInterval = timeout
         return request
     }
 
-    public func send(_ request: URLRequest) async throws -> AIHTTPReply {
+    func send(_ request: URLRequest) async throws -> AIHTTPReply {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw AIHTTPTransportError.notAnHTTPResponse
@@ -127,7 +127,7 @@ public struct URLSessionHTTPTransport: AIHTTPTransport {
         return AIHTTPReply(status: http.statusCode, body: data)
     }
 
-    public func open(_ request: URLRequest, lineByteCap: Int) async throws -> AIHTTPStream {
+    func open(_ request: URLRequest, lineByteCap: Int) async throws -> AIHTTPStream {
         // `bytes(for:)` resolves as soon as the response HEAD has arrived, so
         // the status below is read before any body byte is consumed. That
         // ordering is the whole point of BR-AIL-19 on the streaming path.
@@ -213,16 +213,16 @@ public struct URLSessionHTTPTransport: AIHTTPTransport {
 /// `createRequest(endPoint:)` is a `NetworkProtocol` requirement and not only
 /// an extension default, so the override here is the one the inherited
 /// `sendRequest` calls.
-public struct TimeoutNetworkService: NetworkProtocol {
+struct TimeoutNetworkService: NetworkProtocol {
     /// Seconds a single request may take.
-    public let timeoutInterval: TimeInterval
+    let timeoutInterval: TimeInterval
     private let base = NetworkService()
 
-    public init(timeoutInterval: TimeInterval) {
+    init(timeoutInterval: TimeInterval) {
         self.timeoutInterval = timeoutInterval
     }
 
-    public func createRequest(endPoint: EndPoint) throws(NetworkError) -> URLRequest {
+    func createRequest(endPoint: EndPoint) throws(NetworkError) -> URLRequest {
         var request = try base.createRequest(endPoint: endPoint)
         request.timeoutInterval = timeoutInterval
         return request

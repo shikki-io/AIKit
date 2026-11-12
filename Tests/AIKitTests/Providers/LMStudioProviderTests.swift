@@ -64,7 +64,7 @@ private func makeSUT(
         baseURL: baseURL,
         model: model,
         requestTimeout: requestTimeout,
-        transport: network
+        transport: MockHTTPTransport.factory(network)
     )
     return (provider, network)
 }
@@ -107,16 +107,44 @@ struct LMStudioProviderTests {
     func theRequestCarriesTheCallersTimeout() throws {
         // NetKit's request builder leaves `timeoutInterval` at URLRequest's
         // 60-second default, which would make a cold local model read as a dead
-        // one. The transport the provider builds for a call carries the timeout
-        // instead — this asserts the override is the one that runs, not that it
-        // merely exists.
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", requestTimeout: 300)
+        // one. The deadline the provider asks its transport factory for is the
+        // override — this asserts the number that is actually used, not that an
+        // override merely exists.
+        //
+        // Read from the FACTORY since W27: the transport is a required
+        // `@Sendable (TimeInterval) -> any AIHTTPTransport` rather than
+        // `(any AIHTTPTransport)? = nil`, so there is no production transport
+        // built inside this type to inspect — and that is the point
+        // (AIKit#18 r4500408737). The deadline arithmetic is unchanged.
+        let deadlines = DeadlineLog()
+        let provider = try LMStudioProvider(
+            baseURL: fixtureServerRoot,
+            model: "m",
+            requestTimeout: 300,
+            transport: MockHTTPTransport.recordingFactory(into: deadlines)
+        )
 
-        let within = try #require(provider.provider(timeout: 120).network as? URLSessionHTTPTransport)
-        #expect(within.timeout == 120)
+        _ = provider.provider(timeout: 120)
+        _ = provider.provider(timeout: 900)
+        #expect(
+            deadlines.deadlines == [120, 300],
+            "a caller's 120s is honoured; its 900s is capped at the entry's 300s"
+        )
 
-        let capped = try #require(provider.provider(timeout: 900).network as? URLSessionHTTPTransport)
-        #expect(capped.timeout == 300, "requestTimeout is the ceiling")
+        // And the production factory is what puts that number on the request.
+        // ONE factory, on AIKitAssembly, which is what six `?? nil` defaults
+        // were replaced by.
+        let entry = try AIProviderEntry(
+            id: "lmstudio",
+            family: .openAIChat,
+            address: fixtureServerRoot,
+            model: "m",
+            requestTimeout: 300
+        )
+        let production = try #require(
+            AIKitAssembly.urlSessionTransport(entry) as? URLSessionHTTPTransport
+        )
+        #expect(production.timeout == 300)
 
         let endpoint = OpenAIEndPoint.chatCompletions(
             address: try AIServerAddress(validating: fixtureServerRoot),
@@ -131,7 +159,7 @@ struct LMStudioProviderTests {
                 responseFormat: nil
             )
         )
-        #expect(try within.createRequest(endPoint: endpoint).timeoutInterval == 120)
+        #expect(try production.createRequest(endPoint: endpoint).timeoutInterval == 300)
         #expect(try NetworkService().createRequest(endPoint: endpoint).timeoutInterval == 60)
     }
 
@@ -168,7 +196,11 @@ struct LMStudioProviderTests {
             address: try AIServerAddress(validating: fixtureServerRoot),
             route: "/v1/chat/completions"
         )
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "qwen")
+        let provider = try LMStudioProvider(
+            baseURL: fixtureServerRoot,
+            model: "qwen",
+            transport: MockHTTPTransport.factory()
+        )
         #expect(provider.mapped(AIKitError.emptyReply(target: target)) == .emptyContent)
         // And the verdict does not depend on what the sentence happens to say.
         #expect(!FallbackProviderChain.isFallbackEligible(LMStudioProvider.LMStudioError.emptyContent))
@@ -396,7 +428,11 @@ struct LMStudioProviderTests {
         // W22 there is no environment to win over — `LMSTUDIO_URL` and
         // `LMSTUDIO_MODEL` are gone from Sources (BR-AIL-20) and the init is
         // non-optional, so what settings said is all there is.
-        let provider = try LMStudioProvider(baseURL: "http://custom:9999", model: "custom-model")
+        let provider = try LMStudioProvider(
+            baseURL: "http://custom:9999",
+            model: "custom-model",
+            transport: MockHTTPTransport.factory()
+        )
         #expect(provider.baseURL == "http://custom:9999")
         #expect(provider.model == "custom-model")
         #expect(provider.requestTimeout == 300)
@@ -419,7 +455,12 @@ struct LMStudioProviderTests {
 
     @Test("the entry it serves carries the provider's own timeout")
     func theEntryCarriesTheTimeout() throws {
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", requestTimeout: 90)
+        let provider = try LMStudioProvider(
+            baseURL: fixtureServerRoot,
+            model: "m",
+            requestTimeout: 90,
+            transport: MockHTTPTransport.factory()
+        )
         #expect(provider.entry.requestTimeout == 90)
     }
 
@@ -431,7 +472,11 @@ struct LMStudioProviderTests {
         // a bad value when `run` built its entry — by which time a caller had
         // already been handed a provider.
         #expect(throws: AIKitError.self) {
-            try LMStudioProvider(baseURL: "https://proxy.corp/openai/v1", model: "m")
+            try LMStudioProvider(
+                baseURL: "https://proxy.corp/openai/v1",
+                model: "m",
+                transport: MockHTTPTransport.factory()
+            )
         }
     }
 }
@@ -453,7 +498,7 @@ struct LMStudioModelManagementTests {
                 LMStudioHostedModel(id: "devstral", type: "llm", isLoaded: true),
                 LMStudioHostedModel(id: "nomic", type: "embeddings", isLoaded: nil),
             ]).utf8)
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: MockHTTPTransport.factory(network))
 
         let models = try await provider.hostedModels()
         #expect(models.map(\.id) == ["devstral", "nomic"])
@@ -465,7 +510,7 @@ struct LMStudioModelManagementTests {
     func loadPostsToTheLoadRoute() async throws {
         let network = MockHTTPTransport()
         network.body = Data(fixtureEmptyJSONObject.utf8)
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: MockHTTPTransport.factory(network))
 
         try await provider.load(model: "devstral", contextLength: 8192, ttl: 600)
 
@@ -482,7 +527,7 @@ struct LMStudioModelManagementTests {
     func loadOmitsAbsentOptions() async throws {
         let network = MockHTTPTransport()
         network.body = Data(fixtureEmptyJSONObject.utf8)
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: MockHTTPTransport.factory(network))
 
         try await provider.load(model: "devstral")
 
@@ -495,7 +540,7 @@ struct LMStudioModelManagementTests {
     func unloadPostsToTheUnloadRoute() async throws {
         let network = MockHTTPTransport()
         network.body = Data(fixtureEmptyJSONObject.utf8)
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: MockHTTPTransport.factory(network))
 
         try await provider.unload(model: "devstral")
 
@@ -508,7 +553,7 @@ struct LMStudioModelManagementTests {
         let network = MockHTTPTransport()
         network.status = 404
         network.body = Data(try mintErrorReply("model not found").utf8)
-        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: network)
+        let provider = try LMStudioProvider(baseURL: fixtureServerRoot, model: "m", transport: MockHTTPTransport.factory(network))
 
         let error = await #expect(throws: AIKitError.self) {
             try await provider.load(model: "no-such-model")
@@ -601,7 +646,11 @@ struct HTTPAIProviderErrorSurfacingTests {
             }
             #expect(target.route == "/v1/chat/completions")
             #expect(target.address.description == fixtureServerRoot)
-            #expect(try LMStudioProvider(baseURL: fixtureServerRoot, model: "qwen").mapped(error) == .emptyContent)
+            #expect(try LMStudioProvider(
+                baseURL: fixtureServerRoot,
+                model: "qwen",
+                transport: MockHTTPTransport.factory()
+            ).mapped(error) == .emptyContent)
         }
     }
 }

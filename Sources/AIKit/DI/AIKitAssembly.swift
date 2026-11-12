@@ -56,6 +56,21 @@ public struct AIKitAssembly: DIAssembly {
     /// The document's path, for an error that must name it.
     private let source: String
 
+    // MARK: - The one transport factory
+
+    /// How a settings row becomes an HTTP transport in production: `URLSession`
+    /// with the row's own timeout.
+    ///
+    /// ONE place, and internal (W27, AIKit#18 r4500408737). Six initializers
+    /// used to carry `transport: (any AIHTTPTransport)? = nil` and build this
+    /// for themselves when nothing was passed, which is how a test that forgot
+    /// the argument talked to the operator's live LM Studio. Now every one of
+    /// them requires a transport, ``AIProviderFactory`` takes this as its
+    /// default, and a test hands a stub instead (BR-AIL-12).
+    static let urlSessionTransport: @Sendable (AIProviderEntry) -> any AIHTTPTransport = { entry in
+        URLSessionHTTPTransport(timeout: entry.requestTimeout)
+    }
+
     // MARK: - Init
 
     /// - Parameters:

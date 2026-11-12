@@ -87,7 +87,12 @@ public enum AIProviderFamily: String, Sendable, Codable, CaseIterable {
     ///
     /// - Throws: ``AIKitError/engineUnavailable(_:)`` for a local family, which
     ///   has no wire and is served by its own provider type instead.
-    public func codec() throws(AIKitError) -> any WireCodec {
+    ///
+    /// Internal, while the family itself is public (W27, BR-AIL-21): the family
+    /// is door 1 — the one list of provider types an operator writes in
+    /// settings — and a codec is a provider API. A caller chooses `anthropic-messages`;
+    /// it never holds the thing that serialises to it.
+    func codec() throws(AIKitError) -> any WireCodec {
         switch self {
         case .openAIChat: OpenAIChatCodec()
         case .openAIResponses: OpenAIResponsesCodec()

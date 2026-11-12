@@ -16,7 +16,7 @@ import MLXLMCommon
 /// Extracted from shikki-client's `MLXEngineError` in W7 of spec
 /// ai-layer-aikit-core-2026-10-31. Both cases name the limit they hit, which is
 /// the point: "the model did not load" is not an answer a caller can act on.
-public enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
+enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
     /// The device has less free memory than the model needs.
     /// Carries both numbers so the refusal names the limit, per S3.7.
     case insufficientRAM(model: String, required: Double, available: Double)
@@ -30,7 +30,7 @@ public enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
     /// inventing a directory to write 4 GB into.
     case noDownloader(model: String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .insufficientRAM(let model, let required, let available):
             String(
@@ -61,7 +61,7 @@ public enum MLXProviderError: Error, LocalizedError, Equatable, Sendable {
 /// a suite that reached the real runtime would crash rather than fail.
 ///
 /// It carries `AIChunk`, not a new chunk noun, per BR-AIL-01.
-public protocol MLXModelSession: Sendable {
+protocol MLXModelSession: Sendable {
     /// Stream the model's answer to a request, one chunk at a time.
     func stream(_ request: AIRequest) -> AsyncThrowingStream<AIChunk, Error>
 
@@ -73,7 +73,7 @@ public protocol MLXModelSession: Sendable {
 ///
 /// The second parameter is called with a 0…1 fraction while a multi-gigabyte
 /// download runs; that is what `AIProviderStatus.loading(progress:)` reports.
-public typealias MLXSessionLoader =
+typealias MLXSessionLoader =
     @Sendable (
         ModelDescriptor,
         @Sendable @escaping (Double) -> Void
@@ -105,7 +105,7 @@ public typealias MLXSessionLoader =
 ///     print(chunk.delta, terminator: "")
 /// }
 /// ```
-public actor MLXInProcessProvider: AIProvider {
+actor MLXInProcessProvider: AIProvider {
 
     // MARK: - AIProvider identity
 
@@ -125,7 +125,7 @@ public actor MLXInProcessProvider: AIProvider {
     private var state: AIProviderStatus
 
     /// Whether the weights are in memory right now.
-    public var isLoaded: Bool { session != nil }
+    var isLoaded: Bool { session != nil }
 
     // MARK: - Init
 
@@ -145,7 +145,7 @@ public actor MLXInProcessProvider: AIProvider {
     ///     (W23). A model with a `localPath` needs none.
     ///   - loadSession: how to load the weights. Defaults to
     ///     `MLXContainerSession`, the real in-process runtime.
-    public init(
+    init(
         model: ModelDescriptor,
         device: DeviceCapability = .current(),
         id: String? = nil,
@@ -178,11 +178,11 @@ public actor MLXInProcessProvider: AIProvider {
     /// architecture, or less free RAM than the model's measured minimum.
     /// `AIProviderStatus` has no "generating" case, so a request in flight
     /// still reads `.ready`.
-    public var status: AIProviderStatus {
+    var status: AIProviderStatus {
         get async { state }
     }
 
-    public func complete(request: AIRequest) async throws -> AIResponse {
+    func complete(request: AIRequest) async throws -> AIResponse {
         let startTime = ContinuousClock.now
         var content = ""
         for try await chunk in try await stream(request: request) {
@@ -206,7 +206,7 @@ public actor MLXInProcessProvider: AIProvider {
         )
     }
 
-    public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
+    func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
         let session = try await loadedSession()
         return session.stream(request)
     }
@@ -222,7 +222,7 @@ public actor MLXInProcessProvider: AIProvider {
     ///   refuses the model, or whatever the session loader throws —
     ///   `.unsupportedHardware` off Apple silicon, a download failure
     ///   otherwise.
-    public func load() async throws {
+    func load() async throws {
         _ = try await loadedSession()
     }
 
@@ -230,7 +230,7 @@ public actor MLXInProcessProvider: AIProvider {
     ///
     /// The next request loads again — and is refused again if the device has
     /// meanwhile lost the headroom.
-    public func unload() async {
+    func unload() async {
         await session?.unload()
         session = nil
         state = device.canLoad(model) ? .ready : .unavailable
@@ -290,12 +290,12 @@ public actor MLXInProcessProvider: AIProvider {
 /// tokenizer, and drives its `prepare` / `generate` pair. Those two methods
 /// replace the `container.perform { }` closure the client used, which needed
 /// `nonisolated(unsafe)` on both the messages and the prepared input.
-public struct MLXContainerSession: MLXModelSession {
+struct MLXContainerSession: MLXModelSession {
 
     private let container: ModelContainer
 
     /// Wrap a container that is already loaded.
-    public init(container: ModelContainer) {
+    init(container: ModelContainer) {
         self.container = container
     }
 
@@ -315,7 +315,7 @@ public struct MLXContainerSession: MLXModelSession {
     /// by a kit — which is how 2.x's `HubApi` default produced a second cache
     /// in the first place. A model that is not on disk and has no downloader is
     /// refused by name (``MLXProviderError/noDownloader(model:)``).
-    public static func load(
+    static func load(
         _ model: ModelDescriptor,
         downloader: (any Downloader)? = nil,
         tokenizerLoader: any TokenizerLoader = TransformersTokenizerLoader(),
@@ -355,7 +355,7 @@ public struct MLXContainerSession: MLXModelSession {
         return MLXContainerSession(container: container)
     }
 
-    public func stream(_ request: AIRequest) -> AsyncThrowingStream<AIChunk, Error> {
+    func stream(_ request: AIRequest) -> AsyncThrowingStream<AIChunk, Error> {
         let parameters = GenerateParameters(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature)
@@ -415,7 +415,7 @@ public struct MLXContainerSession: MLXModelSession {
         return stream
     }
 
-    public func unload() async {
+    func unload() async {
         MLX.Memory.cacheLimit = 0
         MLX.Memory.clearCache()
     }

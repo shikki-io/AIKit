@@ -30,7 +30,7 @@ import Logging
 /// Three slow providers used to cost three full timeouts — a 300-second ceiling
 /// became fifteen minutes with no caller able to see why — so the deadline is
 /// computed once and each attempt gets what is left of it.
-public struct FallbackProviderChain: AgentProviding, Sendable {
+struct FallbackProviderChain: AgentProviding, Sendable {
     private let providers: [any AgentProviding]
     private let logger: Logger
     /// Caller-supplied rule for error types this package does not know about.
@@ -41,11 +41,11 @@ public struct FallbackProviderChain: AgentProviding, Sendable {
 
     /// What this chain is called. A chain is itself a backend, so a chain
     /// nested in a chain names itself in the outer one's attempt list.
-    public let id: String
+    let id: String
 
     // MARK: - Init
 
-    public init(
+    init(
         providers: [any AgentProviding],
         id: String = "fallback-chain",
         logger: Logger = Logger(label: "aikit.fallback-chain"),
@@ -69,7 +69,7 @@ public struct FallbackProviderChain: AgentProviding, Sendable {
     ///   otherwise, carrying one ``AIProviderAttempt`` per provider asked, each
     ///   naming the provider by its own `id` (BR-AIL-07);
     ///   `CancellationError` when the calling task was cancelled.
-    public func run(prompt: String, timeout: TimeInterval) async throws -> String {
+    func run(prompt: String, timeout: TimeInterval) async throws -> String {
         // An empty chain is NOT "all providers failed": nothing was asked.
         // `AIProviderAttempt.summary` says exactly that for an empty list, so
         // the one error case covers it and the second case this type used to

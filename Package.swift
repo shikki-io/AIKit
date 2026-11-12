@@ -179,6 +179,23 @@ let package = Package(
                 .product(name: "ShellKit", package: "ShellKit", condition: .when(platforms: [.macOS, .linux])),
             ]
         ),
+        // The public-surface ratchet (W27, T-AIL-52/T-AIL-53), in its OWN
+        // target. Its one suite shells out to `scripts/public-api.sh`, which
+        // runs `swift build --target AIKit` and `--target AIKitMLX` with
+        // `-emit-symbol-graph` under a scratch path of its own — a cold run
+        // compiles mlx-swift's Metal kernels. Folded into `AIKitTests` that
+        // took the whole-target `AIKitAll` scope from 11s to 1m19s and put a
+        // 7-core compile beside suites that assert a wall-clock budget.
+        //
+        // It imports `AIKit` WITHOUT `@testable`: the suite names only what a
+        // consumer can reach, which is the thing being asserted.
+        .testTarget(
+            name: "AIKitPublicSurfaceTests",
+            dependencies: [
+                "AIKit",
+                "AIKitTestSupport",
+            ]
+        ),
         // The MLX provider's own suite. It reaches MLX through the
         // `MLXModelSession` seam and stubs it, so `swift test` never asks for a
         // Metal device: SPM does not bundle MLX's metallib, and a test that

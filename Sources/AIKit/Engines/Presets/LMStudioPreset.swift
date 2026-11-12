@@ -8,12 +8,18 @@ import NetKit
 // Every factory throws for the same reason: the address is validated once,
 // where it is written, instead of being defaulted to the local machine at call
 // time (BR-AIL-18).
+//
+// And every factory REQUIRES its transport (W27, AIKit#18 r4500408737). All
+// four read `(any AIHTTPTransport)? = nil` and built a `URLSession` transport
+// when nothing was passed, so `OpenAICompatibleEngine.lmStudio()` with no
+// argument — which four tests wrote — was a live request to whatever is on
+// port 1234. A transport is now named at every call site (BR-AIL-12).
 
 extension OpenAICompatibleEngine {
     /// Pre-configured for LM Studio local server.
-    public static func lmStudio(
+    static func lmStudio(
         baseURL: String = "http://127.0.0.1:1234",
-        transport: (any AIHTTPTransport)? = nil
+        transport: any AIHTTPTransport
     ) throws(AIKitError) -> OpenAICompatibleEngine {
         try OpenAICompatibleEngine(
             id: "lmstudio",
@@ -25,9 +31,9 @@ extension OpenAICompatibleEngine {
     }
 
     /// Pre-configured for Ollama.
-    public static func ollama(
+    static func ollama(
         baseURL: String = "http://127.0.0.1:11434",
-        transport: (any AIHTTPTransport)? = nil
+        transport: any AIHTTPTransport
     ) throws(AIKitError) -> OpenAICompatibleEngine {
         try OpenAICompatibleEngine(
             id: "ollama",
@@ -39,9 +45,9 @@ extension OpenAICompatibleEngine {
     }
 
     /// Pre-configured for OpenAI API.
-    public static func openAI(
+    static func openAI(
         apiKey: String,
-        transport: (any AIHTTPTransport)? = nil
+        transport: any AIHTTPTransport
     ) throws(AIKitError) -> OpenAICompatibleEngine {
         try OpenAICompatibleEngine(
             id: "openai",
@@ -53,10 +59,10 @@ extension OpenAICompatibleEngine {
     }
 
     /// Pre-configured for Anthropic Claude (via OpenAI-compatible proxy).
-    public static func anthropic(
+    static func anthropic(
         apiKey: String,
         baseURL: String = "https://api.anthropic.com",
-        transport: (any AIHTTPTransport)? = nil
+        transport: any AIHTTPTransport
     ) throws(AIKitError) -> OpenAICompatibleEngine {
         try OpenAICompatibleEngine(
             id: "anthropic",

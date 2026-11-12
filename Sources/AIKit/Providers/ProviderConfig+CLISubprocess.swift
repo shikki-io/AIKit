@@ -34,11 +34,11 @@
     /// The parser only accepts `kind = "cli-subprocess"`; any other kind is a
     /// typed error so operators don't silently get a subprocess adapter when
     /// they wrote an HTTP one.
-    public struct CLISubprocessProviderConfig: Sendable, Equatable {
+    struct CLISubprocessProviderConfig: Sendable, Equatable {
 
         // MARK: - ConfigError
 
-        public enum ConfigError: Error, Sendable, Equatable {
+        enum ConfigError: Error, Sendable, Equatable {
             /// The `kind` key was present but did not equal `cli-subprocess`.
             case wrongKind(String)
             /// A required field was missing (or, for `binary`, empty).
@@ -57,34 +57,34 @@
         /// file — so the vocabularies could drift and a row accepted by one was
         /// rejected by the other (AIKit#18, panel finding on
         /// `AIWireStandard.swift:66` and `ProviderConfig+CLISubprocess.swift:51,106`).
-        public static let kindLiteral: String = AIProviderFamily.cliSubprocess.rawValue
+        static let kindLiteral: String = AIProviderFamily.cliSubprocess.rawValue
 
         // MARK: - Stored properties
 
         /// The CLI binary to spawn (e.g. `claude`, `codex`, `aider`).
         /// Looked up via `/usr/bin/env` by the shell executor.
-        public let binary: String
+        let binary: String
 
         /// Positional arguments passed to `binary`, with `{prompt}` and `{model}`
         /// placeholders (see ``ArgsTemplate``). Rendered on each `run(...)`.
-        public let argsTemplate: [String]
+        let argsTemplate: [String]
 
         /// Model name used when the caller does not override it. Resolved
         /// through ``modelAliases`` before rendering.
-        public let defaultModel: String
+        let defaultModel: String
 
         /// Short-name → canonical-id alias map (see ``ModelAliasMap``).
-        public let modelAliases: ModelAliasMap
+        let modelAliases: ModelAliasMap
 
         /// Extra environment variables merged into the subprocess env.
-        public let env: [String: String]
+        let env: [String: String]
 
         /// Working directory for the subprocess; `nil` inherits the caller's.
-        public let cwd: String?
+        let cwd: String?
 
         // MARK: - Init (explicit)
 
-        public init(
+        init(
             binary: String,
             argsTemplate: [String],
             defaultModel: String,
@@ -109,7 +109,7 @@
         ///   - ``ConfigError/missingField(_:)`` for missing `binary` / `default_model`
         ///     (or an empty `binary`).
         ///   - ``ConfigError/invalidField(_:)`` for shape mismatches.
-        public init(dictionary: [String: Any]) throws {
+        init(dictionary: [String: Any]) throws {
             // kind: optional, but if present it is read through the ONE
             // vocabulary and must resolve to this family. A row saying
             // `openai-compatible` is refused here by the same parser that
@@ -155,7 +155,7 @@
         /// - Parameters:
         ///   - options: the row's CLI fields.
         ///   - defaultModel: the row's `model`, which is this config's default.
-        public init(options: AICLISubprocessOptions, defaultModel: String) {
+        init(options: AICLISubprocessOptions, defaultModel: String) {
             self.init(
                 binary: options.binary,
                 argsTemplate: options.argsTemplate,
@@ -168,7 +168,7 @@
 
         /// The row's CLI fields again, for a caller that holds a config and
         /// needs a settings row.
-        public var options: AICLISubprocessOptions {
+        var options: AICLISubprocessOptions {
             AICLISubprocessOptions(
                 binary: binary,
                 argsTemplate: argsTemplate,

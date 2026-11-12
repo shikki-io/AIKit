@@ -5,24 +5,18 @@ import NetKit
 
 /// Quick ping to verify a provider endpoint is alive and responsive.
 /// Used to pre-check availability before routing prompts.
-public struct ProviderHealthCheck: Sendable {
+struct ProviderHealthCheck: Sendable {
 
     // MARK: - Result
 
     /// Result of a health check ping.
-    public struct HealthStatus: Sendable, Equatable {
+    struct HealthStatus: Sendable, Equatable {
         /// Whether the provider is reachable.
-        public let available: Bool
+        let available: Bool
         /// Round-trip latency in milliseconds (nil if unavailable).
-        public let latencyMs: Double?
+        let latencyMs: Double?
         /// Human-readable status message.
-        public let message: String
-
-        public init(available: Bool, latencyMs: Double?, message: String) {
-            self.available = available
-            self.latencyMs = latencyMs
-            self.message = message
-        }
+        let message: String
     }
 
     // MARK: - Check
@@ -42,7 +36,7 @@ public struct ProviderHealthCheck: Sendable {
     ///   - timeout: Maximum wait time in seconds (default 5).
     /// - Returns: A `HealthStatus` with availability and latency. An address
     ///   that is not a root is reported unavailable, naming why.
-    public static func check(baseURL: String, timeout: TimeInterval = 5) async -> HealthStatus {
+    static func check(baseURL: String, timeout: TimeInterval = 5) async -> HealthStatus {
         let request: URLRequest
         do {
             let address = try AIServerAddress(validating: baseURL)

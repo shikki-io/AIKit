@@ -2,14 +2,14 @@ import Foundation
 import NetKit
 
 /// Search filter for HuggingFace model queries.
-public struct HFSearchFilter: Sendable {
-    public var tags: [String]?
-    public var pipelineTag: String?
-    public var sort: String?
-    public var direction: String?
-    public var limit: Int?
+struct HFSearchFilter: Sendable {
+    var tags: [String]?
+    var pipelineTag: String?
+    var sort: String?
+    var direction: String?
+    var limit: Int?
 
-    public init(
+    init(
         tags: [String]? = nil,
         pipelineTag: String? = nil,
         sort: String? = nil,
@@ -25,17 +25,17 @@ public struct HFSearchFilter: Sendable {
 }
 
 /// Model information returned by the HuggingFace API.
-public struct HFModelInfo: Sendable, Codable, Equatable {
-    public let modelId: String
-    public let author: String?
-    public let tags: [String]
-    public let downloads: Int
-    public let likes: Int
-    public let lastModified: String?
-    public let pipelineTag: String?
-    public let library: String?
+struct HFModelInfo: Sendable, Codable, Equatable {
+    let modelId: String
+    let author: String?
+    let tags: [String]
+    let downloads: Int
+    let likes: Int
+    let lastModified: String?
+    let pipelineTag: String?
+    let library: String?
 
-    public init(
+    init(
         modelId: String,
         author: String? = nil,
         tags: [String] = [],
@@ -67,7 +67,7 @@ public struct HFModelInfo: Sendable, Codable, Equatable {
     }
 
     /// Convert to a ModelDescriptor with the specified format.
-    public func toDescriptor(format: ModelFormat) -> ModelDescriptor {
+    func toDescriptor(format: ModelFormat) -> ModelDescriptor {
         let domain = Self.domainFromPipelineTag(pipelineTag)
         let capabilities = Self.capabilitiesFromPipelineTag(pipelineTag)
 
@@ -133,15 +133,15 @@ public struct HFModelInfo: Sendable, Codable, Equatable {
 }
 
 /// Client for HuggingFace Hub API.
-public struct HuggingFaceClient: Sendable {
+struct HuggingFaceClient: Sendable {
     private let networkService: any NetworkProtocol
 
-    public init(networkService: (any NetworkProtocol)? = nil) {
+    init(networkService: (any NetworkProtocol)? = nil) {
         self.networkService = networkService ?? NetworkService()
     }
 
     /// Search models on HuggingFace.
-    public func search(
+    func search(
         query: String,
         filter: HFSearchFilter? = nil
     ) async throws -> [HFModelInfo] {
@@ -151,7 +151,7 @@ public struct HuggingFaceClient: Sendable {
     }
 
     /// Get details for a single model.
-    public func getModel(id: String) async throws -> HFModelInfo {
+    func getModel(id: String) async throws -> HFModelInfo {
         let endpoint = HuggingFaceEndPoint.getModel(id: id)
         let result: HFModelInfo = try await networkService.sendRequest(endpoint: endpoint)
         return result
@@ -164,7 +164,7 @@ public struct HuggingFaceClient: Sendable {
     /// the two digests `ModelFileDigest` describes: `lfs.oid` (SHA-256) for an
     /// LFS-tracked file, the tree's own `oid` (git blob SHA-1) otherwise.
     /// Directories are dropped — only files are downloaded or verified.
-    public func files(repoId: String, revision: String = "main") async throws -> [ModelFile] {
+    func files(repoId: String, revision: String = "main") async throws -> [ModelFile] {
         let endpoint = HuggingFaceEndPoint.listTree(id: repoId, revision: revision)
         let entries: [HFTreeEntry] = try await networkService.sendRequest(endpoint: endpoint)
         return entries.filter { $0.type == "file" }.map(\.asModelFile)
@@ -179,7 +179,7 @@ public struct HuggingFaceClient: Sendable {
     /// the process, and now reports itself.
     ///
     /// - Throws: `NetworkError.invalidURL` when the pieces form no URL.
-    public func downloadURL(repoId: String, filename: String, revision: String = "main") throws -> URL {
+    func downloadURL(repoId: String, filename: String, revision: String = "main") throws -> URL {
         let request = try networkService.createRequest(
             endPoint: HuggingFaceEndPoint.resolveFile(id: repoId, revision: revision, filename: filename)
         )

@@ -33,15 +33,15 @@ import Tokenizers
 /// protocols: `AIKit` already owns a `HuggingFaceClient` and a
 /// `ModelDownloader`, and the defaults are wired to them. A test passes its own
 /// and reaches no server (BR-AIL-12).
-public struct MLXHubDownloader: Downloader {
+struct MLXHubDownloader: Downloader {
 
     /// Everything the hub says a repository contains, with each file's
     /// published checksum.
-    public typealias FileIndex =
+    typealias FileIndex =
         @Sendable (_ repository: String, _ revision: String) async throws -> [ModelFile]
 
     /// Move one file's bytes to `destination`, reporting `(written, total)`.
-    public typealias FileTransfer =
+    typealias FileTransfer =
         @Sendable (
             _ repository: String,
             _ revision: String,
@@ -55,7 +55,7 @@ public struct MLXHubDownloader: Downloader {
     /// Separate from the download's own progress on purpose: hashing 4 GB is
     /// seconds of work that moves no bytes over the network, and a caller with
     /// only a download bar to show would render it as a freeze.
-    public typealias HashProgress = @Sendable (String, Int64, Int64) -> Void
+    typealias HashProgress = @Sendable (String, Int64, Int64) -> Void
 
     private let store: ModelStore
     private let index: FileIndex
@@ -68,10 +68,15 @@ public struct MLXHubDownloader: Downloader {
     ///     ai-layer-aikit-core-2026-10-31 removed `ModelStore`'s own idea of a
     ///     root, so there is nothing for a default to name.
     ///   - index: how to list a repository's files. Defaults to
-    ///     `HuggingFaceClient.files(repoId:revision:)`.
-    ///   - transfer: how to fetch one file. Defaults to `ModelDownloader`.
+    ///     ``ModelStore/publishedFiles(repository:revision:)``.
+    ///   - transfer: how to fetch one file. Defaults to
+    ///     ``ModelStore/fetchPublishedFile(repository:revision:path:to:onBytes:)``.
+    ///
+    ///     Both defaults come from AIKit's store rather than from a Hugging
+    ///     Face type named here: the hub client and its endpoint are internal
+    ///     to AIKit as of W27 (BR-AIL-21, door 3).
     ///   - onHashProgress: told how far a verification has read.
-    public init(
+    init(
         store: ModelStore,
         index: FileIndex? = nil,
         transfer: FileTransfer? = nil,
@@ -80,15 +85,17 @@ public struct MLXHubDownloader: Downloader {
         self.store = store
         self.index =
             index ?? { repository, revision in
-                try await HuggingFaceClient().files(repoId: repository, revision: revision)
+                try await ModelStore.publishedFiles(repository: repository, revision: revision)
             }
         self.transfer =
             transfer ?? { repository, revision, path, destination, onBytes in
-                let url = try HuggingFaceClient()
-                    .downloadURL(repoId: repository, filename: path, revision: revision)
-                try await ModelDownloader().download(from: url, to: destination) { progress in
-                    onBytes(progress.bytesDownloaded, progress.totalBytes ?? 0)
-                }
+                try await ModelStore.fetchPublishedFile(
+                    repository: repository,
+                    revision: revision,
+                    path: path,
+                    to: destination,
+                    onBytes: onBytes
+                )
             }
         self.onHashProgress = onHashProgress
     }
@@ -105,7 +112,7 @@ public struct MLXHubDownloader: Downloader {
     /// - Throws: `ModelStoreError.digestMismatch` naming the file and both
     ///   digests, after deleting the bytes that failed; `.unverifiableFile`;
     ///   or whatever the index or transfer threw.
-    public func download(
+    func download(
         id: String,
         revision: String?,
         matching patterns: [String],
@@ -273,16 +280,14 @@ extension ModelStore.Receipt {
 ///
 /// The bridge is the same one upstream's `#adaptHuggingFaceTokenizer` expands
 /// to, written by hand.
-public struct TransformersTokenizerLoader: TokenizerLoader {
-
-    public init() {}
+struct TransformersTokenizerLoader: TokenizerLoader {
 
     /// Load the tokenizer from a model directory.
     ///
     /// `AutoTokenizer.from(modelFolder:)` reads `tokenizer_config.json` and
     /// `tokenizer.json` from `directory` and reaches no network. Those files
     /// are in the snapshot `MLXHubDownloader` just verified.
-    public func load(from directory: URL) async throws -> any MLXLMCommon.Tokenizer {
+    func load(from directory: URL) async throws -> any MLXLMCommon.Tokenizer {
         let upstream = try await Tokenizers.AutoTokenizer.from(modelFolder: directory)
         return TransformersTokenizerBridge(upstream)
     }

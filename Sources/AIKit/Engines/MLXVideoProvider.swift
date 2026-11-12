@@ -19,7 +19,7 @@
     /// The other cases replace `AIKitError.requestFailed` strings that this
     /// provider used to throw for its own failures, so a caller can tell "the
     /// device said no" from "mlx-video crashed" without parsing text.
-    public enum MLXVideoError: Error, LocalizedError, Equatable {
+    enum MLXVideoError: Error, LocalizedError, Equatable {
 
         /// ``DeviceCapability`` refused the preset.
         case presetRefused(VideoPresetRefusal, preset: MLXVideoPreset)
@@ -30,7 +30,7 @@
         /// `mlx-video` exited non-zero.
         case nonZeroExit(exitCode: Int32, stderr: String)
 
-        public var errorDescription: String? {
+        var errorDescription: String? {
             switch self {
             case .presetRefused(let refusal, let preset):
                 switch refusal {
@@ -54,10 +54,10 @@
     /// Generates video from text or image prompts via mlx-video CLI.
     /// The request's first user message is used as the generation prompt.
     /// Response content = output video file path.
-    public struct MLXVideoProvider: AIProvider, Sendable {
-        public let id: String
-        public let displayName: String
-        public let capabilities: AICapabilities = [.videoGeneration, .vision]
+    struct MLXVideoProvider: AIProvider, Sendable {
+        let id: String
+        let displayName: String
+        let capabilities: AICapabilities = [.videoGeneration, .vision]
 
         private let pythonPath: String
         private let modelName: String
@@ -71,7 +71,7 @@
         /// suite.
         private let device: DeviceCapability
 
-        public init(
+        init(
             id: String,
             displayName: String,
             pythonPath: String,
@@ -87,7 +87,7 @@
             self.device = device
         }
 
-        public var status: AIProviderStatus {
+        var status: AIProviderStatus {
             get async {
                 ShellRunner.commandExists(pythonPath) ? .ready : .unavailable
             }
@@ -147,7 +147,7 @@
         }
 
         /// Generate video from prompt. Returns file path in response content.
-        public func complete(request: AIRequest) async throws -> AIResponse {
+        func complete(request: AIRequest) async throws -> AIResponse {
             let startTime = ContinuousClock.now
             let (arguments, outputPath) = try prepare(for: request)
 
@@ -172,7 +172,7 @@
         }
 
         /// Stream progress during video generation.
-        public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
+        func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
             let (arguments, outputPath) = try prepare(for: request)
             let pythonCmd = pythonPath
 
@@ -209,17 +209,17 @@
     // MARK: - VideoGenerationOptions
 
     /// Video generation specific request options.
-    public struct VideoGenerationOptions: Sendable, Codable, Equatable {
-        public var width: Int
-        public var height: Int
-        public var numFrames: Int
-        public var fps: Int
-        public var numInferenceSteps: Int
-        public var guidanceScale: Double
-        public var seed: Int?
-        public var outputPath: String?
+    struct VideoGenerationOptions: Sendable, Codable, Equatable {
+        var width: Int
+        var height: Int
+        var numFrames: Int
+        var fps: Int
+        var numInferenceSteps: Int
+        var guidanceScale: Double
+        var seed: Int?
+        var outputPath: String?
         /// For I2V (image-to-video): input image path.
-        public var inputImagePath: String?
+        var inputImagePath: String?
 
         /// The grid preset these options came from, when they came from one.
         ///
@@ -235,9 +235,9 @@
         ///
         /// Optional and synthesized-`Codable`, so a stored payload written
         /// before W25 still decodes: the key is simply absent.
-        public var preset: MLXVideoPreset?
+        var preset: MLXVideoPreset?
 
-        public init(
+        init(
             width: Int = 480,
             height: Int = 320,
             numFrames: Int = 49,
@@ -273,7 +273,7 @@
         ///     24 fps is 48 frames — the neighbourhood of this type's legacy
         ///     49-frame default, kept so switching to a preset does not quietly
         ///     change how long a generation takes.
-        public init(
+        init(
             preset: MLXVideoPreset,
             seconds: Double = 2.0,
             numInferenceSteps: Int = 30,
@@ -300,10 +300,10 @@
         ///
         /// Carries no preset: 480x320 is on no grid point. Kept unchanged
         /// because it is what every existing caller and stored payload means.
-        public static let `default` = VideoGenerationOptions()
+        static let `default` = VideoGenerationOptions()
 
         /// HD 720p: 1280x720, 97 frames (~4s at 24fps), 50 inference steps.
-        public static let hd720p = VideoGenerationOptions(
+        static let hd720p = VideoGenerationOptions(
             width: 1280,
             height: 720,
             numFrames: 97,

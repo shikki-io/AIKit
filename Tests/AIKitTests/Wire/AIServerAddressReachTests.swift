@@ -146,7 +146,11 @@ struct AIServerAddressReachTests {
     @Test("a provider refuses an address that is not a server root")
     func aProviderRefusesANonRoot() throws {
         let error = #expect(throws: AIKitError.self) {
-            _ = try LMStudioProvider(baseURL: "\(fixtureServerRoot)/v1", model: "qwen")
+            _ = try LMStudioProvider(
+                baseURL: "\(fixtureServerRoot)/v1",
+                model: "qwen",
+                transport: MockHTTPTransport.factory()
+            )
         }
         // Named at construction, not at first request: validated once.
         #expect(error?.errorDescription?.contains("/v1") == true)
