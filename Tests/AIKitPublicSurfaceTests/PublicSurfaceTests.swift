@@ -223,7 +223,9 @@ struct PublicSurfaceTests {
         ("CLISubprocessProvider", "the CLI subprocess provider"),
         ("WhisperCLIProvider", "the Whisper CLI provider"),
         ("ProviderHealthCheck", "the health check"),
-        ("ProviderModelCatalog", "the provider model catalogue"),
+        // ProviderModelCatalog is NOT here since W28: the Claude model identity
+        // is door 3 (model naming) and shikki reads the same ids — see the W28
+        // note in AIKitPublicAPI.txt. One table, public, instead of a copy.
         ("ArgsTemplate", "the CLI args template"),
         ("ShellRunner", "the shell runner"),
         ("Mock", "a test double"),

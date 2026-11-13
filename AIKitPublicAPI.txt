@@ -76,6 +76,20 @@
 #      * AIKitError.insufficientSpace / .downloadNeedsConsent — door 2 already
 #        exports AIKitError; these are its two new cases.
 #
+#    W28 (shikki onto the four doors) made the Claude model identity public
+#    again, in this door because it names models a caller can ask for:
+#      * ProviderModelCatalog (+ `default`, `canonical(for:)`, `resolve(_:)`,
+#        `allCanonicalIds`, `merging(operatorAliases:)`), AnthropicFamily —
+#        the ONE place a canonical Claude id and its aliases (`opus`,
+#        `claude-sonnet`, …) are spelled. AIKit itself needs it for the CLI
+#        family's model aliases; shikki needs the same ids for its cost table
+#        and its category router. Internal would force shikki to copy the
+#        table, i.e. a second source of truth that drifts on the next model.
+#      * HistoricalAnthropicId — frozen ids kept for cost telemetry, read by
+#        shikki's cost catalog.
+#      * ProviderModelCapability — the prefix tiers shikki's cost router
+#        matches models against; same reason, one list.
+#
 # 4. TOOLS AND CAPABILITIES — what a provider may call, and what a device can do.
 #    AITool, AIToolCall, AICapabilities, MLXVideoPreset, VideoResolution,
 #    VideoFrameRate, VideoPresetRefusal.
@@ -133,11 +147,13 @@ AIKit  enum  AIProviderID
 AIKit  enum  AIProviderOptions
 AIKit  enum  AIProviderStatus
 AIKit  enum  AIServerAddress.Reach
+AIKit  enum  AnthropicFamily
 AIKit  enum  BudgetLedger.LedgerError
 AIKit  enum  ClaudeSessionIndex
 AIKit  enum  DeviceClass
 AIKit  enum  DeviceRowProvenance
 AIKit  enum  FallbackEligibility
+AIKit  enum  HistoricalAnthropicId
 AIKit  enum  HostPlatform
 AIKit  enum  LocalModelStoreError
 AIKit  enum  MediaLanguageResolver
@@ -151,6 +167,7 @@ AIKit  enum  ModelDownloadRefusal
 AIKit  enum  ModelFileDigest
 AIKit  enum  ModelFormat
 AIKit  enum  ModelStoreError
+AIKit  enum  ProviderModelCapability
 AIKit  enum  ResponseFormat
 AIKit  enum  SourceBehavior
 AIKit  enum  TranslationDecision
@@ -219,6 +236,10 @@ AIKit  enum.case  AIProviderStatus.unavailable
 AIKit  enum.case  AIServerAddress.Reach.loopback
 AIKit  enum.case  AIServerAddress.Reach.privateNetwork
 AIKit  enum.case  AIServerAddress.Reach.remote
+AIKit  enum.case  AnthropicFamily.fable51
+AIKit  enum.case  AnthropicFamily.haiku45
+AIKit  enum.case  AnthropicFamily.opus5
+AIKit  enum.case  AnthropicFamily.sonnet5
 AIKit  enum.case  BudgetLedger.LedgerError.budgetExhausted(provider:spent:cap:)
 AIKit  enum.case  DeviceClass.iPadM1
 AIKit  enum.case  DeviceClass.iPadM2
@@ -333,6 +354,7 @@ AIKit  func.op  AIServerAddress.Reach.!=(_:_:)
 AIKit  func.op  AITool.!=(_:_:)
 AIKit  func.op  AIToolCall.!=(_:_:)
 AIKit  func.op  AgentSessionEntry.!=(_:_:)
+AIKit  func.op  AnthropicFamily.!=(_:_:)
 AIKit  func.op  BudgetLedger.LedgerError.!=(_:_:)
 AIKit  func.op  BudgetLedger.SlotPermit.!=(_:_:)
 AIKit  func.op  DeviceCapability.!=(_:_:)
@@ -365,6 +387,7 @@ AIKit  func.op  ModelIdentifier.!=(_:_:)
 AIKit  func.op  ModelStore.Receipt.!=(_:_:)
 AIKit  func.op  ModelStoreError.!=(_:_:)
 AIKit  func.op  PerformanceStat.!=(_:_:)
+AIKit  func.op  ProviderModelCatalog.!=(_:_:)
 AIKit  func.op  ProviderPreferences.!=(_:_:)
 AIKit  func.op  ResponseFormat.!=(_:_:)
 AIKit  func.op  SourceBehavior.!=(_:_:)
@@ -428,6 +451,8 @@ AIKit  init  AITool.init(name:description:parametersSchema:)
 AIKit  init  AIToolCall.init(from:)
 AIKit  init  AIToolCall.init(id:name:arguments:)
 AIKit  init  AgentSessionEntry.init(sessionID:jsonlPath:projectSlug:cwd:mtime:sizeBytes:firstMessageTopic:)
+AIKit  init  AnthropicFamily.init(from:)
+AIKit  init  AnthropicFamily.init(rawValue:)
 AIKit  init  BudgetLedger.init(hardStopTokens:concurrencyCaps:)
 AIKit  init  ClaudeSessionIndexProvider.init()
 AIKit  init  DefaultModelRegistry.init(localStore:modelStore:planner:consent:)
@@ -483,6 +508,7 @@ AIKit  init  ModelVerificationReceipt.init(repositoryID:)
 AIKit  init  PerformanceStat.init(avgLatencyMs:avgTokensPerSecond:qualityScore:totalInvocations:lastUsedAt:)
 AIKit  init  PerformanceStat.init(from:)
 AIKit  init  PerformanceStore.init(storePath:)
+AIKit  init  ProviderModelCatalog.init(canonical:aliases:)
 AIKit  init  ProviderPreferences.init(from:)
 AIKit  init  ProviderPreferences.init(preferLocal:maxLatencyMs:maxCostPerRequest:requiredCapabilities:)
 AIKit  init  ProviderRouter.init(providers:performanceStore:)
@@ -591,6 +617,10 @@ AIKit  method  AgentSessionEntry.ageSeconds(now:)
 AIKit  method  AgentSessionEntry.ageString(now:)
 AIKit  method  AgentSessionIndexProvider.resumeInvocation(sessionID:)
 AIKit  method  AgentSessionIndexProvider.scanSessions(limit:)
+AIKit  method  AnthropicFamily.compactJSON()
+AIKit  method  AnthropicFamily.encode(to:)
+AIKit  method  AnthropicFamily.hash(into:)
+AIKit  method  AnthropicFamily.prettyJSON()
 AIKit  method  BudgetLedger.acquireSlot(for:)
 AIKit  method  BudgetLedger.activeSlotCount(for:)
 AIKit  method  BudgetLedger.assertIsolated(_:file:line:)
@@ -711,6 +741,9 @@ AIKit  method  PerformanceStore.bestModel(for:)
 AIKit  method  PerformanceStore.clear()
 AIKit  method  PerformanceStore.record(model:context:latencyMs:tokensPerSecond:qualityScore:)
 AIKit  method  PerformanceStore.stats(for:context:)
+AIKit  method  ProviderModelCatalog.canonical(for:)
+AIKit  method  ProviderModelCatalog.merging(operatorAliases:)
+AIKit  method  ProviderModelCatalog.resolve(_:)
 AIKit  method  ProviderPreferences.compactJSON()
 AIKit  method  ProviderPreferences.prettyJSON()
 AIKit  method  ProviderRouter.route(capabilities:)
@@ -887,6 +920,10 @@ AIKit  property  AgentSessionEntry.sessionID
 AIKit  property  AgentSessionEntry.sizeBytes
 AIKit  property  AgentSessionEntry.sizeString
 AIKit  property  AgentSessionIndexProvider.providerID
+AIKit  property  AnthropicFamily.hashValue
+AIKit  property  AnthropicFamily.lessPrettyJson
+AIKit  property  AnthropicFamily.prettyJson
+AIKit  property  AnthropicFamily.rawAttachmentValueRepresentation
 AIKit  property  BudgetLedger.LedgerError.localizedDescription
 AIKit  property  BudgetLedger.SlotPermit.id
 AIKit  property  BudgetLedger.SlotPermit.providerID
@@ -1053,6 +1090,9 @@ AIKit  property  PerformanceStat.lessPrettyJson
 AIKit  property  PerformanceStat.prettyJson
 AIKit  property  PerformanceStat.qualityScore
 AIKit  property  PerformanceStat.totalInvocations
+AIKit  property  ProviderModelCatalog.aliases
+AIKit  property  ProviderModelCatalog.allCanonicalIds
+AIKit  property  ProviderModelCatalog.canonical
 AIKit  property  ProviderPreferences.lessPrettyJson
 AIKit  property  ProviderPreferences.maxCostPerRequest
 AIKit  property  ProviderPreferences.maxLatencyMs
@@ -1145,6 +1185,7 @@ AIKit  struct  ModelStore
 AIKit  struct  ModelStore.Receipt
 AIKit  struct  ModelVerificationReceipt
 AIKit  struct  PerformanceStat
+AIKit  struct  ProviderModelCatalog
 AIKit  struct  ProviderPreferences
 AIKit  struct  ProviderRouter
 AIKit  struct  TokenUsage
@@ -1160,6 +1201,7 @@ AIKit  type.method  AIProviderRepository.loading(from:)
 AIKit  type.method  AIProviderSettings.load(from:)
 AIKit  type.method  AIProviderSettings.parse(toml:file:)
 AIKit  type.method  AIServerAddress.Reach.makeFromRawAttachmentValue(_:)
+AIKit  type.method  AnthropicFamily.makeFromRawAttachmentValue(_:)
 AIKit  type.method  ClaudeSessionIndex.decodeSlug(_:fileManager:)
 AIKit  type.method  ClaudeSessionIndex.makeEntry(jsonlPath:projectSlug:)
 AIKit  type.method  ClaudeSessionIndex.scan(root:maxAge:limit:now:)
@@ -1213,6 +1255,11 @@ AIKit  type.property  ClaudeSessionIndex.defaultRoot
 AIKit  type.property  DeviceCapability.deviceTable
 AIKit  type.property  DeviceCapability.estimatedTokPerSecFloor
 AIKit  type.property  ExternalModelLibrary.knownForHost
+AIKit  type.property  HistoricalAnthropicId.all
+AIKit  type.property  HistoricalAnthropicId.haiku45Short
+AIKit  type.property  HistoricalAnthropicId.opus46
+AIKit  type.property  HistoricalAnthropicId.opus48
+AIKit  type.property  HistoricalAnthropicId.sonnet46
 AIKit  type.property  HostPlatform.current
 AIKit  type.property  LocalModelDirectory.placement
 AIKit  type.property  LocalModelFile.placement
@@ -1225,6 +1272,9 @@ AIKit  type.property  ModelDownloadSettings.defaultFreeSpaceMarginBytes
 AIKit  type.property  ModelRepositoryDirectory.placement
 AIKit  type.property  ModelRepositoryFile.placement
 AIKit  type.property  ModelVerificationReceipt.placement
+AIKit  type.property  ProviderModelCapability.codeCapablePrefixes
+AIKit  type.property  ProviderModelCapability.frontierPrefixes
+AIKit  type.property  ProviderModelCatalog.default
 AIKit  typealias  AIProviderEntry.EntryID
 AIKit  typealias  AIProviderFactory.Builder
 AIKit  typealias  AIProviderRepository.ModelType
