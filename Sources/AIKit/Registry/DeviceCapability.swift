@@ -3,6 +3,9 @@ import Foundation
 #if canImport(Darwin)
     import Darwin
 #endif
+#if os(iOS) || os(tvOS) || os(visionOS)
+    import os  // os_proc_available_memory
+#endif
 
 // MARK: - HostPlatform
 
@@ -348,40 +351,60 @@ public struct DeviceCapability: Sendable, Equatable {
             videoCeiling: MLXVideoPreset(resolution: .fullHD1080, frameRate: .fps30)
         ),
 
-        // iPad. The M1/M2 rows keep the pre-W25 mapping, which lumped the
-        // iPad13/14 and iPad15/16 series; it is coarse, and it is what shipped.
+        // iPad, by exact model identifier from Apple's published list. The
+        // pre-W25 rows matched families ("iPad13,", "iPad14,") and put every
+        // iPad14,x on M1, so the operator's iPad Pro 12.9" 6th gen (iPad14,5,
+        // M2) read as M1 (backlog 65e5866d). A family prefix cannot work for
+        // iPads: one family mixes chips (iPad13,1 is an A14 Air, iPad13,8 an
+        // M1 Pro; iPad14,1 an A15 mini, iPad14,5 an M2 Pro). A-series iPads
+        // have no row and fall back on RAM, bounded to iOS classes.
         DeviceRow(
             deviceClass: .iPadM1,
             platform: .iOS,
-            machinePrefixes: ["iPad13,", "iPad14,"],
+            // iPad Pro 11" 3rd gen (13,4–7), iPad Pro 12.9" 5th gen (13,8–11),
+            // iPad Air 5th gen (13,16–17).
+            machinePrefixes: [
+                "iPad13,4", "iPad13,5", "iPad13,6", "iPad13,7",
+                "iPad13,8", "iPad13,9", "iPad13,10", "iPad13,11",
+                "iPad13,16", "iPad13,17",
+            ],
             provenance: .shipped,
             videoCeiling: MLXVideoPreset(resolution: .fullHD1080, frameRate: .fps30)
         ),
         DeviceRow(
             deviceClass: .iPadM2,
             platform: .iOS,
-            machinePrefixes: ["iPad15,", "iPad16,"],
+            // iPad Pro 11" 4th gen (14,3–4), iPad Pro 12.9" 6th gen (14,5–6),
+            // iPad Air 11" / 13" M2 (14,8–11).
+            machinePrefixes: [
+                "iPad14,3", "iPad14,4", "iPad14,5", "iPad14,6",
+                "iPad14,8", "iPad14,9", "iPad14,10", "iPad14,11",
+            ],
             provenance: .shipped,
             videoCeiling: MLXVideoPreset(resolution: .fullHD1080, frameRate: .fps30)
         ),
         DeviceRow(
             deviceClass: .iPadM3,
             platform: .iOS,
-            machinePrefixes: ["iPad17,"],
-            provenance: .projected,
+            // iPad Air 11" / 13" M3 (15,3–6).
+            machinePrefixes: ["iPad15,3", "iPad15,4", "iPad15,5", "iPad15,6"],
+            provenance: .shipped,
             videoCeiling: MLXVideoPreset(resolution: .fullHD1080, frameRate: .fps60)
         ),
         DeviceRow(
             deviceClass: .iPadM4,
             platform: .iOS,
-            machinePrefixes: ["iPad18,"],
-            provenance: .projected,
+            // iPad Pro 11" / 13" M4 (16,3–6).
+            machinePrefixes: ["iPad16,3", "iPad16,4", "iPad16,5", "iPad16,6"],
+            provenance: .shipped,
             videoCeiling: MLXVideoPreset(resolution: .fullHD1080, frameRate: .fps60)
         ),
         DeviceRow(
             deviceClass: .iPadM5,
             platform: .iOS,
-            machinePrefixes: ["iPad19,"],
+            // iPad Pro M5: the iPad17 family. Not measured on a device here,
+            // so projected; a family prefix until its identifiers are.
+            machinePrefixes: ["iPad17,"],
             provenance: .projected,
             videoCeiling: MLXVideoPreset(resolution: .fullHD1080, frameRate: .fps60)
         ),
@@ -509,7 +532,14 @@ public struct DeviceCapability: Sendable, Equatable {
             deviceTable
             .flatMap { row in row.machinePrefixes.map { (prefix: $0, deviceClass: row.deviceClass) } }
             .sorted { $0.prefix.count > $1.prefix.count }
-            .first { machineIdentifier.hasPrefix($0.prefix) }
+            .first { entry in
+                // An entry ending in "," names a whole family ("iPhone17,");
+                // anything else is one exact identifier ("iPad14,5"), so
+                // "iPad13,1" (an A14 Air) can never match the "iPad13,10" row.
+                entry.prefix.hasSuffix(",")
+                    ? machineIdentifier.hasPrefix(entry.prefix)
+                    : machineIdentifier == entry.prefix
+            }
 
         if let matched { return matched.deviceClass }
         return fallbackDeviceClass(totalRAMGB: totalRAMGB, platform: platform)
@@ -623,7 +653,15 @@ public struct DeviceCapability: Sendable, Equatable {
     }
 
     private static func availableRAMGigabytes(total: Double) -> Double {
-        #if canImport(Darwin)
+        #if os(iOS) || os(tvOS) || os(visionOS)
+            // On iOS the limit is not physical RAM: the kernel caps each app
+            // (jetsam) well below it, and raises the cap only for an app with
+            // `com.apple.developer.kernel.increased-memory-limit`. The process's
+            // real headroom is what `os_proc_available_memory` returns, read at
+            // decision time. The physical-RAM estimate below answered ~6.8 GB
+            // free on an 8 GB iPad, so it offered an 8B the app could not hold.
+            return Double(os_proc_available_memory()) / 1_073_741_824.0
+        #elseif canImport(Darwin)
             var info = mach_task_basic_info()
             var count = mach_msg_type_number_t(
                 MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
@@ -650,9 +688,11 @@ public struct DeviceCapability: Sendable, Equatable {
                 let available = max(0.0, total - usedGB - systemReserveGB)
                 return available
             }
+            // Fallback: assume 75% of total is available
+            return total * 0.75
+        #else
+            return total * 0.75
         #endif
-        // Fallback: assume 75% of total is available
-        return total * 0.75
     }
 
     // MARK: - Private: machine identifier

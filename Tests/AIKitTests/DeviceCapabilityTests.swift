@@ -115,8 +115,9 @@ struct DeviceCapabilityTests {
             ("iPhone18,1", .iPhoneA19),
             ("iPhone19,1", .iPhoneA20),
             ("iPad13,8", .iPadM1),
-            ("iPad16,6", .iPadM2),
-            ("iPad17,1", .iPadM3),
+            ("iPad14,5", .iPadM2),
+            ("iPad16,6", .iPadM4),
+            ("iPad17,1", .iPadM5),
         ]
     )
     func identifierMapsToClass(identifier: String, expected: DeviceClass) {
@@ -127,6 +128,45 @@ struct DeviceCapabilityTests {
                 platform: .iOS
             ) == expected
         )
+    }
+
+    // Apple's published identifier ↔ chip list for every iPad with an M chip.
+    // The pre-fix table matched the "iPad13," and "iPad14," families and put
+    // the operator's iPad Pro 12.9" 6th gen (iPad14,5, M2) on M1 (backlog
+    // 65e5866d); every row here is one real model.
+    @Test(
+        "Every M-series iPad identifier maps to its chip",
+        arguments: [
+            // M1: iPad Pro 11" 3rd gen, iPad Pro 12.9" 5th gen, iPad Air 5th gen.
+            ("iPad13,4", DeviceClass.iPadM1), ("iPad13,5", .iPadM1), ("iPad13,6", .iPadM1), ("iPad13,7", .iPadM1),
+            ("iPad13,8", .iPadM1), ("iPad13,9", .iPadM1), ("iPad13,10", .iPadM1), ("iPad13,11", .iPadM1),
+            ("iPad13,16", .iPadM1), ("iPad13,17", .iPadM1),
+            // M2: iPad Pro 11" 4th gen, iPad Pro 12.9" 6th gen, iPad Air 11"/13" M2.
+            ("iPad14,3", .iPadM2), ("iPad14,4", .iPadM2), ("iPad14,5", .iPadM2), ("iPad14,6", .iPadM2),
+            ("iPad14,8", .iPadM2), ("iPad14,9", .iPadM2), ("iPad14,10", .iPadM2), ("iPad14,11", .iPadM2),
+            // M3: iPad Air 11"/13" M3.
+            ("iPad15,3", .iPadM3), ("iPad15,4", .iPadM3), ("iPad15,5", .iPadM3), ("iPad15,6", .iPadM3),
+            // M4: iPad Pro 11"/13" M4.
+            ("iPad16,3", .iPadM4), ("iPad16,4", .iPadM4), ("iPad16,5", .iPadM4), ("iPad16,6", .iPadM4),
+        ]
+    )
+    func iPadIdentifierMapsToChip(identifier: String, expected: DeviceClass) {
+        #expect(
+            DeviceCapability.deviceClass(forMachineIdentifier: identifier, totalRAMGB: 8, platform: .iOS)
+                == expected
+        )
+    }
+
+    // A-series iPads share a family with M-series ones, so they must not be
+    // caught by an M row: an exact identifier never matches a longer one.
+    @Test(
+        "An A-series iPad is never mistaken for an M-series one",
+        arguments: ["iPad13,1", "iPad13,2", "iPad13,18", "iPad13,19", "iPad14,1", "iPad14,2", "iPad15,7", "iPad16,1"]
+    )
+    func aSeriesIPadIsNotAnMChip(identifier: String) {
+        let mClasses: Set<DeviceClass> = [.iPadM1, .iPadM2, .iPadM3, .iPadM4, .iPadM5]
+        let measured = DeviceCapability.deviceClass(forMachineIdentifier: identifier, totalRAMGB: 4, platform: .iOS)
+        #expect(!mClasses.contains(measured), "\(identifier) read as \(measured)")
     }
 
     @Test(
