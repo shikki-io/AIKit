@@ -77,10 +77,19 @@ timeout_seconds = 300
 # a refusal counted as zero transfers) and ModelDownloaderResumeTests
 # (T-AIL-61).
 #
+# RE-MEASURED 2026-11-13 at the W32 commit: 741/741 (run
+# 12C4CD86-6CC3-4D49-B221-EF488C545C96). +34 on W33's 707, all of them W32's
+# own and all newly discovered by this scope's existing glob:
+# ProviderRouterPolicyTests (19 — the capability, device and topic filters, the
+# cluster's pooled memory, and the proof that a provider already out is never
+# asked for its status) and ProviderRouterFanOutTests (15 — parallelism by
+# in-flight counter, one shared deadline, a slow branch that blocks nobody,
+# cancellation through every branch, and the input order).
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 707
+expected_test_min = 741
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]

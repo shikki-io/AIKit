@@ -39,6 +39,38 @@
 #    FallbackEligibility, ProviderRouter, ProviderPreferences, PerformanceStore,
 #    PerformanceStat, UsageContext.
 #
+#    W32 (BR-AIL-22) added ORCHESTRATION over that one entry point, and it
+#    belongs to this door rather than a fifth one: a caller already holds
+#    `any AIProvider` and calls `complete`, and choosing WHICH providers and
+#    asking several at once is the same conversation, not a different kit.
+#    Operator 2026-11-12: *"shikki gonna have the possibility to target every ai
+#    providers to orchestrate with the public api … in function of the topics and
+#    the capabilities of the current device … dispatch on different ai provider
+#    in //"*. Each symbol, with why it is public rather than internal:
+#      * ProviderRouter.candidates(for:policy:providers:) — the selection, as a
+#        value a caller can render. Internal would mean every consumer rebuilds
+#        the capability + device + topic filter, which is the duplication this
+#        whole spec removes.
+#      * ProviderRouter.fanOut(_:to:deadline:) and (_:to:within:) — the parallel
+#        ask. Two forms because a shared deadline IS an instant and a caller's
+#        budget is a duration; converting at the boundary beats re-deriving it
+#        per branch.
+#      * AIRoutingPolicy — what the caller wants routed where, built from data
+#        so the topic vocabulary stays in shikki (BR-AIL-03, BR-AIL-04) and
+#        AIKit never learns what a stage name means.
+#      * AILocalModelPlacement — which providers are LOCAL and what each would
+#        load, because `AIProvider` deliberately says neither. Also the cluster
+#        case: one entry, one pooled-memory figure, no new family.
+#      * AIRoutingPlan / AIProviderRejection / AIRoutingRejection — the
+#        selection AND the reasons. BR-AIL-22 requires that nothing be silently
+#        skipped, and a reason a caller cannot read is a silent skip: these must
+#        leave the router or the rejections could only be logged inside it.
+#      * AIProviderOutcome and its Verdict — one answer-or-failure per branch,
+#        each naming its provider, model and latency (BR-AIL-06, BR-AIL-07). A
+#        fan-out has no single answer, so it cannot return `AIResponse`;
+#        `.attempt` bridges a failed branch back to `AIProviderAttempt` so a
+#        caller reports "nobody answered" with the kit's existing error.
+#
 # 3. GET MODELS — the catalogue, the store, and what this device can load.
 #    ModelRegistry, DefaultModelRegistry, ModelFilter, ModelDescriptor,
 #    ModelIdentifier, ModelDomain, ModelFormat, ModelStore, ModelFile,
@@ -131,7 +163,9 @@ AIKit  enum  AIMessage.Role
 AIKit  enum  AIProviderFamily
 AIKit  enum  AIProviderID
 AIKit  enum  AIProviderOptions
+AIKit  enum  AIProviderOutcome.Verdict
 AIKit  enum  AIProviderStatus
+AIKit  enum  AIRoutingRejection
 AIKit  enum  AIServerAddress.Reach
 AIKit  enum  BudgetLedger.LedgerError
 AIKit  enum  ClaudeSessionIndex
@@ -211,11 +245,17 @@ AIKit  enum.case  AIProviderID.together
 AIKit  enum.case  AIProviderID.zhipuGlm
 AIKit  enum.case  AIProviderOptions.cliSubprocess(_:)
 AIKit  enum.case  AIProviderOptions.none
+AIKit  enum.case  AIProviderOutcome.Verdict.answered(_:)
+AIKit  enum.case  AIProviderOutcome.Verdict.failed(cause:error:)
+AIKit  enum.case  AIProviderOutcome.Verdict.timedOut(budget:)
 AIKit  enum.case  AIProviderStatus.downloading(progress:totalBytes:)
 AIKit  enum.case  AIProviderStatus.error(_:)
 AIKit  enum.case  AIProviderStatus.loading(progress:)
 AIKit  enum.case  AIProviderStatus.ready
 AIKit  enum.case  AIProviderStatus.unavailable
+AIKit  enum.case  AIRoutingRejection.deviceCannotLoad(model:requiredGB:availableGB:)
+AIKit  enum.case  AIRoutingRejection.missingCapabilities(required:offered:)
+AIKit  enum.case  AIRoutingRejection.notReady(_:)
 AIKit  enum.case  AIServerAddress.Reach.loopback
 AIKit  enum.case  AIServerAddress.Reach.privateNetwork
 AIKit  enum.case  AIServerAddress.Reach.remote
@@ -313,6 +353,7 @@ AIKit  func.op  AICapabilities.!=(_:_:)
 AIKit  func.op  AIInput.!=(_:_:)
 AIKit  func.op  AIKitError.!=(_:_:)
 AIKit  func.op  AIKitNode.!=(_:_:)
+AIKit  func.op  AILocalModelPlacement.!=(_:_:)
 AIKit  func.op  AIMediaKind.!=(_:_:)
 AIKit  func.op  AIMediaSource.!=(_:_:)
 AIKit  func.op  AIMessage.!=(_:_:)
@@ -323,11 +364,16 @@ AIKit  func.op  AIProviderEntry.!=(_:_:)
 AIKit  func.op  AIProviderFamily.!=(_:_:)
 AIKit  func.op  AIProviderID.!=(_:_:)
 AIKit  func.op  AIProviderOptions.!=(_:_:)
+AIKit  func.op  AIProviderOutcome.!=(_:_:)
+AIKit  func.op  AIProviderOutcome.Verdict.!=(_:_:)
+AIKit  func.op  AIProviderRejection.!=(_:_:)
 AIKit  func.op  AIProviderSettings.!=(_:_:)
 AIKit  func.op  AIProviderStatus.!=(_:_:)
 AIKit  func.op  AIProviderStatus.==(_:_:)
 AIKit  func.op  AIRequestTarget.!=(_:_:)
 AIKit  func.op  AIResponse.!=(_:_:)
+AIKit  func.op  AIRoutingPolicy.!=(_:_:)
+AIKit  func.op  AIRoutingRejection.!=(_:_:)
 AIKit  func.op  AIServerAddress.!=(_:_:)
 AIKit  func.op  AIServerAddress.Reach.!=(_:_:)
 AIKit  func.op  AITool.!=(_:_:)
@@ -388,6 +434,7 @@ AIKit  init  AIInput.init(kind:source:mimeType:)
 AIKit  init  AIInput.init(kind:url:mimeType:)
 AIKit  init  AIKitAssembly.init(settings:factory:source:mockProvider:)
 AIKit  init  AIKitNode.init(rawValue:)
+AIKit  init  AILocalModelPlacement.init(model:device:)
 AIKit  init  AIMediaKind.init(from:)
 AIKit  init  AIMediaKind.init(rawValue:)
 AIKit  init  AIMediaSource.init(from:)
@@ -410,6 +457,8 @@ AIKit  init  AIProviderFamily.init(kind:)
 AIKit  init  AIProviderFamily.init(rawValue:)
 AIKit  init  AIProviderID.init(from:)
 AIKit  init  AIProviderID.init(rawValue:)
+AIKit  init  AIProviderOutcome.init(providerID:model:latency:verdict:)
+AIKit  init  AIProviderRejection.init(providerID:rejection:)
 AIKit  init  AIProviderRepository.init(settings:source:)
 AIKit  init  AIProviderSet.init(providers:unavailable:)
 AIKit  init  AIProviderSettings.init(from:)
@@ -420,6 +469,8 @@ AIKit  init  AIRequestTarget.init(entry:address:route:)
 AIKit  init  AIRequestTarget.init(entryID:address:route:)
 AIKit  init  AIResponse.init(content:model:tokensUsed:latencyMs:toolCalls:providerID:outputs:)
 AIKit  init  AIResponse.init(from:)
+AIKit  init  AIRoutingPlan.init(selected:rejected:)
+AIKit  init  AIRoutingPolicy.init(capabilities:topic:topicRanking:device:localModels:)
 AIKit  init  AIServerAddress.Reach.init(from:)
 AIKit  init  AIServerAddress.Reach.init(rawValue:)
 AIKit  init  AIServerAddress.init(validating:)
@@ -579,6 +630,7 @@ AIKit  method  AIRequest.compactJSON()
 AIKit  method  AIRequest.prettyJSON()
 AIKit  method  AIResponse.compactJSON()
 AIKit  method  AIResponse.prettyJSON()
+AIKit  method  AIRoutingPolicy.requiredCapabilities(for:)
 AIKit  method  AIServerAddress.Reach.compactJSON()
 AIKit  method  AIServerAddress.Reach.encode(to:)
 AIKit  method  AIServerAddress.Reach.hash(into:)
@@ -713,6 +765,9 @@ AIKit  method  PerformanceStore.record(model:context:latencyMs:tokensPerSecond:q
 AIKit  method  PerformanceStore.stats(for:context:)
 AIKit  method  ProviderPreferences.compactJSON()
 AIKit  method  ProviderPreferences.prettyJSON()
+AIKit  method  ProviderRouter.candidates(for:policy:providers:)
+AIKit  method  ProviderRouter.fanOut(_:to:deadline:)
+AIKit  method  ProviderRouter.fanOut(_:to:within:)
 AIKit  method  ProviderRouter.route(capabilities:)
 AIKit  method  ProviderRouter.routeSmart(request:context:providers:)
 AIKit  method  ProviderRouter.routeWithFallback(request:)
@@ -775,6 +830,8 @@ AIKit  property  AIKitNode.hashValue
 AIKit  property  AIKitNode.node
 AIKit  property  AIKitNode.parent
 AIKit  property  AIKitNode.rawAttachmentValueRepresentation
+AIKit  property  AILocalModelPlacement.device
+AIKit  property  AILocalModelPlacement.model
 AIKit  property  AIMediaKind.hashValue
 AIKit  property  AIMediaKind.lessPrettyJson
 AIKit  property  AIMediaKind.prettyJson
@@ -828,6 +885,19 @@ AIKit  property  AIProviderID.lessPrettyJson
 AIKit  property  AIProviderID.prettyJson
 AIKit  property  AIProviderID.rawAttachmentValueRepresentation
 AIKit  property  AIProviderOptions.cliSubprocess
+AIKit  property  AIProviderOutcome.attempt
+AIKit  property  AIProviderOutcome.cause
+AIKit  property  AIProviderOutcome.description
+AIKit  property  AIProviderOutcome.error
+AIKit  property  AIProviderOutcome.isAnswer
+AIKit  property  AIProviderOutcome.latency
+AIKit  property  AIProviderOutcome.model
+AIKit  property  AIProviderOutcome.providerID
+AIKit  property  AIProviderOutcome.response
+AIKit  property  AIProviderOutcome.verdict
+AIKit  property  AIProviderRejection.description
+AIKit  property  AIProviderRejection.providerID
+AIKit  property  AIProviderRejection.rejection
 AIKit  property  AIProviderRepository.fileName
 AIKit  property  AIProviderSet.providers
 AIKit  property  AIProviderSet.unavailable
@@ -858,6 +928,16 @@ AIKit  property  AIResponse.prettyJson
 AIKit  property  AIResponse.providerID
 AIKit  property  AIResponse.tokensUsed
 AIKit  property  AIResponse.toolCalls
+AIKit  property  AIRoutingPlan.isEmpty
+AIKit  property  AIRoutingPlan.rejected
+AIKit  property  AIRoutingPlan.selected
+AIKit  property  AIRoutingPlan.selectedIDs
+AIKit  property  AIRoutingPolicy.capabilities
+AIKit  property  AIRoutingPolicy.device
+AIKit  property  AIRoutingPolicy.localModels
+AIKit  property  AIRoutingPolicy.topic
+AIKit  property  AIRoutingPolicy.topicRanking
+AIKit  property  AIRoutingRejection.reason
 AIKit  property  AIServerAddress.Reach.hashValue
 AIKit  property  AIServerAddress.Reach.lessPrettyJson
 AIKit  property  AIServerAddress.Reach.prettyJson
@@ -1105,16 +1185,21 @@ AIKit  struct  AICapabilities
 AIKit  struct  AIChunk
 AIKit  struct  AIInput
 AIKit  struct  AIKitAssembly
+AIKit  struct  AILocalModelPlacement
 AIKit  struct  AIMessage
 AIKit  struct  AIOutput
 AIKit  struct  AIProviderAttempt
 AIKit  struct  AIProviderEntry
 AIKit  struct  AIProviderFactory
+AIKit  struct  AIProviderOutcome
+AIKit  struct  AIProviderRejection
 AIKit  struct  AIProviderSet
 AIKit  struct  AIProviderSettings
 AIKit  struct  AIRequest
 AIKit  struct  AIRequestTarget
 AIKit  struct  AIResponse
+AIKit  struct  AIRoutingPlan
+AIKit  struct  AIRoutingPolicy
 AIKit  struct  AIServerAddress
 AIKit  struct  AITool
 AIKit  struct  AIToolCall
