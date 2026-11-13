@@ -7,12 +7,12 @@ import Foundation
 /// bytes per token = 2 (K and V) x layers x kvHeads x headDim x element bytes.
 /// Llama-3.1-8B: 2 x 32 x 8 x 128 x 2 = 128 KiB per token; Llama-3.2-3B:
 /// 2 x 28 x 8 x 128 x 2 = 112 KiB.
-public struct KVCacheGeometry: Sendable, Equatable {
-    public let layers: Int
-    public let kvHeads: Int
-    public let headDim: Int
+package struct KVCacheGeometry: Sendable, Equatable {
+    package let layers: Int
+    package let kvHeads: Int
+    package let headDim: Int
 
-    public init(layers: Int, kvHeads: Int, headDim: Int) {
+    package init(layers: Int, kvHeads: Int, headDim: Int) {
         self.layers = layers
         self.kvHeads = kvHeads
         self.headDim = headDim
@@ -20,14 +20,14 @@ public struct KVCacheGeometry: Sendable, Equatable {
 
     /// Bytes of K and V one token occupies. The cache is fp16 unless the
     /// runtime quantises it, so 2 bytes per element is the safe figure.
-    public func bytesPerToken(elementBytes: Int = 2) -> Int {
+    package func bytesPerToken(elementBytes: Int = 2) -> Int {
         2 * layers * kvHeads * headDim * elementBytes
     }
 
     /// Read the geometry out of a `config.json`. A multimodal config nests the
     /// language model under `text_config`. Nil when a field is missing: an
     /// unknown geometry is "unmeasured", never "free".
-    public init?(configJSON: Data) {
+    package init?(configJSON: Data) {
         guard let root = try? JSONSerialization.jsonObject(with: configJSON) as? [String: Any] else {
             return nil
         }

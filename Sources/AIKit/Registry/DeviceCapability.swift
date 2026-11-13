@@ -644,23 +644,23 @@ public struct DeviceCapability: Sendable, Equatable {
 
     /// The context the app budgets for a chat by default, in tokens. The fit
     /// check must hold for at least this much context.
-    public static let defaultContextBudgetTokens = 4096
+    package static let defaultContextBudgetTokens = 4096
 
     /// The smallest context worth running; below it a model is refused.
-    public static let minimumContextTokens = 1024
+    package static let minimumContextTokens = 1024
 
     /// The most a cache is ever allowed to grow to, however much memory is left.
-    public static let maximumContextTokens = 32768
+    package static let maximumContextTokens = 32768
 
     /// Runtime cost beyond weights and KV: MLX's capped buffer cache (512 MB),
     /// activations, tokenizer. Measured 2026-11-13: the 8B (4.2 GiB of weights)
     /// stood at 5.06 GiB resident, so about 0.8 GiB.
-    public static let runtimeOverheadGB = 0.8
+    package static let runtimeOverheadGB = 0.8
 
     /// Gigabytes a model occupies: weights, plus the KV cache for
     /// `contextTokens`, plus runtime overhead. With no geometry the KV term is
     /// left out and the result is the floor, never the estimate.
-    public static func footprintGB(
+    package static func footprintGB(
         weightsBytes: Int64,
         kv: KVCacheGeometry?,
         contextTokens: Int
@@ -674,7 +674,7 @@ public struct DeviceCapability: Sendable, Equatable {
     /// context, or nil when weights + KV + overhead fit `availableRAMGB`, which
     /// already holds the lower of the process ceiling and the system-headroom
     /// share of physical RAM.
-    public func footprintShortfall(
+    package func footprintShortfall(
         for model: ModelDescriptor,
         kv: KVCacheGeometry?,
         contextTokens: Int = DeviceCapability.defaultContextBudgetTokens
@@ -687,7 +687,7 @@ public struct DeviceCapability: Sendable, Equatable {
     /// overhead are paid for: pass it to the engine as its KV cache limit
     /// (`maxKVSize`, a rotating cache) so memory cannot grow past it. Nil when
     /// not even `minimumContextTokens` fit.
-    public func contextTokenCap(weightsBytes: Int64, kv: KVCacheGeometry) -> Int? {
+    package func contextTokenCap(weightsBytes: Int64, kv: KVCacheGeometry) -> Int? {
         let gib = 1_073_741_824.0
         let left = availableRAMGB - Double(weightsBytes) / gib - Self.runtimeOverheadGB
         let perToken = Double(kv.bytesPerToken()) / gib
