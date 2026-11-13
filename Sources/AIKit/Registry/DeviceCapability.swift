@@ -652,6 +652,43 @@ public struct DeviceCapability: Sendable, Equatable {
         Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824.0
     }
 
+    /// Fraction of physical RAM one app may occupy before the system, not the
+    /// process ceiling, starts killing. Measured: Shikki was jetsammed for
+    /// `vm-pageshortage` at 5.06 GiB resident on an 8 GiB iPad (63%), and iOS
+    /// jetsam is documented to act around 65-70% of total. 0.6 stays under both,
+    /// leaves ~4.8 GB on 8 GB (a 3B at 3.2 fits, the 8B at 6.5 does not) and
+    /// ~3.6 GB on 6 GB (the 3B still fits), and gives 9.6 GB on 16 GB.
+    static let systemSafeFractionOfPhysicalRAM = 0.6
+
+    /// What a model may still occupy: the smaller of the process's own headroom
+    /// and the share of physical RAM left once what the app already holds is
+    /// taken off. Pure, so every device size is testable from any host.
+    static func systemSafeAvailableGB(
+        processHeadroomGB: Double,
+        residentGB: Double,
+        physicalGB: Double
+    ) -> Double {
+        let systemShare = physicalGB * systemSafeFractionOfPhysicalRAM - residentGB
+        return max(0.0, min(processHeadroomGB, systemShare))
+    }
+
+    private static func residentGigabytes() -> Double {
+        #if canImport(Darwin)
+            var info = mach_task_basic_info()
+            var count = mach_msg_type_number_t(
+                MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
+            )
+            let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+                infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { reboundPtr in
+                    task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), reboundPtr, &count)
+                }
+            }
+            return kerr == KERN_SUCCESS ? Double(info.resident_size) / 1_073_741_824.0 : 0
+        #else
+            return 0
+        #endif
+    }
+
     private static func availableRAMGigabytes(total: Double) -> Double {
         #if os(iOS) || os(tvOS) || os(visionOS)
             // On iOS the limit is not physical RAM: the kernel caps each app
@@ -660,7 +697,15 @@ public struct DeviceCapability: Sendable, Equatable {
             // real headroom is what `os_proc_available_memory` returns, read at
             // decision time. The physical-RAM estimate below answered ~6.8 GB
             // free on an 8 GB iPad, so it offered an 8B the app could not hold.
-            return Double(os_proc_available_memory()) / 1_073_741_824.0
+            // The process ceiling alone is not enough either: with the
+            // increased-memory-limit entitlement it reports ~8 GB on an 8 GB
+            // iPad, and the app was killed for `vm-pageshortage` at 5.06 GiB
+            // resident. `systemSafeAvailableGB` also keeps system headroom.
+            return systemSafeAvailableGB(
+                processHeadroomGB: Double(os_proc_available_memory()) / 1_073_741_824.0,
+                residentGB: residentGigabytes(),
+                physicalGB: total
+            )
         #elseif canImport(Darwin)
             var info = mach_task_basic_info()
             var count = mach_msg_type_number_t(
