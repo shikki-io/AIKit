@@ -3,23 +3,17 @@ import Foundation
 #if os(macOS)
 /// Runs a shell command asynchronously with stdout/stderr capture.
 /// Used by local engine wrappers (MLX, whisper, etc.) to shell-out to Python/CLI tools.
-public enum ShellRunner {
+enum ShellRunner {
 
     /// Result of a shell command execution.
-    public struct Result: Sendable {
-        public let exitCode: Int32
-        public let stdout: String
-        public let stderr: String
-
-        public init(exitCode: Int32, stdout: String, stderr: String) {
-            self.exitCode = exitCode
-            self.stdout = stdout
-            self.stderr = stderr
-        }
+    struct Result: Sendable {
+        let exitCode: Int32
+        let stdout: String
+        let stderr: String
     }
 
     /// Run a command and return the result when it completes.
-    public static func run(_ command: String, arguments: [String] = []) async throws -> Result {
+    static func run(_ command: String, arguments: [String] = []) async throws -> Result {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: command)
@@ -52,7 +46,7 @@ public enum ShellRunner {
     }
 
     /// Run a command and stream stdout lines via callback.
-    public static func stream(
+    static func stream(
         _ command: String,
         arguments: [String] = [],
         onLine: @Sendable @escaping (String) -> Void
@@ -71,7 +65,8 @@ public enum ShellRunner {
             stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty,
-                      let text = String(data: data, encoding: .utf8) else { return }
+                      let text = String(data: data, encoding: .utf8)
+                else { return }
                 let lines = text.components(separatedBy: "\n")
                 for line in lines where !line.isEmpty {
                     onLine(line)
@@ -101,7 +96,7 @@ public enum ShellRunner {
     }
 
     /// Check if a command exists in PATH.
-    public static func commandExists(_ name: String) -> Bool {
+    static func commandExists(_ name: String) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         process.arguments = [name]

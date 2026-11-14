@@ -8,10 +8,10 @@ import Foundation
 /// their heterogeneous stdout formats into this single event vocabulary so
 /// downstream consumers (dispatch bridge, UI, telemetry) do not need
 /// per-provider decoding paths.
-public struct StreamEvent: Sendable, Equatable {
+struct StreamEvent: Sendable, Equatable {
 
     /// The typed kind of event.
-    public enum Kind: Sendable, Equatable {
+    enum Kind: Sendable, Equatable {
         /// Session-level signal from the CLI (init, config, tool list).
         case system(subtype: String, sessionID: String?)
         /// A chunk of assistant-produced natural-language text.
@@ -36,21 +36,16 @@ public struct StreamEvent: Sendable, Equatable {
     }
 
     /// The direction of a file-edit event reported by a provider.
-    public enum FileEditKind: String, Sendable, Equatable, Codable {
+    enum FileEditKind: String, Sendable, Equatable, Codable {
         case created
         case modified
         case deleted
     }
 
     /// The typed event.
-    public let kind: Kind
+    let kind: Kind
     /// Verbatim source line(s) that produced this event, for tracing.
-    public let raw: String
-
-    public init(kind: Kind, raw: String) {
-        self.kind = kind
-        self.raw = raw
-    }
+    let raw: String
 }
 
 // MARK: - StreamParser Protocol
@@ -66,7 +61,7 @@ public struct StreamEvent: Sendable, Equatable {
 ///
 /// Parsers are single-consumer / single-thread: they do not synchronize
 /// their own state. Callers hold one parser per subprocess.
-public protocol StreamParsing: Sendable {
+protocol StreamParsing: Sendable {
     /// Feed a chunk of stdout. Chunks may span multiple lines and may
     /// end mid-line — implementations buffer the trailing partial.
     mutating func consume(_ chunk: String) -> [StreamEvent]

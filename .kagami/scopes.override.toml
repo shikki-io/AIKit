@@ -15,9 +15,97 @@ name = "AIKitAll"
 language = "swift"
 package_path = "."
 type_patterns = ["Tests"]
-test_file_patterns = ["**/AIKitTests/*.swift"]
-timeout = 300
-expected_test_min = 14
+# Recurse: the target has suites in Tests/AIKitTests/Providers/ as well as at
+# the top level, and the old single-star glob described only the top level.
+test_file_patterns = ["**/AIKitTests/**/*.swift"]
+timeout_seconds = 300
+# Measured 2026-11-12 at the W26 commit of spec ai-layer-aikit-core-2026-10-31:
+# `kagami test --scope AIKitAll --strict` reported 585/585 (run
+# E8533D1A-0789-4F28-9EEB-42A36B72825F). The base for that run — W20 with W23
+# and W25 consolidated onto it, ffd489b — measured 578/578 (run
+# A11AD1D4-E061-46B7-8C02-3A6CB6AA893E), and W26's `MockProductBoundaryTests`
+# adds the 7 between them.
+#
+# Earlier floors: 512 measured at the W20 commit, 413 at W13, 257 at 046a8fb
+# (W1), when the target held 258 tests with 1 skipped. W20 replaced
+# `WireStandardTests` and its two extensions with the route-SSoT,
+# codec-refusal and one-entry-point suites (EndPointRouteTests, WireCodecTests,
+# HTTPAIProviderTests, AIServerAddressTests), a net +99; W23 and W25 carried
+# the rest of the way to 578.
+#
+# RE-MEASURED 2026-11-12 at the W21 commit: 596/596 (run
+# 07E0A071-5958-4B05-AAF1-47EA59ECF88A). The W20 head itself measured 578 — the
+# 512 above was its floor, not its count — and W21 adds 18:
+# AIServerAddressReachTests, NoLocalhostFallbackRatchetTests, and the two
+# catalogue suites that prove a LAN model is not a cloud model.
+#
+# CORRECTED and raised 2026-11-12 at the W22 commit. Two measurements, both
+# `kagami test --scope AIKitAll --strict` in this worktree:
+#
+#   * 578/578 at the W20 merge head ffd489b, BEFORE this wave
+#     (run 2188A6F0-65FB-49B5-9CB2-857AE1D29B41). So 512 was already stale by
+#     66 — it was written from a partial W20 measurement and the gate had been
+#     passing with a floor two suites below what it ran.
+#   * 619/619 with W22's suites in
+#     (run 7ED24A63-9B72-4913-B752-39A14774ED1C): +41 for
+#     AIProviderRepositoryTests (T-AIL-45), AIKitAssemblyTests (T-AIL-46) and
+#     FallbackProviderChainTests' deadline, cancellation and provider-id cases
+#     (T-AIL-47).
+#
+# RE-MEASURED 2026-11-12 at the W24 commit: 660/660 (run
+# D6A3FEC3-70F0-450F-A142-D1B4075EF36F). +17 on W22's 643, all of them W24's
+# own: FixturePinTests (the captured-reply pin, the stream pin, and the four
+# proofs that the minting layer is read by the real codecs),
+# FixtureLiteralRatchetTests (the raw-JSON rule, its detector self-check and
+# its declaration checks), FixtureAddressSSoTTests (the fixture-address rule
+# and its self-check), WireCodecTests+Usage's new minted-omission test, and
+# AIServerAddressTests' host-platform identity test. Nothing was removed: the
+# migrated suites kept every assertion and gained the wire-key ones.
+#
+# RE-MEASURED 2026-11-12 at the W33 commit: 707/707, passed equal to examined
+# (run F7EDC72B-B68F-43EA-BB8B-54F5F4880C83; the first run of the same tree,
+# 5680563C-C4A1-44E9-B39A-8713CFE193BB, measured the same). +47 on W27's 660,
+# and the 47 are exactly the `@Test` functions W33's one new file adds
+# (`grep -c '^    @Test' Tests/AIKitTests/ModelDownloadPlanTests.swift` = 47),
+# which is also the cross-check that 660 was not stale: had the base been
+# anything else, the arithmetic would not close. The suites are
+# ModelDownloadPlanSpaceAndNetworkTests (T-AIL-60's space, margin, verified
+# subtraction, consent and ordering), ModelDownloadProbeTests (the two SHIPPED
+# probes, not the injected ones), ModelDownloadSettingsTests
+# (`[models.download]` read out of the providers document),
+# DefaultModelRegistryPlanTests (the plan enforced where the bytes would move:
+# a refusal counted as zero transfers) and ModelDownloaderResumeTests
+# (T-AIL-61).
+#
+# RE-MEASURED 2026-11-13 at the W32 commit: 741/741 (run
+# 12C4CD86-6CC3-4D49-B221-EF488C545C96). +34 on W33's 707, all of them W32's
+# own and all newly discovered by this scope's existing glob:
+# ProviderRouterPolicyTests (19 — the capability, device and topic filters, the
+# cluster's pooled memory, and the proof that a provider already out is never
+# asked for its status) and ProviderRouterFanOutTests (15 — parallelism by
+# in-flight counter, one shared deadline, a slow branch that blocks nobody,
+# cancellation through every branch, and the input order).
+#
+# RE-MEASURED 2026-11-14 at the restack head (epic rebased onto develop, fleet
+# packages bumped, PR #18's review answered): 745/745 green, run
+# 04FDF8B4-504C-4886-ADC7-E3D0E057772B. +4 on W32's 741, and the four are accounted for
+# individually rather than as a delta:
+#
+#   * 2 were ALREADY THERE and the floor was stale by them. a9d0fb5 ("every
+#     M-series iPad maps to its real chip; iOS fit reads the process's real
+#     memory ceiling") landed after the 741 measurement and added two test
+#     functions without the floor following. Measured: the scope ran 743 at
+#     a9d0fb5 against a floor of 741.
+#   * 2 are `CIScopeCoverageTests`, added answering the operator's review of
+#     `.woodpecker/macos-build.yml` on PR #18: the macOS pipeline gates every
+#     scope the registry declares without `pre_pr_default = false`, and it
+#     names no scope the registry does not declare. That rule exists because
+#     the pipeline was measuring 2 of 9 scopes.
+#
+# The floor is the number that actually executes, so a scope that silently
+# stops discovering its suites exits 2 instead of reporting success forever.
+# Raise this only with a measurement, never to make a red test pass.
+expected_test_min = 745
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -29,3 +117,179 @@ test_file_patterns = ["**/AIKitTests/Providers/*.swift"]
 timeout = 120
 expected_test_min = 106
 description = "Provider family relocated from shikki: catalog, alias map, args template, stream parsers, health check (S1) plus the CLI subprocess provider, fallback chain, LM Studio provider, budget ledger and provider-id vocabulary (S2). Run: kagami test --scope AIKitProviders"
+
+[[scopes]]
+name = "AIKitLive"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitLiveTests"
+# `module_patterns` as well as `test_target_name`: the RUNNER resolves this
+# scope from the target name alone (measured — it runs), but
+# `kagami validate-scopes` requires a Swift scope to carry at least one of
+# modulePatterns / typePatterns / testFilePatterns, so without this the
+# repository's own registry fails its own validator. This is the spelling
+# `kagami auto-discover` writes into the scopes.toml cache for the same target,
+# so it adds no second vocabulary.
+module_patterns = ["AIKitLiveTests"]
+pre_pr_default = false
+timeout_seconds = 120
+
+# W7 of spec ai-layer-aikit-core-2026-10-31. AIKitAll resolves to the
+# AIKitTests target alone, so the on-device provider's suite needs its own
+# scope or no gate ever runs it.
+#
+# pre_pr_default = false for the same reason AIKitLive carries it: the scope
+# needs something the machine may not have. AIKitMLXTests links mlx-swift,
+# whose Metal kernels are compiled from source on every Apple platform, so the
+# scope cannot build unless the SELECTED Xcode has its MetalToolchain component
+# installed. Check with `xcodebuild -showComponent MetalToolchain`; install with
+# `xcodebuild -downloadComponent MetalToolchain`. On 2026-10-31 the selected
+# Xcode 27.2 RC reported "uninstalled" while 27.0 and 26.6 reported
+# "installed", which is why this is opt-in rather than a pre-PR default.
+#
+# CORRECTION, later the same day (W13): the selected Xcode 27.2 (27B48) now
+# reports `Status: installed` for MetalToolchain 27B47, and this scope builds
+# and runs. `pre_pr_default` stays false all the same — the requirement is a
+# machine-level component, so a builder without it must not be told the scope
+# is red.
+[[scopes]]
+name = "AIKitMLX"
+# Measured 2026-10-31 at the W13 commit: 39/39. Was 29 at W7; W13's
+# MLXHubDownloaderTests adds 10.
+expected_test_min = 39
+language = "swift"
+package_path = "."
+test_target_name = "AIKitMLXTests"
+# See the note on AIKitLive: `kagami validate-scopes` requires one pattern key
+# on a Swift scope, and this is the spelling auto-discover writes for the same
+# target. Re-measured after adding it so the key is not taken on trust: still
+# 39/39.
+module_patterns = ["AIKitMLXTests"]
+pre_pr_default = false
+timeout_seconds = 600
+description = "On-device MLX provider, extracted from shikki-client (W7). Needs the Metal toolchain. Run: kagami test --scope AIKitMLX"
+
+[[scopes]]
+name = "AIKitVoiceLive"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitLiveTests"
+type_patterns = ["VoiceLoopbackLiveTests"]
+pre_pr_default = false
+timeout_seconds = 180
+
+# W21 of spec ai-layer-aikit-core-2026-10-31 (T-AIL-44). BR-AIL-18's enforcer:
+# `?? "http"`, `?? "127.0.0.1"` and `?? "localhost"` are gone from Sources, and
+# a route literal stays inside an `Endpoints/` directory. Its own scope rather
+# than a line in AIKitAll, because a rule like this is cited in reviews by name
+# and has to be runnable alone: `kagami test --scope AIKitNoLocalhostFallback`.
+[[scopes]]
+name = "AIKitNoLocalhostFallback"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitTests"
+type_patterns = ["NoLocalhostFallbackRatchetTests", "FixtureAddressSSoTTests"]
+test_file_patterns = ["**/AIKitTests/Wire/NoLocalhostFallbackRatchetTests.swift"]
+timeout_seconds = 120
+# Measured 2026-11-12 at the W21 commit: 4/4 — the ratchet itself (2 rules),
+# its self-check, and the proof the scan read the tree.
+#
+# W24 adds `FixtureAddressSSoTTests` to the same file and the same scope: it is
+# the Tests-side half of the same idea (the operator's LM Studio address is
+# written once), and it shares this file's scanner rather than carrying a
+# second copy of it. RE-MEASURED at the W24 commit: 6/6.
+expected_test_min = 6
+description = "BR-AIL-18 ratchet: no localhost fallback, no route literal outside Endpoints/, and the fixture address declared once. Run: kagami test --scope AIKitNoLocalhostFallback"
+
+# W21, T-AIL-43. The address type on its own: the panel's ten inputs, the
+# refusals that name the value, and `reach` — which is what stopped a LAN Mac
+# from being reported as a cloud model.
+[[scopes]]
+name = "AIKitServerAddress"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitTests"
+type_patterns = ["AIServerAddressTests", "AIServerAddressReachTests"]
+test_file_patterns = ["**/AIKitTests/Wire/AIServerAddress*Tests.swift"]
+timeout_seconds = 120
+# Measured 2026-11-12 at the W21 commit: 28/28 (run
+# E9768783-2A2A-473A-9439-CD20BFFD4935). kagami counts test FUNCTIONS, not the
+# cases a parameterised one expands to, so this is lower than the number of
+# addresses the suite actually classifies.
+#
+# LEFT AT 28 BY W24, DELIBERATELY, and this scope is RED — read this before
+# changing the number.
+#
+# Measured at W24's base commit 73608c9, with none of W24's changes applied:
+# 26/26 tests PASS and `kagami test --scope AIKitServerAddress --strict` exits
+# 2 on `expected_test_min = 28 but only 26 test(s) executed` (run
+# 212BEDF3-C715-40F9-9FAC-B68A5ADEE6B2). So the shortfall PREDATES W24: the
+# floor was authored at 28 against a 28-test measurement at the W21 commit,
+# and two test functions left the two files afterwards without the floor
+# following them. W24 adds one (`AIRequestTarget`'s host platform is printed
+# but is not part of its identity), taking the run to 27/27 — still two short.
+#
+# ACCOUNTED FOR (coordinator, after W24): the two functions are
+# `anAbsentAddressIsNamed` and `aProviderWithNoAddressRefuses` in
+# AIServerAddressReachTests. They tested `AIKitError.serverAddressNotConfigured`,
+# which the W21/W22 merge (50f66d3, "merge epic (W21, W26) into W22") deleted:
+# W22 made the address of `LMStudioProvider` and `MLXEngine` non-optional, so
+# "no address configured" can no longer be written and the case had no
+# producer. The file says so at "MARK: - Nothing configured at all"; a missing
+# address in a settings file is refused at load and tested in
+# AIProviderRepositoryTests. The behaviour left with its tests, so the floor
+# follows: 26 + W24's one = 27, measured at ea5a2fb.
+expected_test_min = 27
+description = "AIServerAddress: validated once, nothing defaulted, reach classified (BR-AIL-18). Run: kagami test --scope AIKitServerAddress"
+
+# W27 of spec ai-layer-aikit-core-2026-10-31 (T-AIL-52, T-AIL-53), BR-AIL-21.
+# The public-surface ratchet: AIKit's and AIKitMLX's exported symbol graph must
+# equal `AIKitPublicAPI.txt`, and no provider API may be in it.
+#
+# Its own scope, not a line in AIKitAll, for the same reason
+# AIKitNoLocalhostFallback has one: a rule cited by name in a review has to be
+# runnable alone — `kagami test --scope AIKitPublicSurface`.
+#
+# ITS OWN TEST TARGET, not a filter over AIKitTests. The suite shells out to a
+# build, and measured in this worktree that cost the whole-target `AIKitAll`
+# scope 11s -> 1m19s cold, with a 7-core compile running beside suites that
+# assert a wall-clock budget. One such suite failed on the first run that way
+# (FallbackProviderChainTests "the timeout is the whole chain's budget", run
+# FE7289AE: a 5s budget spent on 0.2s of stub delay), and passed on every run
+# after. A separate target removes the interaction instead of widening a
+# number.
+#
+# WHAT IT NEEDS ON THE MACHINE. The suite runs `scripts/public-api.sh`, which
+# builds BOTH `AIKit` and `AIKitMLX` with `-emit-symbol-graph` under its own
+# scratch path (`.build/public-api`). AIKitMLX links mlx-swift, whose Metal
+# kernels are compiled from source, so this scope needs the selected Xcode's
+# MetalToolchain component — the same requirement the `AIKitMLX` scope carries.
+# Check with `xcodebuild -showComponent MetalToolchain`.
+#
+# `pre_pr_default` is LEFT ON all the same, unlike the AIKitMLX scope: a public
+# symbol slipping in is exactly the thing a pre-PR run exists to catch, and the
+# AIKitMLX half of the surface is three symbols that must not grow. A builder
+# without the toolchain sees a build failure naming it, not a silent pass.
+#
+# Timing measured in this worktree: ~40s for the first run (cold scratch, both
+# targets), ~3s incremental afterwards. The timeout is the cold figure with
+# room for a cold dependency graph.
+[[scopes]]
+name = "AIKitPublicSurface"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitPublicSurfaceTests"
+test_file_patterns = ["**/AIKitPublicSurfaceTests/*.swift"]
+timeout_seconds = 600
+# Measured 2026-11-12 at the W27 commit: 4 test FUNCTIONS — the allowlist diff
+# (T-AIL-52), the provider-API ratchet (T-AIL-53; one function, 33 parameterised
+# cases), the AIKitMLX three-symbol pin, and the proof AIKitTestSupport exports
+# the doubles. kagami counts functions, not the cases a parameterised one
+# expands to.
+#
+# The other half of T-AIL-53 — that the `AIKit` PRODUCT carries no double — is
+# `MockProductBoundaryTests`, which stays in `AIKitTests` and in `AIKitAll`
+# where W26 put it. It reads source files and costs nothing, so it has no
+# reason to move into this target's expensive lane.
+expected_test_min = 4
+description = "BR-AIL-21: the exported symbol graph equals AIKitPublicAPI.txt, no provider API is public, AIKitMLX exports one registration. Run: kagami test --scope AIKitPublicSurface"

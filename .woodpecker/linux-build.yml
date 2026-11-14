@@ -1,0 +1,102 @@
+# .woodpecker/linux-build.yml — prove AIKit builds AND passes its unit suite on Linux.
+#
+# W30 of spec ai-layer-aikit-core-2026-10-31, T-AIL-56. Operator, 2026-11-12:
+# *"we need to add linux and if we can but it's can be complicated windows"*.
+#
+# What was measured that day, before this file existed:
+#
+#   * ShellKit — AIKit's only subprocess dependency — already builds and passes
+#     its whole suite on Linux, through the sibling of this file in that repo
+#     (shikki-io/ShellKit .woodpecker/linux-build.yml, same image, same label).
+#   * AIKit already CONDITIONS ShellKit on `[.macOS, .linux]`
+#     (Package.swift), so the manifest has claimed Linux support for several
+#     waves.
+#   * AIKit had NO CI at all. No run had ever shown it building, let alone
+#     passing, on Linux. The claim was untested, which is the thing this file
+#     changes.
+#
+# Modelled deliberately on ShellKit's Linux pipeline — same official image,
+# same agent label — so the two leaves of this dependency pair are proven by
+# the same machine class and a failure cannot be blamed on a different Linux.
+
+when:
+  event: [pull_request, push, manual]  # manual = the "run pipeline" button
+  branch: [main, develop, "epic/*", "feat/*", "fix/*", "agent/*", "story/*"]
+
+# A Linux gate must run on a Linux Docker agent. Without a platform label, any
+# connected agent is eligible, whatever its OS or backend — and this pipeline
+# asserts nothing if it happens to run on the darwin agent.
+labels:
+  platform: linux/amd64
+
+variables:
+  # Docker Hub's official Swift Linux image, vendor-neutral. AIKit is
+  # swift-tools 6.0, within range. Same tag ShellKit pins, on purpose.
+  - &swift_image "swift:6.3-jammy"
+
+steps:
+  # The library, on its own, first: this is the claim a Linux consumer of the
+  # package actually depends on, and it fails before the test build does if an
+  # `import FoundationNetworking` is missing from a source file.
+  #
+  # `--target AIKit` and NOT `--product AIKit`, which the spec's wording asked
+  # for: SwiftPM 6.3 answers that with
+  # `warning: '--product' cannot be used with the automatic product 'AIKit';
+  # building the default target instead` — the flag is DROPPED, and what runs
+  # is the default target set. Measured on swift:6.3-jammy. The product has
+  # automatic linkage on purpose (a consumer decides static or dynamic), so the
+  # target form is the one that names what it builds.
+  linux-build:
+    image: *swift_image
+    commands:
+      - swift --version
+      - swift build --target AIKit
+
+  # The unit suite. `AIKitTests` BY NAME, and the three other test targets are
+  # excluded on purpose, each for a stated reason:
+  #
+  #   * `AIKitMLXTests` is not in the graph here at all. mlx-swift is Metal and
+  #     Accelerate and does not build on Linux, so Package.swift declares the
+  #     MLX product, target, suite and dependencies only when the host is an
+  #     Apple one (BR-AIL-14: on-device inference is optional). The Linux job
+  #     therefore neither builds nor tests AIKitMLX: a cold build here
+  #     materialises 7 checkouts — CoreKit, NetKit, ShellKit, TOMLKit,
+  #     swift-asn1, swift-crypto, swift-log — and compiles no MLX module.
+  #     SwiftPM does still fetch the pins Package.resolved lists before
+  #     pruning them, so what this saves the agent is a compile, not a fetch.
+  #   * `AIKitLiveTests` needs a running mlx_lm.server and a recorded wav
+  #     (AIKIT_VOICE_WAV and friends); it is opt-in on macOS too, through its
+  #     own kagami scope with pre_pr_default = false.
+  #   * `AIKitPublicSurfaceTests` diffs the public symbol graph against
+  #     AIKitPublicAPI.txt, and that allowlist is measured on macOS: it holds
+  #     AIKitMLX's symbols, which do not exist here. Its suite carries a skip
+  #     trait naming exactly that, so `swift test` with no filter also stays
+  #     honest on Linux — the filter below is the intent, the trait is the
+  #     guard.
+  #
+  # THE FLOOR IS NOT OPTIONAL. Measured on swift:6.3-jammy, Swift 6.3.3: a
+  # filter that matches nothing prints
+  # `✔ Test run with 0 tests in 0 suites passed` and EXITS 0. So the filter
+  # that makes this step precise is also a way for it to pass having run
+  # nothing — a typo'd regex, a renamed target, a suite that stops being
+  # discovered. `swift test` has no `expected_test_min`, which is one of the
+  # reasons kagami exists and is the runner on the macOS job; here the floor is
+  # asserted from the summary line instead.
+  #
+  # 612 tests in 58 suites is what this commit measures on Linux, against 660
+  # on macOS. The 49 macOS-only tests are accounted for one by one:
+  # CoreMLVoicePathTests (19), MLXEngineTests (14), MLXVideoPresetTests (7),
+  # MLXEngineSmokeTest (5) and 4 of CoreMLEngineTests — every one of them a
+  # test of a type that is `#if os(macOS)` or CoreML in Sources. One test
+  # exists only here: CoreMLEngineTests/unavailableOffPlatform(), which asserts
+  # the refusal a non-Apple platform is supposed to give.
+  #
+  # The floor is 600, below the measured 612 so a legitimately removed test
+  # does not fail the pipeline, and far above the 0 the trap produces.
+  linux-test:
+    image: *swift_image
+    commands:
+      - set -o pipefail
+      - 'swift test --filter "^AIKitTests\." 2>&1 | tee /tmp/aikit-linux-test.log'
+      - "grep -qE 'Test run with ([6-9][0-9]{2}|[0-9]{4,}) tests in [0-9]+ suites passed' /tmp/aikit-linux-test.log"
+    depends_on: [linux-build]

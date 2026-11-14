@@ -9,7 +9,7 @@ import Foundation
 //
 // Provider-agnostic session-store abstraction (PR #1401 review, moved out of
 // the claude-specific file on the second review pass). FINAL HOME: the AIKit
-// SPM (FJ-Studios/AIKit) next to the other provider abstractions — migrates
+// SPM (shikki-io/AIKit) next to the other provider abstractions — migrates
 // with the extraction epic (plan 34bd228b); parked in ShiKit/Agent/ (the
 // provider-resolution area, next to LaunchProviderResolver) until then.
 

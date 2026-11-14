@@ -12,11 +12,11 @@ import Foundation
 /// Placeholder syntax is intentionally trivial (`{key}` — no escaping,
 /// no format specifiers). CLI templates are static and operator-authored;
 /// a heavier syntax would only invite mistakes.
-public enum ArgsTemplate {
+enum ArgsTemplate {
 
     // MARK: - RenderError
 
-    public enum RenderError: Error, Sendable, Equatable {
+    enum RenderError: Error, Sendable, Equatable {
         /// A `{key}` placeholder appeared in the template but no value was
         /// supplied in `substitutions`.
         case unresolvedPlaceholder(String)
@@ -35,7 +35,7 @@ public enum ArgsTemplate {
     ///   (no shell-splitting of substituted values).
     /// - Throws: ``RenderError/unresolvedPlaceholder(_:)`` on the first
     ///   `{key}` whose key is not present in `substitutions`.
-    public static func render(
+    static func render(
         template: [String],
         substitutions: [String: String]
     ) throws -> [String] {

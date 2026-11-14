@@ -23,19 +23,19 @@ import Foundation
 ///
 /// Empty lines are dropped. The set of markers is deliberately small —
 /// the parser's job is to normalize, not to enrich.
-public struct CursorTextParser: StreamParsing {
+struct CursorTextParser: StreamParsing {
 
     private var buffer = LineBuffer()
 
-    public init() {}
+    init() {}
 
     // MARK: - StreamParsing
 
-    public mutating func consume(_ chunk: String) -> [StreamEvent] {
+    mutating func consume(_ chunk: String) -> [StreamEvent] {
         buffer.append(chunk).compactMap(Self.parseLine)
     }
 
-    public mutating func flush() -> [StreamEvent] {
+    mutating func flush() -> [StreamEvent] {
         guard let leftover = buffer.drain(),
             let event = Self.parseLine(leftover)
         else { return [] }

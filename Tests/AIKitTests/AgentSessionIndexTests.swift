@@ -30,19 +30,23 @@ struct ClaudeSessionIndexTests {
 
         let older = try writeSession(
             root: root,
-            slug: "-tmp-project-a",
-            sessionID: "aaaaaaaa-1111-1111-1111-111111111111",
-            cwd: "/tmp/project-a",
-            userMessage: "first task from A",
-            mtime: Date(timeIntervalSinceNow: -3_600)
+            FakeSession(
+                slug: "-tmp-project-a",
+                sessionID: "aaaaaaaa-1111-1111-1111-111111111111",
+                cwd: "/tmp/project-a",
+                userMessage: "first task from A",
+                mtime: Date(timeIntervalSinceNow: -3_600)
+            )
         )
         let newer = try writeSession(
             root: root,
-            slug: "-tmp-project-b",
-            sessionID: "bbbbbbbb-2222-2222-2222-222222222222",
-            cwd: "/tmp/project-b",
-            userMessage: "second task from B",
-            mtime: Date(timeIntervalSinceNow: -60)
+            FakeSession(
+                slug: "-tmp-project-b",
+                sessionID: "bbbbbbbb-2222-2222-2222-222222222222",
+                cwd: "/tmp/project-b",
+                userMessage: "second task from B",
+                mtime: Date(timeIntervalSinceNow: -60)
+            )
         )
 
         let entries = ClaudeSessionIndex.scan(root: root)
@@ -58,11 +62,13 @@ struct ClaudeSessionIndexTests {
 
         _ = try writeSession(
             root: root,
-            slug: "-nonsense-slug-that-cannot-decode",
-            sessionID: "cccccccc-3333-3333-3333-333333333333",
-            cwd: "/Users/anyone/does-not-need-to-exist",
-            userMessage: "hello",
-            mtime: Date()
+            FakeSession(
+                slug: "-nonsense-slug-that-cannot-decode",
+                sessionID: "cccccccc-3333-3333-3333-333333333333",
+                cwd: "/Users/anyone/does-not-need-to-exist",
+                userMessage: "hello",
+                mtime: Date()
+            )
         )
 
         let entries = ClaudeSessionIndex.scan(root: root)
@@ -78,11 +84,13 @@ struct ClaudeSessionIndexTests {
 
         _ = try writeSession(
             root: root,
-            slug: "-tmp-topic",
-            sessionID: "dddddddd-4444-4444-4444-444444444444",
-            cwd: "/tmp/topic",
-            userMessage: "fix the flaky ballot test\nsecond line ignored",
-            mtime: Date()
+            FakeSession(
+                slug: "-tmp-topic",
+                sessionID: "dddddddd-4444-4444-4444-444444444444",
+                cwd: "/tmp/topic",
+                userMessage: "fix the flaky ballot test\nsecond line ignored",
+                mtime: Date()
+            )
         )
 
         let entries = ClaudeSessionIndex.scan(root: root)
@@ -97,19 +105,23 @@ struct ClaudeSessionIndexTests {
 
         let ancient = try writeSession(
             root: root,
-            slug: "-tmp-ancient",
-            sessionID: "eeeeeeee-5555-5555-5555-555555555555",
-            cwd: "/tmp/ancient",
-            userMessage: "old work",
-            mtime: Date(timeIntervalSinceNow: -7 * 86_400)
+            FakeSession(
+                slug: "-tmp-ancient",
+                sessionID: "eeeeeeee-5555-5555-5555-555555555555",
+                cwd: "/tmp/ancient",
+                userMessage: "old work",
+                mtime: Date(timeIntervalSinceNow: -7 * 86_400)
+            )
         )
         _ = try writeSession(
             root: root,
-            slug: "-tmp-fresh",
-            sessionID: "ffffffff-6666-6666-6666-666666666666",
-            cwd: "/tmp/fresh",
-            userMessage: "new work",
-            mtime: Date(timeIntervalSinceNow: -60)
+            FakeSession(
+                slug: "-tmp-fresh",
+                sessionID: "ffffffff-6666-6666-6666-666666666666",
+                cwd: "/tmp/fresh",
+                userMessage: "new work",
+                mtime: Date(timeIntervalSinceNow: -60)
+            )
         )
 
         let entries = ClaudeSessionIndex.scan(root: root, maxAge: 3_600)
@@ -126,11 +138,13 @@ struct ClaudeSessionIndexTests {
         for i in 0..<5 {
             _ = try writeSession(
                 root: root,
-                slug: "-tmp-batch-\(i)",
-                sessionID: "batch\(i)aa-0000-0000-0000-000000000000",
-                cwd: "/tmp/batch-\(i)",
-                userMessage: "task \(i)",
-                mtime: Date(timeIntervalSinceNow: -Double(i * 60))
+                FakeSession(
+                    slug: "-tmp-batch-\(i)",
+                    sessionID: "batch\(i)aa-0000-0000-0000-000000000000",
+                    cwd: "/tmp/batch-\(i)",
+                    userMessage: "task \(i)",
+                    mtime: Date(timeIntervalSinceNow: -Double(i * 60))
+                )
             )
         }
 
@@ -248,16 +262,29 @@ struct ClaudeSessionIndexTests {
         return path
     }
 
+    /// One fake transcript to write: where it sits and what its first two
+    /// lines say.
+    ///
+    /// A value rather than six parameters, so the call sites read as the
+    /// fixture they are and the helper takes the two things that differ in
+    /// kind: the root it goes under, and the session itself.
+    private struct FakeSession {
+        var slug: String
+        var sessionID: String
+        var cwd: String
+        var userMessage: String
+        var mtime: Date
+    }
+
     /// Write a fake session .jsonl and set its mtime. Returns the jsonl path.
     @discardableResult
-    private func writeSession(
-        root: String,
-        slug: String,
-        sessionID: String,
-        cwd: String,
-        userMessage: String,
-        mtime: Date
-    ) throws -> String {
+    private func writeSession(root: String, _ session: FakeSession) throws -> String {
+        let slug = session.slug
+        let sessionID = session.sessionID
+        let cwd = session.cwd
+        let userMessage = session.userMessage
+        let mtime = session.mtime
+
         let dir = "\(root)/\(slug)"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let path = "\(dir)/\(sessionID).jsonl"

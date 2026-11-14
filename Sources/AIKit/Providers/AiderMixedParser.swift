@@ -30,7 +30,7 @@ import Foundation
 /// A SEARCH/REPLACE block whose leading path is empty (`old → new`
 /// with no preceding filename) emits a
 /// ``StreamEvent/Kind/parseError(reason:)`` so silent no-ops are visible.
-public struct AiderMixedParser: StreamParsing {
+struct AiderMixedParser: StreamParsing {
 
     // MARK: State machine
 
@@ -50,11 +50,11 @@ public struct AiderMixedParser: StreamParsing {
     /// Raw source of the current block, for the emitted event's `raw`.
     private var currentBlockRaw: [String] = []
 
-    public init() {}
+    init() {}
 
     // MARK: - StreamParsing
 
-    public mutating func consume(_ chunk: String) -> [StreamEvent] {
+    mutating func consume(_ chunk: String) -> [StreamEvent] {
         var events: [StreamEvent] = []
         for line in buffer.append(chunk) {
             events.append(contentsOf: handle(line))
@@ -62,7 +62,7 @@ public struct AiderMixedParser: StreamParsing {
         return events
     }
 
-    public mutating func flush() -> [StreamEvent] {
+    mutating func flush() -> [StreamEvent] {
         var events: [StreamEvent] = []
         if let leftover = buffer.drain() {
             events.append(contentsOf: handle(leftover))
