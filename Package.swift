@@ -162,7 +162,13 @@ let package = Package(
         //    3.0.0 also drops the Combine `sendRequest(endpoint:type:)`
         //    requirement (it lives in the Apple-only `NetKitApple` product
         //    now); AIKit never used it.
-        .package(url: "https://github.com/obyw-one/NetKit.git", from: "3.0.0"),
+        //  * 3.1.0 is additive on top of that: `NetworkService(decoder:)` /
+        //    `(decoderFactory:)` are back, and `NetworkProtocol` gains
+        //    `injectedDecoder() -> JSONDecoder?` as a requirement WITH a
+        //    `nil` default. AIKit's conformers compile and behave unchanged —
+        //    this package decodes nothing snake_cased — so the bump is a
+        //    floor move, not an adoption.
+        .package(url: "https://github.com/obyw-one/NetKit.git", from: "3.1.0"),
         // CoreKit 0.16.0 — declared DIRECTLY, not taken transitively through
         // NetKit, because AIKit itself is about to import it: the DI container
         // and `RepositoryProtocol` (W22, BR-AIL-20) and the virtual path layer
@@ -175,7 +181,7 @@ let package = Package(
         .package(url: "https://github.com/obyw-one/CoreKit.git", from: "0.16.0"),
         // swift-log — the three CLI providers log their attempts and fallbacks.
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
-        // ShellKit 0.5.1 — async subprocess primitives with a hard timeout
+        // ShellKit 0.6.0 — async subprocess primitives with a hard timeout
         // (TimedShellExecutor); CLISubprocessProvider and WhisperCLIProvider
         // run every CLI through it. Now homed at `shikki-io`, the org that
         // ships it (W19).
@@ -192,7 +198,15 @@ let package = Package(
         // 0.5.1 adds `ShellExecutorProtocol.runStreaming` as a requirement WITH
         // a default implementation, so AIKit's conformers keep compiling
         // unchanged.
-        .package(url: "https://github.com/shikki-io/ShellKit", from: "0.5.1"),
+        //
+        // 0.6.0 is additive — no existing public API changed — and carries one
+        // fix this package wants: `DetachedProcess.exitCode()` could hang
+        // forever on macOS, because it waited with `Process.waitUntilExit()`
+        // on a GCD worker thread, and that call spins a run loop the worker
+        // does not have. It now polls `isRunning` on Darwin as it already did
+        // on Linux. Every CLI provider here reaches a subprocess from async
+        // code, so that hang was reachable from AIKitTests.
+        .package(url: "https://github.com/shikki-io/ShellKit", from: "0.6.0"),
         // TOMLKit 0.5.5 — the decoder for the `[[providers]]` settings document
         // (W22, BR-AIL-20). Declared and LINKED by the `AIKit` target in this
         // wave even though no source imports it yet, precisely so this wave's

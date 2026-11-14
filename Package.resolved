@@ -1,5 +1,5 @@
 {
-  "originHash" : "9a3d45b9d3bba0f267de2daf799554e8bd9a9b1386c6c6974fef41410644af3a",
+  "originHash" : "12b66d82a6551f738ea5d017ea5db2641e1c2c92d67a5c686c6f595f2176c66c",
   "pins" : [
     {
       "identity" : "corekit",
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/obyw-one/NetKit.git",
       "state" : {
-        "revision" : "605b75ad7de2a5ab492a429c21f6dfae482fcf90",
-        "version" : "3.0.0"
+        "revision" : "c8668937f36db82465eecbe9eba04d9bf5119507",
+        "version" : "3.1.0"
       }
     },
     {
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/shikki-io/ShellKit",
       "state" : {
-        "revision" : "4fb45c9f28a877a8ad2c49cf0ece5f93bb1528ee",
-        "version" : "0.5.1"
+        "revision" : "239b357a71ce719cf3d5f6249fbdb37786568aa0",
+        "version" : "0.6.0"
       }
     },
     {
