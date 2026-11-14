@@ -14,14 +14,24 @@ import Testing
 struct DINOv2ModelCacheTests {
 
     @Test("DINOv2 descriptor uses the ~/.shikki/models/dinov2-vits14/ convention") // resolver-exempt: test description string
-    func descriptorPath() {
-        let d = DINOv2ModelDescriptor.vits14
+    func descriptorPath() throws {
+        // `vits14` is optional because its URL is built by
+        // `DINOv2HubEndPoint`, not force-unwrapped from a literal. Required
+        // here rather than optional-chained, so a nil would FAIL this test
+        // instead of skipping its assertions.
+        let d = try #require(DINOv2ModelDescriptor.vits14)
         #expect(d.descriptor.modelId == "dinov2-vits14")
         // CoreML is shipped as an .mlpackage directory — the default cache
         // path ships the zipped blob (`<name>.mlpackage.zip`) so the shared
         // weight loader (file-oriented) can round-trip it.
         let fn = d.descriptor.fileName
         #expect(fn == "dinov2-vits14.mlpackage.zip" || fn == "dinov2-vits14.mlpackage")
+        // The URL is assembled by the endpoint, so pin the shape it produces:
+        // host at the root, the repo id keeping its own separator, and the
+        // resolve route between revision and filename.
+        let url = try #require(d.descriptor.remoteURL)
+        #expect(url.host() == "huggingface.co")
+        #expect(url.path() == "/shikki/dinov2-vits14-coreml/resolve/main/dinov2-vits14.mlpackage.zip")
     }
 
     @Test("cache round-trip: ModelWeightLoader resolves + re-reads DINOv2 blob")

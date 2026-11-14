@@ -140,7 +140,7 @@ final class StubHTTPFetcher: ModelWeightHTTPFetcher, @unchecked Sendable {
     let body: Data
     let respectsRange: Bool
     private(set) var calls: Int = 0
-    private(set) var lastRangeStart: Int64? = nil
+    private(set) var lastRangeStart: Int64?
 
     init<S: Sequence>(body: S, respectsRange: Bool = false) where S.Element == UInt8 {
         self.body = Data(body)
@@ -151,7 +151,11 @@ final class StubHTTPFetcher: ModelWeightHTTPFetcher, @unchecked Sendable {
         calls += 1
         lastRangeStart = rangeStart
         let slice: Data
-        if let start = rangeStart, respectsRange {
+        // `rangeStart != nil` and not `if let`: the binding was never read,
+        // which the compiler reports as `immutable value 'start' was never
+        // used`. Both arms return the same bytes on purpose — see below — so
+        // what this condition tests is the PRESENCE of a range, not its value.
+        if rangeStart != nil, respectsRange {
             slice = body
         } else {
             slice = body
