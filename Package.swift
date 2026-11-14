@@ -277,6 +277,23 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
             ]
         ),
+        // The public-surface renderer (W27, BR-AIL-21 item 5). An executable
+        // TARGET and deliberately NOT a product: nothing links it, and a
+        // consumer resolving AIKit never builds it.
+        //
+        // It was `scripts/public-api-render.py` until the operator asked, on
+        // PR #18, what a Python script was doing rendering a Swift package's
+        // own exported surface. Nothing — so it is Swift now. Every machine
+        // that can run this gate has a Swift toolchain by construction (it is
+        // building AIKit); `python3` it had only by assumption, and
+        // `public-api.sh` named it as a requirement in its own header.
+        //
+        // Unconditional, unlike the MLX block above: the renderer reads JSON
+        // and imports only Foundation, so the Linux job builds it too even
+        // though the surface SUITE is Apple-only.
+        .executableTarget(
+            name: "public-api-render"
+        ),
         .testTarget(
             name: "AIKitLiveTests",
             dependencies: ["AIKit"]
