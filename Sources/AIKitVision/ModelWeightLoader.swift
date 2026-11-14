@@ -156,7 +156,7 @@ public struct ModelWeightLoader: Sendable {
         }
 
         // Resume if `.part` exists.
-        var rangeStart: Int64? = nil
+        var rangeStart: Int64?
         if FileManager.default.fileExists(atPath: partPath.path) {
             let attrs = try FileManager.default.attributesOfItem(atPath: partPath.path)
             let existingSize = (attrs[.size] as? NSNumber)?.int64Value ?? 0

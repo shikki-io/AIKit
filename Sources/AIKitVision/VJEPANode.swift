@@ -96,13 +96,13 @@ public actor VJEPANode {
 
     // MARK: Identity
 
-    public nonisolated let nodeId: String
-    public nonisolated let hostname: String
-    public nonisolated let modelVersion: String
+    nonisolated public let nodeId: String
+    nonisolated public let hostname: String
+    nonisolated public let modelVersion: String
 
     // MARK: Wrapped inference
 
-    public nonisolated let inference: VJEPAInference
+    nonisolated public let inference: VJEPAInference
 
     // MARK: Latency tracking
 
@@ -135,7 +135,7 @@ public actor VJEPANode {
 
     // MARK: Public name — AgentProvider-style identity
 
-    public nonisolated var name: String {
+    nonisolated public var name: String {
         "vjepa-vitb16"
     }
 
@@ -143,7 +143,7 @@ public actor VJEPANode {
 
     /// Embed already-preprocessed frames. Synchronous because the backend is
     /// pure CPU/GPU compute. Latency is recorded for heartbeat P50.
-    public nonisolated func embed(frames: VideoFrameTensor) throws -> VJEPAEmbedding {
+    nonisolated public func embed(frames: VideoFrameTensor) throws -> VJEPAEmbedding {
         let start = Date()
         let embedding = try inference.embed(frames: frames)
         let ms = Int(Date().timeIntervalSince(start) * 1000)
@@ -152,7 +152,7 @@ public actor VJEPANode {
     }
 
     /// Embed a video file. Preprocesses then runs the encoder.
-    public nonisolated func embed(videoAt url: URL) async throws -> VJEPAEmbedding {
+    nonisolated public func embed(videoAt url: URL) async throws -> VJEPAEmbedding {
         let start = Date()
         let embedding = try await inference.embed(videoAt: url)
         let ms = Int(Date().timeIntervalSince(start) * 1000)

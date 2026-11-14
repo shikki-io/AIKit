@@ -58,6 +58,23 @@ public enum VideoFramePreprocessorError: Error, Sendable, Equatable {
 // MARK: - Preprocessor
 
 /// Uniform-sampling video preprocessor for V-JEPA inputs.
+/// One per-channel RGB constant.
+///
+/// A named type rather than a `(r:g:b:)` tuple: three members is past
+/// SwiftLint's `large_tuple` cap, and these are read positionally in the
+/// normalisation loop where a transposed channel is silent.
+public struct RGBTriple: Sendable, Equatable {
+    public let r: Float
+    public let g: Float
+    public let b: Float
+
+    public init(r: Float, g: Float, b: Float) {
+        self.r = r
+        self.g = g
+        self.b = b
+    }
+}
+
 public struct VideoFramePreprocessor: Sendable {
 
     /// Number of frames the encoder consumes. Spec BR-04: 8-16.
@@ -66,8 +83,8 @@ public struct VideoFramePreprocessor: Sendable {
     public let targetSize: Int
 
     // ImageNet RGB mean/std.
-    public static let imageNetMean: (r: Float, g: Float, b: Float) = (0.485, 0.456, 0.406)
-    public static let imageNetStd: (r: Float, g: Float, b: Float) = (0.229, 0.224, 0.225)
+    public static let imageNetMean = RGBTriple(r: 0.485, g: 0.456, b: 0.406)
+    public static let imageNetStd = RGBTriple(r: 0.229, g: 0.224, b: 0.225)
 
     public init(targetFrameCount: Int, targetSize: Int = 224) {
         self.targetFrameCount = targetFrameCount

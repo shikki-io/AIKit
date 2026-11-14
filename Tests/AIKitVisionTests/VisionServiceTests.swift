@@ -19,8 +19,8 @@ struct VisionServiceTests {
     // MARK: - Helpers
 
     private static func makeService() -> VisionService {
-        let videoNode = DINOv2NodeTests_Companion.makeVJEPANode()
-        let imageNode = DINOv2NodeTests_Companion.makeDINOv2Node()
+        let videoNode = DINOv2NodeTestsCompanion.makeVJEPANode()
+        let imageNode = DINOv2NodeTestsCompanion.makeDINOv2Node()
         return VisionService(videoNode: videoNode, imageNode: imageNode)
     }
 
@@ -56,7 +56,7 @@ struct VisionServiceTests {
     @Test("VisionService routes PNG URL to DINOv2")
     func routesImageToDINOv2() async throws {
         let service = Self.makeService()
-        let pngURL = try DINOv2NodeTests_Companion.writeSolidPNG(gray: 128)
+        let pngURL = try DINOv2NodeTestsCompanion.writeSolidPNG(gray: 128)
         defer { try? FileManager.default.removeItem(at: pngURL) }
         let result = try await service.embed(fileAt: pngURL)
         switch result {
@@ -96,7 +96,7 @@ struct VisionServiceTests {
 /// Shared setup used by VisionServiceTests + DINOv2VisualQCTests.
 /// Kept outside the `DINOv2NodeTests` suite struct so both files can use it
 /// without re-declaring the fixture helpers.
-enum DINOv2NodeTests_Companion {
+enum DINOv2NodeTestsCompanion {
 
     static func makeDINOv2Node() -> DINOv2Node {
         DINOv2Node(

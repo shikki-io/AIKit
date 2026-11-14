@@ -62,27 +62,26 @@ public struct VisionBenchmark: Sendable {
 
     /// The 10-task starter corpus. Deterministic — same output every call.
     public static func starterCorpus() -> [VisionBenchmarkTask] {
-        let rows: [(String, String, String, String)] = [
-            ("t01", "ui-identification", "Which button was clicked?",  "submit"),
-            ("t02", "ui-identification", "Which menu was opened?",     "file"),
-            ("t03", "ui-identification", "Which tab is active?",       "editor"),
-            ("t04", "error-detection",   "What error appeared?",       "timeout"),
-            ("t05", "error-detection",   "What error appeared?",       "permission-denied"),
-            ("t06", "error-detection",   "What error appeared?",       "not-found"),
-            ("t07", "action-performed",  "What action was performed?", "save"),
-            ("t08", "action-performed",  "What action was performed?", "copy"),
-            ("t09", "action-performed",  "What action was performed?", "delete"),
-            ("t10", "action-performed",  "What action was performed?", "rename"),
+        let rows: [StarterRow] = [
+            StarterRow(id: "t01", category: "ui-identification", question: "Which button was clicked?", label: "submit"),
+            StarterRow(id: "t02", category: "ui-identification", question: "Which menu was opened?", label: "file"),
+            StarterRow(id: "t03", category: "ui-identification", question: "Which tab is active?", label: "editor"),
+            StarterRow(id: "t04", category: "error-detection", question: "What error appeared?", label: "timeout"),
+            StarterRow(id: "t05", category: "error-detection", question: "What error appeared?", label: "permission-denied"),
+            StarterRow(id: "t06", category: "error-detection", question: "What error appeared?", label: "not-found"),
+            StarterRow(id: "t07", category: "action-performed", question: "What action was performed?", label: "save"),
+            StarterRow(id: "t08", category: "action-performed", question: "What action was performed?", label: "copy"),
+            StarterRow(id: "t09", category: "action-performed", question: "What action was performed?", label: "delete"),
+            StarterRow(id: "t10", category: "action-performed", question: "What action was performed?", label: "rename"),
         ]
         return rows.map { row in
-            let (id, category, question, label) = row
-            let frames = Self.synthesiseFrames(forLabel: label)
-            let signal = Self.labelSignature(label)
+            let frames = Self.synthesiseFrames(forLabel: row.label)
+            let signal = Self.labelSignature(row.label)
             let task = BattleTask(
-                taskId: id,
-                category: category,
-                question: question,
-                groundTruthLabel: label,
+                taskId: row.id,
+                category: row.category,
+                question: row.question,
+                groundTruthLabel: row.label,
                 videoURL: nil,
                 frames: frames
             )
@@ -344,4 +343,16 @@ public struct MockLLMFrameDescriptionProvider: VisionProvider, Sendable {
             memoryMB: 8
         )
     }
+}
+
+/// One row of the starter corpus.
+///
+/// A named type rather than a four-member tuple: `large_tuple` caps a tuple at
+/// two, and four same-typed `String`s positionally is exactly the shape where a
+/// question and a label get swapped without the compiler noticing.
+private struct StarterRow {
+    let id: String
+    let category: String
+    let question: String
+    let label: String
 }

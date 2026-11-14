@@ -181,10 +181,10 @@ public actor DINOv2Node {
 
     // MARK: Identity
 
-    public nonisolated let nodeId: String
-    public nonisolated let hostname: String
-    public nonisolated let modelVersion: String
-    public nonisolated let backend: DINOv2Backend
+    nonisolated public let nodeId: String
+    nonisolated public let hostname: String
+    nonisolated public let modelVersion: String
+    nonisolated public let backend: DINOv2Backend
 
     // MARK: Latency tracking
 
@@ -210,7 +210,7 @@ public actor DINOv2Node {
         self.modelVersion = modelVersion
     }
 
-    public nonisolated var name: String { "dinov2-vits14" }
+    nonisolated public var name: String { "dinov2-vits14" }
 
     // MARK: Embedding API
 
@@ -220,7 +220,7 @@ public actor DINOv2Node {
     ///   1. resize to `backend.inputSize` × `backend.inputSize` RGBA
     ///   2. convert to CHW float32 and ImageNet-normalize
     ///   3. call `backend.forward(normalizedPixels:)`
-    public nonisolated func embed(image: CGImage) throws -> DINOv2Embedding {
+    nonisolated public func embed(image: CGImage) throws -> DINOv2Embedding {
         let start = Date()
         let pixels = try Self.preprocess(image: image, size: backend.inputSize)
         let flat = try backend.forward(normalizedPixels: pixels)
@@ -289,10 +289,7 @@ public actor DINOv2Node {
         let space = CGColorSpaceCreateDeviceRGB()
         let info: UInt32 = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
         try buffer.withUnsafeMutableBytes { raw in
-            guard let base = raw.baseAddress else {
-                throw DINOv2Error.preprocessingFailed
-            }
-            guard let ctx = CGContext(
+            guard let base = raw.baseAddress, let ctx = CGContext(
                 data: base,
                 width: size,
                 height: size,

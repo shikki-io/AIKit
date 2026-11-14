@@ -39,6 +39,7 @@ public struct CategoryWinRate: Sendable, Equatable, Codable {
     public var winRateA: Double {
         totalBattles == 0 ? 0 : Double(winsA) / Double(totalBattles)
     }
+
     public var winRateB: Double {
         totalBattles == 0 ? 0 : Double(winsB) / Double(totalBattles)
     }
@@ -119,7 +120,8 @@ public final class AdaptiveVisionRouter: @unchecked Sendable {
     public func route(for category: String) -> VisionRoute {
         lock.lock(); defer { lock.unlock() }
         guard let acc = perCategory[category],
-              acc.totalBattles >= minBattlesForDecision else {
+              acc.totalBattles >= minBattlesForDecision
+        else {
             return .undecided
         }
         let delta = acc.winRateA - acc.winRateB
@@ -157,6 +159,7 @@ private struct CategoryAccumulator {
     var winRateA: Double {
         totalBattles == 0 ? 0 : Double(winsA) / Double(totalBattles)
     }
+
     var winRateB: Double {
         totalBattles == 0 ? 0 : Double(winsB) / Double(totalBattles)
     }

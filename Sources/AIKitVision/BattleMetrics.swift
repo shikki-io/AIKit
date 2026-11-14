@@ -155,11 +155,28 @@ public struct BattleMetrics: Sendable, Equatable, Codable {
         a: ProviderMeasurement,
         b: ProviderMeasurement,
         policy: BattleScoringPolicy = .default
-    ) -> (winner: BattleWinner, scoreA: Double, scoreB: Double) {
+    ) -> BattleDecision {
         let sa = policy.score(a)
         let sb = policy.score(b)
-        if sa > sb { return (.providerA, sa, sb) }
-        if sb > sa { return (.providerB, sa, sb) }
-        return (.draw, sa, sb)
+        if sa > sb { return BattleDecision(winner: .providerA, scoreA: sa, scoreB: sb) }
+        if sb > sa { return BattleDecision(winner: .providerB, scoreA: sa, scoreB: sb) }
+        return BattleDecision(winner: .draw, scoreA: sa, scoreB: sb)
+    }
+}
+
+/// The outcome of one scoring comparison.
+///
+/// A named type rather than the `(winner:scoreA:scoreB:)` tuple this used to
+/// return: three members is past SwiftLint's `large_tuple` cap, and the two
+/// scores are easy to transpose at a call site when they are positional.
+public struct BattleDecision: Sendable, Equatable {
+    public let winner: BattleWinner
+    public let scoreA: Double
+    public let scoreB: Double
+
+    public init(winner: BattleWinner, scoreA: Double, scoreB: Double) {
+        self.winner = winner
+        self.scoreA = scoreA
+        self.scoreB = scoreB
     }
 }

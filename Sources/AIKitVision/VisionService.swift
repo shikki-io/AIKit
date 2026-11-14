@@ -100,10 +100,7 @@ public struct VisionService: Sendable {
     // MARK: CGImage loading
 
     static func loadCGImage(at url: URL) throws -> CGImage {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            throw VisionServiceError.inputUnreadable(url)
-        }
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw VisionServiceError.inputUnreadable(url)
         }
         return image

@@ -101,7 +101,7 @@ public struct DINOv2LayoutAnalyzer: Sendable {
         guard !rows.isEmpty else { return DINOv2Layout(regions: []) }
 
         // Group contiguous rows within 0.08 luminance of each other.
-        var bands: [(start: Int, end: Int, mean: Float)] = []
+        var bands: [LuminanceBand] = []
         var bandStart = 0
         var accum: Float = rows[0]
         var count = 1
@@ -111,13 +111,13 @@ public struct DINOv2LayoutAnalyzer: Sendable {
                 accum += rows[i]
                 count += 1
             } else {
-                bands.append((start: bandStart, end: i - 1, mean: accum / Float(count)))
+                bands.append(LuminanceBand(start: bandStart, end: i - 1, mean: accum / Float(count)))
                 bandStart = i
                 accum = rows[i]
                 count = 1
             }
         }
-        bands.append((start: bandStart, end: rows.count - 1, mean: accum / Float(count)))
+        bands.append(LuminanceBand(start: bandStart, end: rows.count - 1, mean: accum / Float(count)))
 
         // Drop bands thinner than `minBandHeight`.
         let filtered = bands.filter { ($0.end - $0.start + 1) >= minBandHeight }
@@ -163,10 +163,7 @@ public struct DINOv2LayoutAnalyzer: Sendable {
         let space = CGColorSpaceCreateDeviceRGB()
         let info: UInt32 = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
         try buffer.withUnsafeMutableBytes { raw in
-            guard let base = raw.baseAddress else {
-                throw DINOv2Error.preprocessingFailed
-            }
-            guard let ctx = CGContext(
+            guard let base = raw.baseAddress, let ctx = CGContext(
                 data: base,
                 width: size,
                 height: size,
@@ -198,3 +195,13 @@ public struct DINOv2LayoutAnalyzer: Sendable {
 }
 
 #endif
+
+/// A contiguous run of rows within one luminance threshold of each other.
+///
+/// A named type rather than the `(start:end:mean:)` tuple: three members is
+/// past SwiftLint's `large_tuple` cap, and `start`/`end` are both `Int`.
+private struct LuminanceBand {
+    let start: Int
+    let end: Int
+    let mean: Float
+}

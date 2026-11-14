@@ -401,7 +401,7 @@ private final class TransformerBlockMLX: Module, @unchecked Sendable {
 
         attn = attn.transposed(0, 2, 1, 3).reshaped([B, N, D])
         h = attnOut(attn)
-        residual = residual + h
+        residual += h
 
         // --- MLP path ---------------------------------------------------
         var m = norm2(residual)

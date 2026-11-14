@@ -62,7 +62,7 @@ struct DINOv2VisualQCTests {
     }
 
     private static func makeQC() -> DINOv2VisualQC {
-        DINOv2VisualQC(node: DINOv2NodeTests_Companion.makeDINOv2Node())
+        DINOv2VisualQC(node: DINOv2NodeTestsCompanion.makeDINOv2Node())
     }
 
     // MARK: - Cosine sim math
