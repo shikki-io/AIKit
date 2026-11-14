@@ -23,10 +23,28 @@ struct FleetPackagesManifestTests {
         var testDescription: String { "\(identity) \(url) from \(floor)" }
     }
 
+    /// RAISED 2026-11-14 with a measurement, which is the only reason a floor
+    /// in this table ever moves. `git ls-remote --tags` on each canonical URL
+    /// on that date: NetKit `v3.1.0`, CoreKit `0.16.0`, ShellKit `v0.6.0`.
+    /// NetKit and ShellKit moved; CoreKit's floor is already its newest tag and
+    /// is unchanged.
+    ///
+    /// Both moves are additive — no public API this package uses changed — so
+    /// no source moved with them. ShellKit 0.6.0 is the one that matters here:
+    /// `DetachedProcess.exitCode()` could hang forever on macOS because it
+    /// waited with `Process.waitUntilExit()` on a GCD worker thread, which has
+    /// no run loop for that call to spin. Every CLI provider in this package
+    /// reaches a subprocess from async code, so that hang was reachable from
+    /// this very suite.
+    ///
+    /// This table failing is this ratchet WORKING: it is what makes a fleet
+    /// bump a deliberate edit in two places rather than a manifest drifting
+    /// alone. The number is never raised to make a red test pass — it is
+    /// raised to record a tag that exists.
     static let requirements: [Requirement] = [
-        Requirement(identity: "netkit", url: "https://github.com/obyw-one/NetKit.git", floor: "3.0.0"),
+        Requirement(identity: "netkit", url: "https://github.com/obyw-one/NetKit.git", floor: "3.1.0"),
         Requirement(identity: "corekit", url: "https://github.com/obyw-one/CoreKit.git", floor: "0.16.0"),
-        Requirement(identity: "shellkit", url: "https://github.com/shikki-io/ShellKit", floor: "0.5.1"),
+        Requirement(identity: "shellkit", url: "https://github.com/shikki-io/ShellKit", floor: "0.6.0"),
         Requirement(identity: "tomlkit", url: "https://github.com/LebJe/TOMLKit.git", floor: "0.5.5"),
     ]
 
