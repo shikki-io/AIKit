@@ -14,6 +14,54 @@
 # .woodpecker/ci.yml): same agent class, and kagami built from shi-qa in the
 # workspace rather than assumed to be installed on the agent.
 #
+# REVISED on PR #18, operator against the `swift build --build-tests` step this
+# file used to open with: *"you are mandatory to build here the code, kagami
+# runner don't do it? And I don't see kagami cli in the next command you use
+# like in other project where I have something like this: `kagami test --all
+# --strict`"*.
+#
+# Both halves were right, and a third thing was wrong that the question
+# uncovered:
+#
+#   1. THE BUILD STEP WAS REDUNDANT and is gone. kagami builds — every scope
+#      run compiles the package and its test targets before it runs anything,
+#      which is why a scope's verdict can be `build_failed` at all. A separate
+#      `swift build --build-tests` bought one extra full compile of the same
+#      tree and no information kagami does not already report.
+#
+#   2. KAGAMI IS NOW THE CLI, by name. It used to be invoked as
+#      `${CI_WORKSPACE}/kagami/.build/debug/kagami`, which is why it did not
+#      read as the fleet's runner. It is built from shi-qa into
+#      `${CI_WORKSPACE}/bin` once and every later step puts that on PATH, so
+#      the commands below are the same `kagami test ... --strict` lines a human
+#      runs. Each Woodpecker step is a fresh shell, so the export is per step
+#      rather than once at the top — that is the tool's shape, not a choice.
+#
+#   3. THE GATE MEASURED 2 OF 9 SCOPES. It named `AIKitAll` and
+#      `AIKitPublicSurface` and nothing else, so `AgentSessionIndex`,
+#      `AIKitProviders`, `AIKitNoLocalhostFallback`, `AIKitServerAddress` and
+#      `AIKitMLX` were declared in `.kagami/scopes.override.toml` and gated by
+#      no pipeline. Four of those five are the ratchets this epic added. They
+#      run now.
+#
+# WHY NOT `--all --strict`, which is the form the operator quoted. Because
+# `--all` means every DECLARED scope, and it does not read `pre_pr_default`
+# (kagami 1.10.0, `runAllScopes` in shi-qa's KagamiCLI.swift: it iterates
+# `declaredScopeNames` and resolves each by name). This repository declares two
+# scopes that need something a CI agent does not have:
+#
+#   * `AIKitLive`      — talks to a running LM Studio server.
+#   * `AIKitVoiceLive` — needs a real audio loopback.
+#
+# Both carry `pre_pr_default = false` for that reason. `--all` would run them,
+# they would fail, and the job would be red forever for a reason that is not
+# the code — the exact "gate that is red for the machine, not the diff" shape.
+# So the scopes are named, and `CIScopeCoverageTests` in `AIKitTests` is the
+# ratchet that stops the list drifting from the registry again: it fails if a
+# scope is declared with `pre_pr_default` unset or true and this file does not
+# gate it. That test is what makes a hand-written list safe; without it, item 3
+# above happens a second time.
+#
 # HONEST GAP, stated rather than papered over: this file being correct does not
 # mean it is RUNNING. Registering shikki-io/AIKit with the fleet's Woodpecker
 # server is a server-side operator action, and no pipeline id for this commit
@@ -25,37 +73,51 @@ when:
   branch: [main, develop, "epic/*", "feat/*", "fix/*", "agent/*", "story/*"]
 
 steps:
-  # The whole package, including the targets the Linux job cannot have:
-  # AIKitMLX and its suite.
-  build:
+  # kagami itself, built from the repo that ships it, so the agent needs no
+  # preinstalled copy and the version used is the one shi-qa ships. Installed
+  # under a name on PATH rather than reached by its build path.
+  kagami-cli:
     platform: darwin/arm64
     image: bash
     commands:
       - swift --version
-      - swift build --build-tests
-
-  # kagami, never a raw `swift test`: the fleet's runner is what records a run,
-  # and a scope's `expected_test_min` floor is what makes a silently shrunken
-  # suite a failure instead of a pass. `--strict` is the wave gate's own form.
-  #
-  # kagami is built from shi-qa into the workspace, so the agent needs no
-  # preinstalled copy and the version used is the one that repo ships.
-  kagami-test:
-    platform: darwin/arm64
-    image: bash
-    commands:
       - test -d "${CI_WORKSPACE}/kagami" || git clone --depth 1 https://github.com/shikki-io/shi-qa.git "${CI_WORKSPACE}/kagami"
-      - swift build --product kagami --package-path "${CI_WORKSPACE}/kagami"
-      - "${CI_WORKSPACE}/kagami/.build/debug/kagami test --scope AIKitAll --strict"
-    depends_on: [build]
+      - swift build -c release --product kagami --package-path "${CI_WORKSPACE}/kagami"
+      - mkdir -p "${CI_WORKSPACE}/bin"
+      - install "${CI_WORKSPACE}/kagami/.build/release/kagami" "${CI_WORKSPACE}/bin/kagami"
+      - export PATH="${CI_WORKSPACE}/bin:$PATH" && kagami --version
 
-  # The public-surface ratchet (W27, BR-AIL-21), its own scope because it runs
-  # `scripts/public-api.sh` and a cold run of that compiles mlx-swift. It is
-  # Apple-only by construction — the allowlist holds AIKitMLX's symbols — so
-  # this job is the only place it can run.
-  public-surface:
+  # The unit scopes and the ratchets, in one run. kagami builds the package
+  # itself; `--strict` is what makes an empty or shrunken suite a failure
+  # instead of a silent exit 0, and each scope's `expected_test_min` is the
+  # floor it is held to.
+  #
+  # Comma-separated and not `--all`: see the header. `AIKitLive` and
+  # `AIKitVoiceLive` are the two declared scopes deliberately absent, both
+  # `pre_pr_default = false`, and `CIScopeCoverageTests` fails if this list
+  # drifts from the registry.
+  kagami-gate:
     platform: darwin/arm64
     image: bash
     commands:
-      - "${CI_WORKSPACE}/kagami/.build/debug/kagami test --scope AIKitPublicSurface --strict"
-    depends_on: [kagami-test]
+      - export PATH="${CI_WORKSPACE}/bin:$PATH"
+      - kagami test --scope AIKitAll,AgentSessionIndex,AIKitProviders,AIKitNoLocalhostFallback,AIKitServerAddress --strict
+    depends_on: [kagami-cli]
+
+  # The MLX half and the public-surface ratchet, after the cheap scopes: both
+  # link mlx-swift, whose Metal kernels compile from source, so they are the
+  # slow pair and they share that build. They are Apple-only by construction —
+  # the allowlist holds AIKitMLX's symbols — so this job is the only place they
+  # can run.
+  #
+  # `AIKitMLX` carries `pre_pr_default = false` because it needs the selected
+  # Xcode's MetalToolchain component, which a laptop may not have. A CI agent
+  # that can run `AIKitPublicSurface` can run this, because that scope builds
+  # the same target; if the component is missing both fail together, naming it.
+  kagami-mlx:
+    platform: darwin/arm64
+    image: bash
+    commands:
+      - export PATH="${CI_WORKSPACE}/bin:$PATH"
+      - kagami test --scope AIKitMLX,AIKitPublicSurface --strict
+    depends_on: [kagami-gate]

@@ -86,10 +86,26 @@ timeout_seconds = 300
 # in-flight counter, one shared deadline, a slow branch that blocks nobody,
 # cancellation through every branch, and the input order).
 #
+# RE-MEASURED 2026-11-14 at the restack head (epic rebased onto develop, fleet
+# packages bumped, PR #18's review answered): 745/745 green, run
+# 04FDF8B4-504C-4886-ADC7-E3D0E057772B. +4 on W32's 741, and the four are accounted for
+# individually rather than as a delta:
+#
+#   * 2 were ALREADY THERE and the floor was stale by them. a9d0fb5 ("every
+#     M-series iPad maps to its real chip; iOS fit reads the process's real
+#     memory ceiling") landed after the 741 measurement and added two test
+#     functions without the floor following. Measured: the scope ran 743 at
+#     a9d0fb5 against a floor of 741.
+#   * 2 are `CIScopeCoverageTests`, added answering the operator's review of
+#     `.woodpecker/macos-build.yml` on PR #18: the macOS pipeline gates every
+#     scope the registry declares without `pre_pr_default = false`, and it
+#     names no scope the registry does not declare. That rule exists because
+#     the pipeline was measuring 2 of 9 scopes.
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 741
+expected_test_min = 745
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -107,6 +123,14 @@ name = "AIKitLive"
 language = "swift"
 package_path = "."
 test_target_name = "AIKitLiveTests"
+# `module_patterns` as well as `test_target_name`: the RUNNER resolves this
+# scope from the target name alone (measured — it runs), but
+# `kagami validate-scopes` requires a Swift scope to carry at least one of
+# modulePatterns / typePatterns / testFilePatterns, so without this the
+# repository's own registry fails its own validator. This is the spelling
+# `kagami auto-discover` writes into the scopes.toml cache for the same target,
+# so it adds no second vocabulary.
+module_patterns = ["AIKitLiveTests"]
 pre_pr_default = false
 timeout_seconds = 120
 
@@ -136,6 +160,11 @@ expected_test_min = 39
 language = "swift"
 package_path = "."
 test_target_name = "AIKitMLXTests"
+# See the note on AIKitLive: `kagami validate-scopes` requires one pattern key
+# on a Swift scope, and this is the spelling auto-discover writes for the same
+# target. Re-measured after adding it so the key is not taken on trust: still
+# 39/39.
+module_patterns = ["AIKitMLXTests"]
 pre_pr_default = false
 timeout_seconds = 600
 description = "On-device MLX provider, extracted from shikki-client (W7). Needs the Metal toolchain. Run: kagami test --scope AIKitMLX"
