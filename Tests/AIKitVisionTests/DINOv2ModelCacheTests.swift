@@ -29,7 +29,11 @@ struct DINOv2ModelCacheTests {
         // The URL is assembled by the endpoint, so pin the shape it produces:
         // host at the root, the repo id keeping its own separator, and the
         // resolve route between revision and filename.
-        let url = try #require(d.descriptor.remoteURL)
+        // Not `#require`: `ModelDescriptor.remoteURL` is non-optional, so the
+        // compiler reports that form as redundant. The optionality this suite
+        // does have to handle is `DINOv2ModelDescriptor.vits14` itself, which
+        // is required above.
+        let url = d.descriptor.remoteURL
         #expect(url.host() == "huggingface.co")
         #expect(url.path() == "/shikki/dinov2-vits14-coreml/resolve/main/dinov2-vits14.mlpackage.zip")
     }
