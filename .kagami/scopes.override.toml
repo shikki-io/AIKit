@@ -102,10 +102,17 @@ timeout_seconds = 300
 #     names no scope the registry does not declare. That rule exists because
 #     the pipeline was measuring 2 of 9 scopes.
 #
+# RE-MEASURED 2026-11-14 at the head of PR #22, restacked onto #20: 755/755
+# green (run 0F87E0CC-5D5E-4C13-AC0C-2D1F31E3A47F). +10 on the 745 this branch
+# inherited, and the ten are this PR's own: `KVFootprintTests` (the KV-cache
+# geometry — bytes per token, the cap, and a footprint that is weights + cache
+# + overhead rather than weights alone) and `DeviceCapabilityTests`' new iOS
+# cases (system headroom kept, not only the process ceiling).
+#
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 745
+expected_test_min = 755
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
@@ -156,7 +163,13 @@ timeout_seconds = 120
 name = "AIKitMLX"
 # Measured 2026-10-31 at the W13 commit: 39/39. Was 29 at W7; W13's
 # MLXHubDownloaderTests adds 10.
-expected_test_min = 39
+#
+# RE-MEASURED 2026-11-14 at the head of PR #22: 41/41 (run
+# 4EF847F3-1AC4-442C-9CCE-C2B27F83B988). +2 for `MLXSnapshotFootprintTests` —
+# a snapshot's footprint is checked BEFORE the weights are mapped, which is the
+# whole point of the change: an iPad was being jetsammed by the mapping it was
+# about to refuse.
+expected_test_min = 41
 language = "swift"
 package_path = "."
 test_target_name = "AIKitMLXTests"
