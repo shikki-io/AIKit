@@ -148,15 +148,15 @@ struct CIScopeCoverageTests {
         // Named rather than counted: a third opt-in scope should be a decision
         // someone makes here, not a number that quietly grows.
         #expect(
-            optIn == ["AIKitLive", "AIKitVoiceLive", "AIKitMLX"],
+            optIn == ["AIKitLive", "AIKitVoiceLive", "AIKitMLX", "AIKitVision"],
             """
             the set of opt-in (`pre_pr_default = false`) scopes changed to \
             \(optIn.sorted().joined(separator: ", ")). AIKitLive needs a running LM \
             Studio server and AIKitVoiceLive needs an audio loopback, so neither can \
-            run on a CI agent; AIKitMLX needs the selected Xcode's MetalToolchain, so \
-            it is opt-in for a laptop but IS gated in CI beside AIKitPublicSurface, \
-            which builds the same target. A new entry here needs the same kind of \
-            reason written down.
+            run on a CI agent; AIKitMLX and AIKitVision need the selected Xcode's \
+            MetalToolchain, so they are opt-in for a laptop but ARE gated in CI beside \
+            AIKitPublicSurface, which builds AIKitMLX too. A new entry here needs the \
+            same kind of reason written down.
             """
         )
     }
