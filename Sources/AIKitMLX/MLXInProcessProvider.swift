@@ -67,6 +67,15 @@ protocol MLXModelSession: Sendable {
 
     /// Release the weights and whatever GPU cache they hold.
     func unload() async
+
+    /// The most context tokens the KV cache may grow to on this device, once
+    /// the weights are paid for; nil when unbounded or unknown. The chat layer
+    /// reads it as its token budget.
+    var contextTokenLimit: Int? { get }
+}
+
+extension MLXModelSession {
+    var contextTokenLimit: Int? { nil }
 }
 
 /// Loads the weights a descriptor names and returns a session that can answer.
@@ -124,6 +133,9 @@ actor MLXInProcessProvider: AIProvider {
     private var session: (any MLXModelSession)?
     private var state: AIProviderStatus
 
+    /// The context cap of the loaded session, nil before a load.
+    var contextTokenLimit: Int? { session?.contextTokenLimit }
+
     /// Whether the weights are in memory right now.
     var isLoaded: Bool { session != nil }
 
@@ -162,7 +174,7 @@ actor MLXInProcessProvider: AIProvider {
         self.loadSession =
             loadSession ?? { descriptor, progress in
                 try await MLXContainerSession.load(
-                    descriptor, downloader: downloader, progress: progress)
+                    descriptor, device: device, downloader: downloader, progress: progress)
             }
         // Reported before anything is asked of it, so a router can skip a
         // provider this device cannot serve instead of discovering it by
@@ -294,9 +306,13 @@ struct MLXContainerSession: MLXModelSession {
 
     private let container: ModelContainer
 
+    /// KV cache limit handed to the engine as `maxKVSize` (a rotating cache).
+    let contextTokenLimit: Int?
+
     /// Wrap a container that is already loaded.
-    init(container: ModelContainer) {
+    init(container: ModelContainer, contextTokenLimit: Int? = nil) {
         self.container = container
+        self.contextTokenLimit = contextTokenLimit
     }
 
     /// Load the weights a descriptor names.
@@ -317,6 +333,7 @@ struct MLXContainerSession: MLXModelSession {
     /// refused by name (``MLXProviderError/noDownloader(model:)``).
     static func load(
         _ model: ModelDescriptor,
+        device: DeviceCapability = .current(),
         downloader: (any Downloader)? = nil,
         tokenizerLoader: any TokenizerLoader = TransformersTokenizerLoader(),
         progress: @Sendable @escaping (Double) -> Void
@@ -338,6 +355,9 @@ struct MLXContainerSession: MLXModelSession {
             // 3.x: `directory:` became `from:`, and the local overload reports
             // no progress because there is no download to report — the weights
             // are already where they will be read from.
+            // The snapshot is measured before a byte of it is mapped.
+            _ = try MLXSnapshotFootprint(directory: directory)
+                .contextTokenLimit(on: device, model: model.huggingFaceId ?? model.id.modelId)
             container = try await loadModelContainer(from: directory, using: tokenizerLoader)
             progress(1)
         } else {
@@ -345,19 +365,31 @@ struct MLXContainerSession: MLXModelSession {
                 throw MLXProviderError.noDownloader(model: model.id.modelId)
             }
             container = try await loadModelContainer(
-                from: downloader,
+                from: FootprintGatedDownloader(
+                    inner: downloader, device: device,
+                    model: model.huggingFaceId ?? model.id.modelId),
                 using: tokenizerLoader,
                 id: model.huggingFaceId ?? model.id.modelId
             ) {
                 progress($0.fractionCompleted)
             }
         }
-        return MLXContainerSession(container: container)
+
+        // The cache cap comes from the snapshot itself (config.json and the
+        // weight files), never from a model name: what is left after weights
+        // and overhead, divided by the bytes one token of K and V costs.
+        var limit: Int?
+        if let directory = try? await container.modelDirectory {
+            limit = try MLXSnapshotFootprint(directory: directory)
+                .contextTokenLimit(on: device, model: model.huggingFaceId ?? model.id.modelId)
+        }
+        return MLXContainerSession(container: container, contextTokenLimit: limit)
     }
 
     func stream(_ request: AIRequest) -> AsyncThrowingStream<AIChunk, Error> {
         let parameters = GenerateParameters(
             maxTokens: request.maxTokens,
+            maxKVSize: contextTokenLimit,
             temperature: Float(request.temperature)
         )
         let container = container

@@ -389,6 +389,42 @@ struct DeviceCapabilityTests {
 
     // MARK: - The RAM queries W7 shipped, unchanged by W25
 
+    // Incident 2026-11-13: the 8B was offered on an 8 GB iPad because the process
+    // ceiling (increased-memory-limit) reads ~8 GB; the system killed the app.
+    @Test("An 8 GB iPad with an 8 GB process ceiling refuses the 8B and allows the 3B")
+    func eightGBiPadKeepsSystemHeadroom() {
+        let available = DeviceCapability.systemSafeAvailableGB(
+            processHeadroomGB: 8.0, residentGB: 0.1, physicalGB: 8
+        )
+        let device = DeviceCapability(deviceClass: .iPadM2, totalRAMGB: 8, availableRAMGB: available)
+        #expect(device.canLoad(makeModel(minRAMGB: 6.5)) == false)
+        #expect(device.canLoad(makeModel(minRAMGB: 3.2)) == true)
+    }
+
+    @Test("A 6 GB iPhone still runs the 3B")
+    func sixGBPhoneStillRunsThe3B() {
+        let available = DeviceCapability.systemSafeAvailableGB(
+            processHeadroomGB: 4.0, residentGB: 0.1, physicalGB: 6
+        )
+        #expect(available >= 3.2)
+    }
+
+    @Test("A 16 GB device is unchanged: the process ceiling decides")
+    func sixteenGBDeviceUnchanged() {
+        let available = DeviceCapability.systemSafeAvailableGB(
+            processHeadroomGB: 12.0, residentGB: 0.2, physicalGB: 16
+        )
+        #expect(available > 6.5)
+        #expect(available <= 12.0)
+        let tight = DeviceCapability.systemSafeAvailableGB(processHeadroomGB: 4.0, residentGB: 0, physicalGB: 16)
+        #expect(tight == 4.0)
+    }
+
+    @Test("Headroom never goes negative")
+    func headroomNeverNegative() {
+        #expect(DeviceCapability.systemSafeAvailableGB(processHeadroomGB: 8, residentGB: 9, physicalGB: 8) == 0)
+    }
+
     @Test("canLoad refuses a model needing more RAM than is free")
     func canLoadRefusesOversized() {
         let capability = DeviceCapability(deviceClass: .iPhoneA16, totalRAMGB: 6.0, availableRAMGB: 4.0)

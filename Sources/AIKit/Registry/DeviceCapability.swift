@@ -640,6 +640,62 @@ public struct DeviceCapability: Sendable, Equatable {
         return nil
     }
 
+    // MARK: - Footprint: weights + KV cache + runtime overhead
+
+    /// The context the app budgets for a chat by default, in tokens. The fit
+    /// check must hold for at least this much context.
+    package static let defaultContextBudgetTokens = 4096
+
+    /// The smallest context worth running; below it a model is refused.
+    package static let minimumContextTokens = 1024
+
+    /// The most a cache is ever allowed to grow to, however much memory is left.
+    package static let maximumContextTokens = 32768
+
+    /// Runtime cost beyond weights and KV: MLX's capped buffer cache (512 MB),
+    /// activations, tokenizer. Measured 2026-11-13: the 8B (4.2 GiB of weights)
+    /// stood at 5.06 GiB resident, so about 0.8 GiB.
+    package static let runtimeOverheadGB = 0.8
+
+    /// Gigabytes a model occupies: weights, plus the KV cache for
+    /// `contextTokens`, plus runtime overhead. With no geometry the KV term is
+    /// left out and the result is the floor, never the estimate.
+    package static func footprintGB(
+        weightsBytes: Int64,
+        kv: KVCacheGeometry?,
+        contextTokens: Int
+    ) -> Double {
+        let gib = 1_073_741_824.0
+        let kvBytes = Double((kv?.bytesPerToken() ?? 0) * contextTokens)
+        return (Double(weightsBytes) + kvBytes) / gib + runtimeOverheadGB
+    }
+
+    /// The memory limit that stops this model running with `contextTokens` of
+    /// context, or nil when weights + KV + overhead fit `availableRAMGB`, which
+    /// already holds the lower of the process ceiling and the system-headroom
+    /// share of physical RAM.
+    package func footprintShortfall(
+        for model: ModelDescriptor,
+        kv: KVCacheGeometry?,
+        contextTokens: Int = DeviceCapability.defaultContextBudgetTokens
+    ) -> (required: Double, available: Double)? {
+        let required = Self.footprintGB(weightsBytes: model.sizeBytes, kv: kv, contextTokens: contextTokens)
+        return availableRAMGB < required ? (required: required, available: availableRAMGB) : nil
+    }
+
+    /// How many tokens of context the KV cache may grow to once weights and
+    /// overhead are paid for: pass it to the engine as its KV cache limit
+    /// (`maxKVSize`, a rotating cache) so memory cannot grow past it. Nil when
+    /// not even `minimumContextTokens` fit.
+    package func contextTokenCap(weightsBytes: Int64, kv: KVCacheGeometry) -> Int? {
+        let gib = 1_073_741_824.0
+        let left = availableRAMGB - Double(weightsBytes) / gib - Self.runtimeOverheadGB
+        let perToken = Double(kv.bytesPerToken()) / gib
+        guard left > 0, perToken > 0 else { return nil }
+        let tokens = min(Int(left / perToken), Self.maximumContextTokens)
+        return tokens >= Self.minimumContextTokens ? tokens : nil
+    }
+
     /// Every preset of the resolution × frame-rate grid this device may
     /// attempt, in grid order.
     public var supportedVideoPresets: [MLXVideoPreset] {
@@ -652,6 +708,43 @@ public struct DeviceCapability: Sendable, Equatable {
         Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824.0
     }
 
+    /// Fraction of physical RAM one app may occupy before the system, not the
+    /// process ceiling, starts killing. Measured: Shikki was jetsammed for
+    /// `vm-pageshortage` at 5.06 GiB resident on an 8 GiB iPad (63%), and iOS
+    /// jetsam is documented to act around 65-70% of total. 0.6 stays under both,
+    /// leaves ~4.8 GB on 8 GB (a 3B at 3.2 fits, the 8B at 6.5 does not) and
+    /// ~3.6 GB on 6 GB (the 3B still fits), and gives 9.6 GB on 16 GB.
+    static let systemSafeFractionOfPhysicalRAM = 0.6
+
+    /// What a model may still occupy: the smaller of the process's own headroom
+    /// and the share of physical RAM left once what the app already holds is
+    /// taken off. Pure, so every device size is testable from any host.
+    static func systemSafeAvailableGB(
+        processHeadroomGB: Double,
+        residentGB: Double,
+        physicalGB: Double
+    ) -> Double {
+        let systemShare = physicalGB * systemSafeFractionOfPhysicalRAM - residentGB
+        return max(0.0, min(processHeadroomGB, systemShare))
+    }
+
+    private static func residentGigabytes() -> Double {
+        #if canImport(Darwin)
+            var info = mach_task_basic_info()
+            var count = mach_msg_type_number_t(
+                MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
+            )
+            let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+                infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { reboundPtr in
+                    task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), reboundPtr, &count)
+                }
+            }
+            return kerr == KERN_SUCCESS ? Double(info.resident_size) / 1_073_741_824.0 : 0
+        #else
+            return 0
+        #endif
+    }
+
     private static func availableRAMGigabytes(total: Double) -> Double {
         #if os(iOS) || os(tvOS) || os(visionOS)
             // On iOS the limit is not physical RAM: the kernel caps each app
@@ -660,7 +753,15 @@ public struct DeviceCapability: Sendable, Equatable {
             // real headroom is what `os_proc_available_memory` returns, read at
             // decision time. The physical-RAM estimate below answered ~6.8 GB
             // free on an 8 GB iPad, so it offered an 8B the app could not hold.
-            return Double(os_proc_available_memory()) / 1_073_741_824.0
+            // The process ceiling alone is not enough either: with the
+            // increased-memory-limit entitlement it reports ~8 GB on an 8 GB
+            // iPad, and the app was killed for `vm-pageshortage` at 5.06 GiB
+            // resident. `systemSafeAvailableGB` also keeps system headroom.
+            return systemSafeAvailableGB(
+                processHeadroomGB: Double(os_proc_available_memory()) / 1_073_741_824.0,
+                residentGB: residentGigabytes(),
+                physicalGB: total
+            )
         #elseif canImport(Darwin)
             var info = mach_task_basic_info()
             var count = mach_msg_type_number_t(
