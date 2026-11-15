@@ -1,77 +1,106 @@
 import Foundation
 import NetKit
 
-/// OpenAI-compatible engine — works with OpenAI, LM Studio, Ollama, and any
-/// server exposing /v1/chat/completions and /v1/models endpoints.
-public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
-    public let id: String
-    public let displayName: String
-    public let supportedFormats: [ModelFormat]
+/// Discovers what an OpenAI-compatible server serves, and builds a provider per
+/// model.
+///
+/// A `RuntimeEngine`, not a provider: the chat half it used to carry is
+/// ``HTTPAIProvider`` with the `openai-chat` codec now, so what remains here is
+/// the model catalogue — `GET /v1/models`, and one provider per descriptor.
+/// Works with OpenAI, LM Studio, Ollama, and any server exposing that surface.
+///
+/// The address is an ``AIServerAddress``, validated once in `init`. What that
+/// replaces was the defect: `URLComponents(string: baseURL)?.scheme ?? "http"`
+/// with `?.host ?? "127.0.0.1"`, which turned any unparseable configuration
+/// into a request against the local machine, bearer key included
+/// (AIKit#18 r4500281951).
+final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
+    let id: String
+    let displayName: String
+    let supportedFormats: [ModelFormat]
 
-    private let baseURL: String
+    /// The server root. Validated, never defaulted (BR-AIL-18).
+    let address: AIServerAddress
     private let apiKey: String?
-    private let networkService: any NetworkProtocol
+    /// The ONE transport: discovery sends on it, and so does every provider
+    /// this engine builds.
+    ///
+    /// It is an ``AIHTTPTransport`` rather than a bare `NetworkProtocol`
+    /// because a provider needs the status-and-stream surface. A first draft of
+    /// this wave took `NetworkProtocol` and fell back to the production
+    /// transport when it was not one — and the tests, which injected NetKit's
+    /// `MockNetworkService`, silently talked to the operator's live LM Studio
+    /// and to api.openai.com. A seam that can be half-injected is not a seam
+    /// (BR-AIL-12).
+    private let transport: any AIHTTPTransport
     private var _loadedModels: [ModelIdentifier] = []
 
-    public init(
+    /// - Throws: ``AIKitError/invalidServerAddress(value:reason:)`` when
+    ///   `baseURL` is not a server root — naming the value, so a configuration
+    ///   mistake is reported where it was written rather than sent somewhere.
+    init(
         id: String = "openai-compatible",
         displayName: String = "OpenAI Compatible",
         baseURL: String,
         apiKey: String? = nil,
         supportedFormats: [ModelFormat] = [.api],
-        networkService: (any NetworkProtocol)? = nil
-    ) {
+        transport: any AIHTTPTransport
+    ) throws(AIKitError) {
         self.id = id
         self.displayName = displayName
-        self.baseURL = baseURL
+        self.address = try AIServerAddress(validating: baseURL)
         self.apiKey = apiKey
         self.supportedFormats = supportedFormats
-        self.networkService = networkService ?? NetworkService()
+        self.transport = transport
     }
 
-    public var isAvailable: Bool { true }
+    var isAvailable: Bool { true }
 
-    /// Discover models from /v1/models endpoint.
-    public func discoverModels() async throws -> [ModelDescriptor] {
-        let parsed = URLComponents(string: baseURL)
-        let endpoint = OpenAIModelsListEndPoint(
-            host: parsed?.host ?? "127.0.0.1",
-            port: parsed?.port,
-            scheme: parsed?.scheme ?? "http",
-            apiKey: apiKey
-        )
-
-        let response: ModelsListResponseDTO = try await networkService.sendRequest(endpoint: endpoint)
+    /// Discover models from `GET /v1/models`.
+    func discoverModels() async throws -> [ModelDescriptor] {
+        let endpoint = OpenAIEndPoint.models(address: address, credential: apiKey)
+        let response: ModelsListResponseDTO = try await transport.sendRequest(endpoint: endpoint)
 
         return response.data.map { model in
             let modelId = ModelIdentifier(provider: id, modelId: model.id)
-            let capabilities = inferCapabilities(from: model.id)
             return ModelDescriptor(
                 id: modelId,
                 name: model.id,
                 author: model.ownedBy ?? "unknown",
                 description: "Model \(model.id) via \(displayName)",
-                capabilities: capabilities,
+                capabilities: inferCapabilities(from: model.id),
                 format: .api,
                 parameters: "unknown",
                 sizeBytes: 0,
                 architecture: "unknown",
                 domain: inferDomain(from: model.id),
-                isLocal: baseURL.contains("127.0.0.1") || baseURL.contains("localhost"),
+                // The model does not leave this network, which is what a
+                // reader of `isLocal` is asking. Read from
+                // ``AIServerAddress/reach``, not from a substring test on the
+                // host: `host == "127.0.0.1" || host == "localhost"` called
+                // the Mac on the desk at `192.168.1.42` — or at
+                // `studio.local` — a cloud model (AIKit#18, panel finding on
+                // `OpenAICompatibleEngine.swift:62`).
+                isLocal: address.reach != .remote,
                 tags: []
             )
         }
     }
 
-    public func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
-        let provider = OpenAIProvider(
+    func loadModel(_ descriptor: ModelDescriptor) async throws -> any AIProvider {
+        let entry = AIProviderEntry(
             id: "\(id)/\(descriptor.id.modelId)",
+            family: .openAIChat,
+            address: address,
+            model: descriptor.id.modelId
+        )
+        let provider = HTTPAIProvider(
+            entry: entry,
+            codec: OpenAIChatCodec(),
+            network: transport,
+            credential: apiKey,
             displayName: "\(displayName) — \(descriptor.name)",
-            capabilities: descriptor.capabilities,
-            baseURL: baseURL,
-            modelName: descriptor.id.modelId,
-            apiKey: apiKey,
-            networkService: networkService
+            capabilities: descriptor.capabilities
         )
         if !_loadedModels.contains(descriptor.id) {
             _loadedModels.append(descriptor.id)
@@ -79,11 +108,11 @@ public final class OpenAICompatibleEngine: RuntimeEngine, @unchecked Sendable {
         return provider
     }
 
-    public func unloadModel(_ id: ModelIdentifier) async throws {
+    func unloadModel(_ id: ModelIdentifier) async throws {
         _loadedModels.removeAll { $0 == id }
     }
 
-    public func loadedModels() -> [ModelIdentifier] {
+    func loadedModels() -> [ModelIdentifier] {
         _loadedModels
     }
 

@@ -60,7 +60,23 @@ excluded:
   - Package.swift
 
 reporter: "xcode"
-baseline: .swiftlint-baseline.json
+
+# No `baseline:` key, on purpose (W26 of spec ai-layer-aikit-core-2026-10-31,
+# operator thread AIKit#18 r4500611478: "Did we cannot reduce the linter
+# warnings ?").
+#
+# `.swiftlint-baseline.json` parked 22 violations, of which only 10 still fired
+# at the W20 head — the other 12 named `nesting` sites in OpenAIDTOs.swift and
+# LMStudioProvider.swift that the rework had already restructured away, so the
+# file was also reporting debt that no longer existed. W26 fixed all 10 (a
+# `for ... where` in ProviderRouter, the escape table lifted out of
+# ClaudeSessionIndex.extractStringField, `Data(s.utf8)` for six forced
+# `data(using:)!` conversions, `isEmpty` for one `== ""`, and a fixture value
+# instead of a 6-parameter helper), which left nothing to suppress.
+#
+# A baseline is a ratchet that only goes down and zero is the floor: do not
+# reintroduce the key to park a new warning. `.kagami` scope AIKitAll asserts
+# both the missing file and the missing key (MockProductBoundaryTests).
 
 custom_rules:
   # A FIXME/TODO is debt with an address. Allowed forms — the reference is the

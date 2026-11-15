@@ -2,6 +2,21 @@ import Foundation
 
 // MARK: - Chat Completion Request
 
+// CodingKey for ChatCompletionRequest.ChatMessage fields.
+// Defined at file scope to avoid a 2-level nesting violation (SwiftLint `nesting`).
+private enum ChatMessageKey: String, CodingKey {
+    case role, content
+    case toolCalls = "tool_calls"
+    case toolCallId = "tool_call_id"
+}
+
+/// Function call details inside a ToolCallRequest.
+/// Defined at file scope to avoid a 2-level nesting violation (SwiftLint `nesting`).
+struct ToolCallFunctionRequest: Encodable, Sendable {
+    let name: String
+    let arguments: String
+}
+
 /// OpenAI-compatible chat completion request body.
 struct ChatCompletionRequest: Encodable, Sendable {
     let model: String
@@ -20,13 +35,45 @@ struct ChatCompletionRequest: Encodable, Sendable {
 
     struct ChatMessage: Encodable, Sendable {
         let role: String
-        let content: String
+        /// Nil for an assistant message that carries only `toolCalls`.
+        let content: String?
+        /// Tool calls the assistant is requesting (`role == "assistant"`).
+        let toolCalls: [ToolCallRequest]?
+        /// ID of the tool call being responded to (`role == "tool"`).
+        let toolCallId: String?
+
+        init(role: String, content: String?, toolCalls: [ToolCallRequest]? = nil, toolCallId: String? = nil) {
+            self.role = role
+            self.content = content
+            self.toolCalls = toolCalls
+            self.toolCallId = toolCallId
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: ChatMessageKey.self)
+            try container.encode(role, forKey: .role)
+            // Only encode content when present; omitting it produces the
+            // correct wire format for a tool-calls-only assistant message.
+            if let content {
+                try container.encode(content, forKey: .content)
+            }
+            try container.encodeIfPresent(toolCalls, forKey: .toolCalls)
+            try container.encodeIfPresent(toolCallId, forKey: .toolCallId)
+        }
+    }
+
+    /// A tool call sent IN a request (assistant-turn replay).
+    struct ToolCallRequest: Encodable, Sendable {
+        let id: String
+        let type: String
+        let function: ToolCallFunctionRequest
     }
 
     struct ToolDefinition: Encodable, Sendable {
         let type: String
         let function: FunctionDef
 
+        // swiftlint:disable:next nesting
         struct FunctionDef: Encodable, Sendable {
             let name: String
             let description: String
@@ -42,49 +89,66 @@ struct ChatCompletionRequest: Encodable, Sendable {
 // MARK: - Chat Completion Response
 
 /// OpenAI-compatible chat completion response.
-struct ChatCompletionResponseDTO: Decodable, Sendable {
+struct ChatCompletionResponseDTO: Codable, Sendable, Equatable {
     let id: String
+    /// The model that actually answered.
+    ///
+    /// Optional because a reply is not required to echo it. Measured on LM
+    /// Studio 2026-10-31: this surface *ignores* an unknown `model` in the
+    /// request and answers with whatever is loaded, so the request's model name
+    /// is not evidence of who answered and the reply's value is (BR-AIL-06).
+    ///
+    /// No PRODUCTION call site builds this type memberwise — AIKit reads
+    /// replies and never writes one. It gained `Encodable` in W24 so a test
+    /// fixture can be MINTED from the same declaration the decoder reads,
+    /// instead of being a second, hand-written statement of the same wire
+    /// shape that drifts from it silently (AIKit#18 r4500592040 and siblings).
+    let model: String?
     let choices: [Choice]
     let usage: Usage?
 
-    struct Choice: Decodable, Sendable {
+    struct Choice: Codable, Sendable, Equatable {
         let index: Int
         let message: Message
         let finishReason: String?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case index, message
             case finishReason = "finish_reason"
         }
     }
 
-    struct Message: Decodable, Sendable {
+    struct Message: Codable, Sendable, Equatable {
         let role: String
         let content: String?
         let toolCalls: [ToolCall]?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case role, content
             case toolCalls = "tool_calls"
         }
     }
 
-    struct ToolCall: Decodable, Sendable {
+    struct ToolCall: Codable, Sendable, Equatable {
         let id: String?
         let type: String?
         let function: FunctionCall
 
-        struct FunctionCall: Decodable, Sendable {
+        // swiftlint:disable:next nesting
+        struct FunctionCall: Codable, Sendable, Equatable {
             let name: String
             let arguments: String
         }
     }
 
-    struct Usage: Decodable, Sendable {
-        let promptTokens: Int
-        let completionTokens: Int
-        let totalTokens: Int
+    struct Usage: Codable, Sendable, Equatable {
+        let promptTokens: Int?
+        let completionTokens: Int?
+        let totalTokens: Int?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case promptTokens = "prompt_tokens"
             case completionTokens = "completion_tokens"
@@ -96,39 +160,42 @@ struct ChatCompletionResponseDTO: Decodable, Sendable {
 // MARK: - Streaming Chunk
 
 /// A single SSE chunk from a streaming chat completion.
-struct ChatCompletionChunkDTO: Decodable, Sendable {
+struct ChatCompletionChunkDTO: Codable, Sendable, Equatable {
     let id: String
     let choices: [Choice]
 
-    struct Choice: Decodable, Sendable {
+    struct Choice: Codable, Sendable, Equatable {
         let index: Int
         let delta: Delta
         let finishReason: String?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case index, delta
             case finishReason = "finish_reason"
         }
     }
 
-    struct Delta: Decodable, Sendable {
+    struct Delta: Codable, Sendable, Equatable {
         let role: String?
         let content: String?
         let toolCalls: [ToolCallDelta]?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case role, content
             case toolCalls = "tool_calls"
         }
     }
 
-    struct ToolCallDelta: Decodable, Sendable {
+    struct ToolCallDelta: Codable, Sendable, Equatable {
         let index: Int?
         let id: String?
         let type: String?
         let function: FunctionDelta?
 
-        struct FunctionDelta: Decodable, Sendable {
+        // swiftlint:disable:next nesting
+        struct FunctionDelta: Codable, Sendable, Equatable {
             let name: String?
             let arguments: String?
         }
@@ -138,14 +205,15 @@ struct ChatCompletionChunkDTO: Decodable, Sendable {
 // MARK: - Models List
 
 /// Response from /v1/models endpoint.
-struct ModelsListResponseDTO: Decodable, Sendable {
+struct ModelsListResponseDTO: Codable, Sendable, Equatable {
     let data: [ModelInfo]
 
-    struct ModelInfo: Decodable, Sendable {
+    struct ModelInfo: Codable, Sendable, Equatable {
         let id: String
         let ownedBy: String?
         let created: Int?
 
+        // swiftlint:disable:next nesting
         enum CodingKeys: String, CodingKey {
             case id
             case ownedBy = "owned_by"
@@ -162,16 +230,21 @@ struct JSONFragment: Encodable, Sendable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        if let data = rawJSON.data(using: .utf8),
-           let object = try? JSONSerialization.jsonObject(with: data) {
-            // Re-serialize through the encoder to produce valid nested JSON.
-            let reEncoded = try JSONSerialization.data(withJSONObject: object)
-            let rawValue = try JSONDecoder().decode(AnyCodable.self, from: reEncoded)
-            try container.encode(rawValue)
-        } else {
-            // Fallback: encode as a plain string.
-            try container.encode(rawJSON)
+        guard let data = rawJSON.data(using: .utf8) else {
+            throw EncodingError.invalidValue(
+                rawJSON,
+                EncodingError.Context(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "JSONFragment: rawJSON is not valid UTF-8"
+                )
+            )
         }
+        // Throws on invalid JSON rather than silently encoding a raw string.
+        // A malformed fragment is a programming error and must surface.
+        let object = try JSONSerialization.jsonObject(with: data)
+        let reEncoded = try JSONSerialization.data(withJSONObject: object)
+        let rawValue = try JSONDecoder().decode(AnyCodable.self, from: reEncoded)
+        try container.encode(rawValue)
     }
 }
 
@@ -217,5 +290,35 @@ private enum AnyCodable: Codable, Sendable {
         case .dictionary(let value): try container.encode(value)
         case .null: try container.encodeNil()
         }
+    }
+}
+
+// MARK: - Chat Completion Reply
+
+/// One reply from `/v1/chat/completions`, in either shape the surface answers
+/// with.
+///
+/// A completion is the normal shape. The other one is a 2xx carrying an error
+/// body, which an OpenAI-compatible server returns for a request it accepted
+/// and then could not serve — a model name it has not loaded, a `/v1` left in
+/// the server root. Asking for `ChatCompletionResponseDTO` alone turns that
+/// answer into a `DecodingError` and loses the server's own words. BR-AIL-10
+/// requires those words to reach the caller, so the reply type admits both
+/// shapes and `OpenAIChatCodec` decides which one is a failure.
+enum ChatCompletionReply: Decodable, Sendable {
+    /// The server answered with choices.
+    case completion(ChatCompletionResponseDTO)
+    /// The server answered 2xx and named what went wrong.
+    case serverError(message: String)
+
+    /// Error bodies are read by the shared `wireErrorMessage`, which tests for
+    /// an absent or null `error` explicitly and throws on a malformed one, so
+    /// a decode failure is never mistaken for "no error, so a completion".
+    init(from decoder: Decoder) throws {
+        if let message = try wireErrorMessage(in: decoder) {
+            self = .serverError(message: message)
+            return
+        }
+        self = .completion(try ChatCompletionResponseDTO(from: decoder))
     }
 }

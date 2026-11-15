@@ -5,9 +5,12 @@ import Testing
 @Suite("CoreMLEngine")
 struct CoreMLEngineTests {
 
+    private static let directory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        .appendingPathComponent("aikit-coreml-engine-tests", isDirectory: true)
+
     @Test("CoreML engine has correct id and formats")
     func engineIdentity() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(engine.id == "coreml")
         #expect(engine.displayName == "Apple CoreML")
         #expect(engine.supportedFormats == [.coreml])
@@ -16,16 +19,27 @@ struct CoreMLEngineTests {
     #if canImport(CoreML)
     @Test("isAvailable returns true on Apple platforms")
     func availableOnApple() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(engine.isAvailable)
     }
 
-    @Test("Default models directory is ~/.aikit/coreml-models/")
-    func defaultModelsDirectory() {
-        let engine = CoreMLEngine()
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let expected = home.appendingPathComponent(".aikit/coreml-models", isDirectory: true)
-        #expect(engine.modelsDirectory == expected)
+    @Test("availableModelIDs lists the .mlmodelc bundles, sorted, ignoring other entries")
+    func availableModelIDsListsBundles() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("aikit-coreml-discover-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for name in ["whisper-small.mlmodelc", "ocr.mlmodelc", "notes.txt", "other.mlpackage"] {
+            try FileManager.default.createDirectory(
+                at: dir.appendingPathComponent(name), withIntermediateDirectories: true)
+        }
+        let engine = CoreMLEngine(modelsDirectory: dir)
+        #expect(engine.availableModelIDs() == ["ocr", "whisper-small"])
+    }
+
+    @Test("availableModelIDs is empty when the directory is missing")
+    func availableModelIDsMissingDirectory() {
+        let missing = Self.directory.appendingPathComponent("does-not-exist-\(UUID().uuidString)")
+        #expect(CoreMLEngine(modelsDirectory: missing).availableModelIDs().isEmpty)
     }
 
     @Test("Custom models directory is respected")
@@ -37,14 +51,14 @@ struct CoreMLEngineTests {
     #else
     @Test("isAvailable returns false off Apple platforms")
     func unavailableOffPlatform() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(!engine.isAvailable)
     }
     #endif
 
     @Test("Loaded models starts empty")
     func loadedModelsEmpty() {
-        let engine = CoreMLEngine()
+        let engine = CoreMLEngine(modelsDirectory: Self.directory)
         #expect(engine.loadedModels().isEmpty)
     }
 

@@ -13,19 +13,23 @@ import Foundation
 /// as another alias key. This keeps resolution deterministic (no cycle
 /// detection needed) and matches how operators actually reason about
 /// their model list.
-public struct ModelAliasMap: Sendable, Equatable {
+struct ModelAliasMap: Sendable, Equatable {
     private let aliases: [String: String]
+
+    /// The pairs this map holds, for a caller that has to write them back into
+    /// a settings row (``AICLISubprocessOptions``).
+    var mapping: [String: String] { aliases }
 
     /// Create a map from the given `alias → canonical` pairs.
     /// An empty map is a valid passthrough (every input resolves to itself).
-    public init(_ aliases: [String: String]) {
+    init(_ aliases: [String: String]) {
         self.aliases = aliases
     }
 
     /// Resolve `name` through the map.
     /// - Returns: the canonical model id when `name` matches an alias key;
     ///            otherwise `name` itself (passthrough).
-    public func resolve(_ name: String) -> String {
+    func resolve(_ name: String) -> String {
         aliases[name] ?? name
     }
 }

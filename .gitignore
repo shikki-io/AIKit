@@ -9,6 +9,7 @@
 .kagami/*.db-wal
 .kagami/*.write-lock
 .kagami/tmp/
+.kagami/runs/
 .DS_Store
 
 # Secrets — env files and every backup of them never belong in git.
@@ -24,3 +25,8 @@
 !.env.dist
 !*.env.example
 !*.env.template
+
+# CoreKit TestScratch: run-scoped test fixtures, swept by the suite that made
+# them. Never tracked — a crashed run leaves its tree behind.
+.tests/
+

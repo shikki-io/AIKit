@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import AIKit
 
 // MARK: - ProviderHealthCheckTests
@@ -46,7 +47,7 @@ struct ProviderHealthCheckTests {
     func healthCheckUnreachableHost() async {
         // Use a port that is almost certainly not listening
         let status = await ProviderHealthCheck.check(
-            baseURL: "http://127.0.0.1:59999",
+            baseURL: fixtureUnreachableServerRoot,
             timeout: 2
         )
 
