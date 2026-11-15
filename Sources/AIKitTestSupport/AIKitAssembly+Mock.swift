@@ -20,13 +20,31 @@ extension AIKitAssembly {
         )
     }
 
+    /// The embedder a row becomes in the `.mock` environment, for the rows that
+    /// declare an `embedding_model`. Carries the row's id and that model, so a
+    /// mocked vector still names who made it and with what (BR-AIL-06).
+    public static let mockEmbedder: @Sendable (AIProviderEntry) -> any AIEmbeddingProviding = { entry in
+        MockEmbeddingProvider(
+            id: entry.id,
+            // Safe: the assembly only calls this for a row that declares one.
+            embeddingModel: entry.embeddingModel ?? "<no embedding_model>"
+        )
+    }
+
     /// An assembly whose `.mock` environment serves a `MockAIProvider` per
-    /// settings row. Production behaviour is unchanged.
+    /// settings row, and a `MockEmbeddingProvider` per row that declares an
+    /// `embedding_model`. Production behaviour is unchanged.
     public static func mock(
         settings: AIProviderSettings,
         factory: AIProviderFactory = AIProviderFactory(),
         source: String = "the provider settings"
     ) -> AIKitAssembly {
-        AIKitAssembly(settings: settings, factory: factory, source: source, mockProvider: mockProvider)
+        AIKitAssembly(
+            settings: settings,
+            factory: factory,
+            source: source,
+            mockProvider: mockProvider,
+            mockEmbedder: mockEmbedder
+        )
     }
 }

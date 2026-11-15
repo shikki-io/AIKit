@@ -70,8 +70,20 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
     /// nil for a LOCAL family, which has no server. Read it through
     /// ``serverAddress()``, which names the row when it is missing.
     public let address: AIServerAddress?
-    /// The model name as the server knows it.
+    /// The model name as the server knows it. A CHAT model.
     public let model: String
+    /// The model this row embeds with, when it serves embeddings.
+    ///
+    /// BR-AIL-25, and deliberately separate from ``model``. The operator's own
+    /// `providers.toml` states why, beside the key: *"`embedding_model` is
+    /// deliberately separate from `default_model`/`model`, which are CHAT
+    /// models: a provider serves both, and embedding a query with a chat model
+    /// yields a vector that is silently wrong rather than an error."*
+    ///
+    /// `nil` means this row serves no embeddings, which is the common case —
+    /// not "use the chat model". Read it through ``embeddingModelName()``,
+    /// which names the row a reader has to edit.
+    public let embeddingModel: String?
     /// A broker reference to the secret, never the secret (BR-AIL-20).
     public let apiKeyRef: String?
     /// Seconds one request may take. Defaults to
@@ -90,6 +102,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
         family: AIProviderFamily,
         address: AIServerAddress?,
         model: String,
+        embeddingModel: String? = nil,
         apiKeyRef: String? = nil,
         requestTimeout: TimeInterval = AIProviderEntry.defaultRequestTimeout,
         streamLineByteCap: Int = AIProviderEntry.defaultStreamLineByteCap,
@@ -99,6 +112,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
         self.family = family
         self.address = address
         self.model = model
+        self.embeddingModel = embeddingModel
         self.apiKeyRef = apiKeyRef
         self.requestTimeout = requestTimeout
         self.streamLineByteCap = streamLineByteCap
@@ -114,6 +128,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
         family: AIProviderFamily,
         address: String,
         model: String,
+        embeddingModel: String? = nil,
         apiKeyRef: String? = nil,
         requestTimeout: TimeInterval = AIProviderEntry.defaultRequestTimeout,
         streamLineByteCap: Int = AIProviderEntry.defaultStreamLineByteCap,
@@ -124,6 +139,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
             family: family,
             address: try AIServerAddress(validating: address),
             model: model,
+            embeddingModel: embeddingModel,
             apiKeyRef: apiKeyRef,
             requestTimeout: requestTimeout,
             streamLineByteCap: streamLineByteCap,
@@ -152,6 +168,30 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
         return address
     }
 
+    // MARK: - Reading the embedding model
+
+    /// The model this row embeds with.
+    ///
+    /// - Throws: ``AIKitError/settings(file:entry:reason:)`` naming the row,
+    ///   because the only useful answer is an `embedding_model` line in that
+    ///   file. It does NOT fall back to ``model``: a chat model answers an
+    ///   embeddings call with a vector in a different space, so the fallback
+    ///   would be wrong silently rather than loudly (BR-AIL-25).
+    public func embeddingModelName() throws(AIKitError) -> String {
+        guard let embeddingModel, !embeddingModel.isEmpty else {
+            throw .settings(
+                file: "the provider settings",
+                entry: id,
+                reason: """
+                    it serves no embeddings: add `embedding_model = "<model>"` to this row. \
+                    It is deliberately not `model`, which is the CHAT model — embedding with \
+                    that one answers a vector in a different space, with no error
+                    """
+            )
+        }
+        return embeddingModel
+    }
+
     // MARK: - Codable
 
     /// The keys of one `[[providers]]` row, snake_case as TOML is written.
@@ -160,6 +200,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
         case family
         case address
         case model
+        case embeddingModel = "embedding_model"
         case apiKeyRef = "api_key_ref"
         case requestTimeout = "request_timeout"
         case streamLineByteCap = "stream_line_byte_cap"
@@ -237,6 +278,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
             family: family,
             address: address,
             model: try container.decode(String.self, forKey: .model),
+            embeddingModel: try container.decodeIfPresent(String.self, forKey: .embeddingModel),
             apiKeyRef: try container.decodeIfPresent(String.self, forKey: .apiKeyRef),
             requestTimeout: try Self.decodeSeconds(from: container) ?? Self.defaultRequestTimeout,
             streamLineByteCap: try container.decodeIfPresent(Int.self, forKey: .streamLineByteCap)
@@ -251,6 +293,7 @@ public struct AIProviderEntry: Sendable, Equatable, Codable {
         try container.encode(family.rawValue, forKey: .family)
         try container.encodeIfPresent(address?.description, forKey: .address)
         try container.encode(model, forKey: .model)
+        try container.encodeIfPresent(embeddingModel, forKey: .embeddingModel)
         try container.encodeIfPresent(apiKeyRef, forKey: .apiKeyRef)
         try container.encode(requestTimeout, forKey: .requestTimeout)
         try container.encode(streamLineByteCap, forKey: .streamLineByteCap)

@@ -71,6 +71,42 @@
 #        `.attempt` bridges a failed branch back to `AIProviderAttempt` so a
 #        caller reports "nobody answered" with the kit's existing error.
 #
+#    AIKit#24 (BR-AIL-24, BR-AIL-25) added EMBEDDINGS to this door, and not a
+#    fifth one: embedding is talking to a configured provider — the same
+#    conversation `complete` is — so it sits beside `AIProvider` rather than in
+#    a new kit. It is a separate PROTOCOL because it is not a separate door:
+#    `complete`/`stream` are chat surfaces, an embedding is neither, and most
+#    configured rows serve no embedding model at all, so a requirement on
+#    `AIProvider` would be one every CLI, MLX and Core ML row had to fake —
+#    which is how `AICapabilities.embedding` came to be declared and never
+#    called. Each symbol, with why it is public rather than internal:
+#      * AIEmbeddingProviding, .embed(texts:), .embed(text:), .embeddingModel,
+#        .id — the call itself. A consumer (shikki#1930's `shi indy recall`)
+#        holds one and asks for vectors; `embeddingModel` is readable because a
+#        stored vector is only comparable to another from the SAME model on the
+#        SAME server, so a caller that keeps vectors must record which model
+#        made them. Measured 2026-11-14 against the live @db: the same text
+#        through lmstudio/nomic-embed-text-v1.5 and ollama/nomic-embed-text
+#        reproduces a stored vector at cos 1.0000 and cos 0.9036.
+#      * AIProviderEntry.embeddingModel and .embeddingModelName() — door 1's
+#        settings row gains the `embedding_model` key, because the model an
+#        embeddings call uses comes from settings and never from a caller
+#        (BR-AIL-25). The operator's own providers.toml states why, beside the
+#        key: a chat model answers an embeddings call with a vector in a
+#        different space, with no error.
+#      * AIProviderFactory.makeEmbedding(_:) / .makeAllEmbedding(_:) — a row
+#        becomes an embedder the same way it becomes a provider, through the one
+#        factory. Internal would mean a host could not build one at all.
+#      * AIKitError.embeddingCountMismatch(provider:expected:received:) — the
+#        refusal a caller has to be able to match. Deliberately NOT eligible for
+#        fallback: another embedder is another vector space, not a retry.
+#      * AIKitAssembly.init(... mockEmbedder:) — the `.mock` embedder is
+#        injected, for the reason `mockProvider` is: the doubles live in
+#        AIKitTestSupport, out of the product (AIKit#18 r4500328752).
+#    `HTTPEmbeddingProvider` itself is INTERNAL, as `HTTPAIProvider` is: a
+#    caller names a row in settings and resolves `any AIEmbeddingProviding`
+#    from the container. It never holds the thing that talks the wire.
+#
 # 3. GET MODELS — the catalogue, the store, and what this device can load.
 #    ModelRegistry, DefaultModelRegistry, ModelFilter, ModelDescriptor,
 #    ModelIdentifier, ModelDomain, ModelFormat, ModelStore, ModelFile,
@@ -211,6 +247,7 @@ AIKit  enum  VideoResolution
 AIKit  enum.case  AIKitError.allProvidersFailed(_:)
 AIKit  enum.case  AIKitError.downloadFailed(_:)
 AIKit  enum.case  AIKitError.downloadNeedsConsent(model:reason:network:)
+AIKit  enum.case  AIKitError.embeddingCountMismatch(provider:expected:received:)
 AIKit  enum.case  AIKitError.emptyReply(target:)
 AIKit  enum.case  AIKitError.engineUnavailable(_:)
 AIKit  enum.case  AIKitError.http(status:body:target:)
@@ -455,7 +492,7 @@ AIKit  init  AIInput.init(from:)
 AIKit  init  AIInput.init(kind:data:mimeType:)
 AIKit  init  AIInput.init(kind:source:mimeType:)
 AIKit  init  AIInput.init(kind:url:mimeType:)
-AIKit  init  AIKitAssembly.init(settings:factory:source:mockProvider:)
+AIKit  init  AIKitAssembly.init(settings:factory:source:mockProvider:mockEmbedder:)
 AIKit  init  AIKitNode.init(rawValue:)
 AIKit  init  AILocalModelPlacement.init(model:device:)
 AIKit  init  AIMediaKind.init(from:)
@@ -472,8 +509,8 @@ AIKit  init  AIOutput.init(kind:url:mimeType:)
 AIKit  init  AIProviderAttempt.init(providerID:cause:)
 AIKit  init  AIProviderAttempt.init(providerID:error:)
 AIKit  init  AIProviderEntry.init(from:)
-AIKit  init  AIProviderEntry.init(id:family:address:model:apiKeyRef:requestTimeout:streamLineByteCap:options:)  [s:5AIKit15AIProviderEntryV2id6family7address5model9apiKeyRef14requestTimeout17streamLineByteCap7optionsACSS_AA0B6FamilyOAA15AIServerAddressVSgS2SSgSdSiAA0B7OptionsOtcfc]
-AIKit  init  AIProviderEntry.init(id:family:address:model:apiKeyRef:requestTimeout:streamLineByteCap:options:)  [s:5AIKit15AIProviderEntryV2id6family7address5model9apiKeyRef14requestTimeout17streamLineByteCap7optionsACSS_AA0B6FamilyOS3SSgSdSiAA0B7OptionsOtAA0A5ErrorOYKcfc]
+AIKit  init  AIProviderEntry.init(id:family:address:model:embeddingModel:apiKeyRef:requestTimeout:streamLineByteCap:options:)  [s:5AIKit15AIProviderEntryV2id6family7address5model14embeddingModel9apiKeyRef14requestTimeout17streamLineByteCap7optionsACSS_AA0B6FamilyOAA15AIServerAddressVSgS2SSgARSdSiAA0B7OptionsOtcfc]
+AIKit  init  AIProviderEntry.init(id:family:address:model:embeddingModel:apiKeyRef:requestTimeout:streamLineByteCap:options:)  [s:5AIKit15AIProviderEntryV2id6family7address5model14embeddingModel9apiKeyRef14requestTimeout17streamLineByteCap7optionsACSS_AA0B6FamilyOS3SSgAOSdSiAA0B7OptionsOtAA0A5ErrorOYKcfc]
 AIKit  init  AIProviderFactory.init(credentials:builders:)
 AIKit  init  AIProviderFamily.init(from:)
 AIKit  init  AIProviderFamily.init(kind:)
@@ -599,6 +636,8 @@ AIKit  method  AICapabilities.subtracting(_:)
 AIKit  method  AICapabilities.symmetricDifference(_:)
 AIKit  method  AICapabilities.union(_:)
 AIKit  method  AICapabilities.update(with:)
+AIKit  method  AIEmbeddingProviding.embed(text:)
+AIKit  method  AIEmbeddingProviding.embed(texts:)
 AIKit  method  AIInput.compactJSON()
 AIKit  method  AIInput.prettyJSON()
 AIKit  method  AIKitAssembly.assemble(container:environment:)
@@ -622,11 +661,14 @@ AIKit  method  AIProvider.complete(request:)
 AIKit  method  AIProvider.stream(request:)  [s:5AIKit10AIProviderP6stream7requestScsyAA7AIChunkVs5Error_pGAA9AIRequestV_tYaKF]
 AIKit  method  AIProvider.stream(request:)  [s:5AIKit10AIProviderPAAE6stream7requestScsyAA7AIChunkVs5Error_pGAA9AIRequestV_tYaKF]
 AIKit  method  AIProviderEntry.compactJSON()
+AIKit  method  AIProviderEntry.embeddingModelName()
 AIKit  method  AIProviderEntry.encode(to:)
 AIKit  method  AIProviderEntry.prettyJSON()
 AIKit  method  AIProviderEntry.serverAddress()
 AIKit  method  AIProviderFactory.make(_:)
 AIKit  method  AIProviderFactory.makeAll(_:)
+AIKit  method  AIProviderFactory.makeAllEmbedding(_:)
+AIKit  method  AIProviderFactory.makeEmbedding(_:)
 AIKit  method  AIProviderFactory.registering(_:builder:)
 AIKit  method  AIProviderFamily.compactJSON()
 AIKit  method  AIProviderFamily.encode(to:)
@@ -844,6 +886,8 @@ AIKit  property  AICapabilities.rawAttachmentValueRepresentation
 AIKit  property  AICapabilities.rawValue
 AIKit  property  AIChunk.delta
 AIKit  property  AIChunk.isComplete
+AIKit  property  AIEmbeddingProviding.embeddingModel
+AIKit  property  AIEmbeddingProviding.id
 AIKit  property  AIInput.data
 AIKit  property  AIInput.kind
 AIKit  property  AIInput.lessPrettyJson
@@ -898,6 +942,7 @@ AIKit  property  AIProviderAttempt.description
 AIKit  property  AIProviderAttempt.providerID
 AIKit  property  AIProviderEntry.address
 AIKit  property  AIProviderEntry.apiKeyRef
+AIKit  property  AIProviderEntry.embeddingModel
 AIKit  property  AIProviderEntry.family
 AIKit  property  AIProviderEntry.id
 AIKit  property  AIProviderEntry.lessPrettyJson
@@ -1216,6 +1261,7 @@ AIKit  property  VideoResolution.pixelsPerFrame
 AIKit  property  VideoResolution.prettyJson
 AIKit  property  VideoResolution.rawAttachmentValueRepresentation
 AIKit  property  VideoResolution.width
+AIKit  protocol  AIEmbeddingProviding
 AIKit  protocol  AIProvider
 AIKit  protocol  AgentSessionIndexProvider
 AIKit  protocol  ModelRegistry

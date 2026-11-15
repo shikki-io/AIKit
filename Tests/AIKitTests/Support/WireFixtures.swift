@@ -319,7 +319,9 @@ func makeFixtureEntry(
     family: AIProviderFamily,
     id: String = "lmstudio",
     model: String = "requested-model",
+    embeddingModel: String? = nil,
     root: String = fixtureServerRoot,
+    requestTimeout: TimeInterval = AIProviderEntry.defaultRequestTimeout,
     streamLineByteCap: Int = AIProviderEntry.defaultStreamLineByteCap
 ) throws -> AIProviderEntry {
     try AIProviderEntry(
@@ -327,8 +329,69 @@ func makeFixtureEntry(
         family: family,
         address: root,
         model: model,
+        embeddingModel: embeddingModel,
+        requestTimeout: requestTimeout,
         streamLineByteCap: streamLineByteCap
     )
+}
+
+// MARK: - The MINIMUM settings document
+
+/// The embedding model every minted embeddings fixture says answered.
+///
+/// A fixture name and NOT the operator's `text-embedding-nomic-embed-text-v1.5`:
+/// a unit suite must not read as evidence about his machine, and a failure that
+/// prints this value says at once which kind of fixture it came from.
+let fixtureEmbeddingModel = "fixture-embed-minted"
+
+/// How many components a minted embedding vector has. Small on purpose: a
+/// vector a reader can hold in their head is a better fixture than a realistic
+/// 768-wide one nobody checks.
+let fixtureEmbeddingDimensions = 3
+
+/// The MINIMUM `[[providers]]` document that serves embeddings: exactly the
+/// keys AIKit requires, and not one more.
+///
+/// Operator, AIKit#24 on `AIEmbeddingProviderTests.swift:32` — *"hardcoded
+/// settings need to be against the minimum settings we manage, not against a
+/// working system"*. So this is not a copy of `~/.shikki/settings/providers.toml`
+/// with its seven rows, profiles, timeouts and comments: it is the four keys
+/// ``AIProviderEntry`` cannot do without plus the one that turns embeddings on.
+/// Everything a test asserts about defaults — `request_timeout`,
+/// `stream_line_byte_cap` — is therefore being asserted about the DEFAULT, which
+/// is what a minimum document exists to exercise.
+///
+/// The address is ``fixtureServerRoot`` and written with no `/v1`:
+/// ``AIServerAddress`` refuses a path, because the route belongs to the endpoint
+/// enum (BR-AIL-09).
+func minimumEmbeddingSettingsTOML(
+    id: String = "lmstudio",
+    embeddingModel: String = fixtureEmbeddingModel,
+    root: String = fixtureServerRoot
+) -> String {
+    """
+    [[providers]]
+    id              = "\(id)"
+    family          = "openai-compatible"
+    address         = "\(root)"
+    model           = "\(fakeReplyModel)"
+    embedding_model = "\(embeddingModel)"
+    """
+}
+
+/// The same minimum document with a SECOND row that serves chat only, so a test
+/// can prove an embedder is registered for the declaring row and for no other.
+func minimumMixedSettingsTOML(root: String = fixtureServerRoot) -> String {
+    minimumEmbeddingSettingsTOML(root: root)
+        + """
+
+
+        [[providers]]
+        id      = "chat-only"
+        family  = "openai-chat"
+        address = "\(root)"
+        model   = "\(fakeReplyModel)"
+        """
 }
 
 /// A plain single-turn request — what every family can carry.
@@ -550,6 +613,46 @@ func mintReply(
     case .cliSubprocess, .mlxInProcess, .coreML:
         throw AIKitError.unsupported(field: "a wire reply", family: family)
     }
+}
+
+/// A 2xx `/v1/embeddings` reply, built from the DTO that decodes it.
+///
+/// `indices` is the order the SERVER answers in, which is the point: the OpenAI
+/// surface does not promise `data` comes back in request order, so a fixture
+/// that always arrives sorted cannot prove the reader honours `index`. Pass
+/// `[2, 0, 1]` to answer out of order.
+///
+/// Each vector is distinguishable by its input index, so a test asserting that
+/// INPUT order was restored is not comparing identical vectors.
+func mintEmbeddingsReply(
+    indices: [Int],
+    dimensions: Int = fixtureEmbeddingDimensions,
+    model: String? = fixtureEmbeddingModel,
+    promptTokens: Int? = fakeReplyPromptTokens
+) throws -> String {
+    try mintJSONText(
+        EmbeddingsResponseDTO(
+            data: indices.map { index in
+                EmbeddingsItem(
+                    embedding: mintEmbeddingVector(for: index, dimensions: dimensions),
+                    index: index
+                )
+            },
+            model: model,
+            usage: promptTokens == nil
+                ? nil
+                : EmbeddingsUsage(promptTokens: promptTokens, totalTokens: promptTokens)
+        )
+    )
+}
+
+/// The vector a minted reply carries for input `index`.
+///
+/// Not a zero vector and not a constant one: a zero vector scores 0 against
+/// everything and an identical one scores 1, and either lets a reader that
+/// scrambled the order pass.
+func mintEmbeddingVector(for index: Int, dimensions: Int = fixtureEmbeddingDimensions) -> [Float] {
+    (0..<dimensions).map { component in Float(index + 1) * 10 + Float(component) }
 }
 
 /// `usage` for a chat completion, or nil when neither side is known.

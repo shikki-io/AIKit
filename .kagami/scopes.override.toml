@@ -105,7 +105,12 @@ timeout_seconds = 300
 # The floor is the number that actually executes, so a scope that silently
 # stops discovering its suites exits 2 instead of reporting success forever.
 # Raise this only with a measurement, never to make a red test pass.
-expected_test_min = 745
+#
+#   * +19 at AIKit#24's restack head: `HTTPEmbeddingProviderTests`, the suite
+#     that replaces `AIEmbeddingProviderTests` after the operator's five
+#     threads. Measured 764 executed against a floor of 745, by
+#     `swift test --filter AIKitTests` and then by this scope.
+expected_test_min = 764
 description = "Whole AIKitTests target. Run: kagami test --scope AIKitAll"
 
 [[scopes]]
