@@ -21,6 +21,8 @@ import Foundation
 /// | `[any AIProvider]` | — | the built providers, in settings order |
 /// | `any AIProvider` | each entry's `id` | one provider per row |
 /// | ``ProviderRouter`` | — | the ordered chain over those providers |
+/// | `[any AIEmbeddingProviding]` | — | the embedders, for the rows that declare `embedding_model` |
+/// | `any AIEmbeddingProviding` | each declaring entry's `id` | one embedder per declaring row |
 ///
 /// The two environments differ ONLY in what a row becomes:
 /// `.production` builds the real provider through ``AIProviderFactory``,
@@ -53,6 +55,12 @@ public struct AIKitAssembly: DIAssembly {
     /// A `.mock` container built without it reports every entry unavailable,
     /// naming what to add, instead of serving anything (see `providerSet`).
     private let mockProvider: (@Sendable (AIProviderEntry) -> any AIProvider)?
+    /// Builds the embedder an entry gets in the `.mock` environment, for the
+    /// rows that declare an `embedding_model`.
+    ///
+    /// Injected for the same reason as ``mockProvider``: the doubles live in
+    /// `AIKitTestSupport`, out of the product, so this module cannot name one.
+    private let mockEmbedder: (@Sendable (AIProviderEntry) -> any AIEmbeddingProviding)?
     /// The document's path, for an error that must name it.
     private let source: String
 
@@ -86,12 +94,14 @@ public struct AIKitAssembly: DIAssembly {
         settings: AIProviderSettings,
         factory: AIProviderFactory = AIProviderFactory(),
         source: String = "the provider settings",
-        mockProvider: (@Sendable (AIProviderEntry) -> any AIProvider)? = nil
+        mockProvider: (@Sendable (AIProviderEntry) -> any AIProvider)? = nil,
+        mockEmbedder: (@Sendable (AIProviderEntry) -> any AIEmbeddingProviding)? = nil
     ) {
         self.settings = settings
         self.factory = factory
         self.source = source
         self.mockProvider = mockProvider
+        self.mockEmbedder = mockEmbedder
     }
 
     // MARK: - DIAssembly
@@ -109,6 +119,21 @@ public struct AIKitAssembly: DIAssembly {
         container.register(AIProviderSet.self) { _ in set }
         container.register([any AIProvider].self) { _ in set.providers }
         container.register(ProviderRouter.self) { _ in ProviderRouter(providers: set.providers) }
+
+        // BR-AIL-24: the embedders, from the SAME settings document through the
+        // SAME factory. Only the rows that declare an `embedding_model` have
+        // one, so this list is normally shorter than the provider list — an
+        // embedder per chat row would be a capability nobody configured.
+        //
+        // Registered in BOTH environments, as the providers are: `.mock` gets
+        // an embedder per declaring row too, so a test resolves exactly what
+        // production resolves (T-AIL-46).
+        let embedding = embedders(for: environment)
+        container.register([any AIEmbeddingProviding].self) { _ in embedding }
+        for embedder in embedding {
+            let id = embedder.id
+            container.register((any AIEmbeddingProviding).self, name: id) { _ in embedder }
+        }
 
         // One registration per row, under the row's own id, so a caller that
         // wants a NAMED provider ("the local one") resolves it by the name the
@@ -164,6 +189,23 @@ public struct AIKitAssembly: DIAssembly {
                 }
             }
             return AIProviderSet(providers: providers, unavailable: unavailable)
+        }
+    }
+
+    /// The embedders for an environment.
+    ///
+    /// A row whose declared `embedding_model` cannot be served is NOT silently
+    /// dropped: it is absent from the list and its cause is thrown when that id
+    /// is resolved by name, which is the rule `providerSet` follows.
+    private func embedders(for environment: DIEnvironment) -> [any AIEmbeddingProviding] {
+        switch environment {
+        case .mock:
+            guard let mockEmbedder else { return [] }
+            return settings.providers
+                .filter { $0.embeddingModel?.isEmpty == false }
+                .map(mockEmbedder)
+        case .production:
+            return factory.makeAllEmbedding(settings).embedders
         }
     }
 

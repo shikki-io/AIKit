@@ -81,6 +81,15 @@ public enum AIKitError: Error, LocalizedError, Equatable {
     /// the shape that used to grow the SSE buffer without limit.
     case streamLineTooLong(cap: Int, target: AIRequestTarget)
 
+    /// An embeddings reply did not carry one vector per input (BR-AIL-24).
+    ///
+    /// A case and not a sentence, with both counts as numbers, because this is
+    /// the failure that does NOT announce itself: a short or over-long reply
+    /// read in arrival order pairs each vector with the wrong text, and the
+    /// caller gets plausible similarity scores and no error at all. The call
+    /// refuses instead — no `nil`, no truncation, no substitute vector.
+    case embeddingCountMismatch(provider: String, expected: Int, received: Int)
+
     // MARK: - Rev 28 — a download is planned before it starts (BR-AIL-23)
 
     /// The destination volume cannot hold a model download (BR-AIL-23).
@@ -140,6 +149,12 @@ public enum AIKitError: Error, LocalizedError, Equatable {
             "The reply from \(target) could not be read: \(reason)"
         case .streamLineTooLong(let cap, let target):
             "A streamed line from \(target) passed the \(cap)-byte cap without a newline"
+        case .embeddingCountMismatch(let provider, let expected, let received):
+            """
+            \(provider) was asked to embed \(expected) text(s) and answered \
+            \(received) vector(s). Nothing is returned: pairing them would \
+            give every text a vector that belongs to another one.
+            """
         case .insufficientSpace(let model, let needed, let free):
             """
             \(model) needs \(DownloadProgress.formatBytes(needed)) free \
@@ -316,6 +331,15 @@ public enum FallbackEligibility {
         // provider's answer would replace this evidence rather than add to
         // it.
         .emptyReply, .replyUndecodable, .streamLineTooLong,
+            // The server answered, with vectors that do not line up. Falling
+            // back is WORSE than useless here: vectors are only comparable
+            // inside one model on one server. Measured 2026-11-14 against the
+            // live @db — the same text through lmstudio/nomic-embed-text-v1.5
+            // and through ollama/nomic-embed-text reproduces a stored vector at
+            // cos 1.0000 and cos 0.9036 — so a second embedder's answer is not
+            // a retry, it is a different vector space, and the caller must see
+            // the refusal (BR-AIL-24).
+            .embeddingCountMismatch,
             // A settings mistake, and NOT eligible on purpose: trying the next
             // provider would hide a misconfigured address behind a working one,
             // and the operator would keep an entry that never works. The same

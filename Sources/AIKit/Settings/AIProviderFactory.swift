@@ -162,6 +162,51 @@ public struct AIProviderFactory: Sendable {
         }
     }
 
+    // MARK: - Making an embedder
+
+    /// Builds the embeddings provider one row describes, when it describes one.
+    ///
+    /// BR-AIL-24. Separate from ``make(_:)`` because embedding is a separate
+    /// capability, not a method every provider has: a row with no
+    /// `embedding_model`, or a family with no embeddings route, simply has no
+    /// embedder — so this answers `nil` for those rather than refusing a
+    /// settings document that is perfectly valid for chat.
+    ///
+    /// - Returns: The embedder, or `nil` when this row serves no embeddings.
+    /// - Throws: ``AIKitError`` when the row DOES declare an
+    ///   `embedding_model` and still cannot be served — a declared intent that
+    ///   cannot be honoured is a settings error, not an absence.
+    public func makeEmbedding(_ entry: AIProviderEntry) throws(AIKitError) -> (any AIEmbeddingProviding)? {
+        guard entry.embeddingModel?.isEmpty == false else { return nil }
+        let credential = entry.apiKeyRef.flatMap(credentials)
+        return try HTTPEmbeddingProvider(
+            entry: entry,
+            network: transport(entry),
+            credential: credential
+        )
+    }
+
+    /// Builds every row's embedder, keeping the refusals.
+    ///
+    /// Rows that declare no `embedding_model` are absent from both lists: they
+    /// were never asked to embed.
+    public func makeAllEmbedding(
+        _ settings: AIProviderSettings
+    ) -> (embedders: [any AIEmbeddingProviding], unavailable: [AIProviderAttempt]) {
+        var embedders: [any AIEmbeddingProviding] = []
+        var unavailable: [AIProviderAttempt] = []
+        for entry in settings.providers {
+            do {
+                if let embedder = try makeEmbedding(entry) {
+                    embedders.append(embedder)
+                }
+            } catch {
+                unavailable.append(AIProviderAttempt(providerID: entry.id, error: error))
+            }
+        }
+        return (embedders, unavailable)
+    }
+
     /// Builds every row, keeping the refusals.
     ///
     /// - Throws: ``AIKitError/allProvidersFailed(_:)`` when NOTHING could be

@@ -123,6 +123,57 @@ struct EmbeddingsRequest: Encodable, Sendable, Equatable {
     let input: [String]
 }
 
+/// Reply to `POST /v1/embeddings`.
+///
+/// `Codable` and not merely `Decodable`, because W24's rule is that a payload a
+/// decoder reads is MINTED from the model that reads it: one statement of the
+/// wire shape, so a field that moves is a compile error in the fixture instead
+/// of a green test (`mintEmbeddingsReply`).
+///
+/// `index` IS READ, and that is the whole reason this type has an accessor
+/// rather than a stored array. The OpenAI surface does not promise `data`
+/// comes back in request order; a batch taken in arrival order pairs each
+/// vector with the wrong text, which yields plausible similarity scores and no
+/// error at all.
+struct EmbeddingsResponseDTO: Codable, Sendable, Equatable {
+    /// One item per input, in whatever order the server chose.
+    let data: [EmbeddingsItem]
+    /// The model that answered, when the server names one.
+    let model: String?
+    /// Tokens the server charged, when it reports them.
+    let usage: EmbeddingsUsage?
+
+    /// Every vector, IN INPUT ORDER, by `index`.
+    var vectorsInInputOrder: [[Float]] {
+        data.sorted { $0.index < $1.index }.map(\.embedding)
+    }
+}
+
+/// One embedded input.
+///
+/// Top-level rather than nested, as ``ResponsesUsage`` and ``AnthropicUsage``
+/// are: a `CodingKeys` inside a nested type is two levels deep, which the
+/// fleet lint refuses.
+struct EmbeddingsItem: Codable, Sendable, Equatable {
+    /// The vector.
+    let embedding: [Float]
+    /// Which input this vector belongs to, zero-based.
+    let index: Int
+}
+
+/// What an embeddings call costs. `nil` fields rather than zeros: a reply that
+/// claims no usage must not read as zero tokens, which silently under-charges a
+/// budget and passes a limit check.
+struct EmbeddingsUsage: Codable, Sendable, Equatable {
+    let promptTokens: Int?
+    let totalTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case promptTokens = "prompt_tokens"
+        case totalTokens = "total_tokens"
+    }
+}
+
 // MARK: - OpenAI responses — /v1/responses
 
 /// Request body for `/v1/responses`.
