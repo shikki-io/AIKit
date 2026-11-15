@@ -29,3 +29,20 @@ test_file_patterns = ["**/AIKitTests/Providers/*.swift"]
 timeout = 120
 expected_test_min = 106
 description = "Provider family relocated from shikki: catalog, alias map, args template, stream parsers, health check (S1) plus the CLI subprocess provider, fallback chain, LM Studio provider, budget ledger and provider-id vocabulary (S2). Run: kagami test --scope AIKitProviders"
+
+[[scopes]]
+# Spec c8fa126c W5 — T-L-11 plus the two non-portable APIs AIKit owned. No build
+# of AIKit had ever targeted a non-Apple triple, so four files used `URLSession`
+# with no `canImport(FoundationNetworking)` guard and `ProviderHealthCheck`
+# measured latency with `CFAbsoluteTimeGetCurrent`. The FoundationNetworking
+# check REQUIRES the guard rather than banning an import, which is the opposite
+# polarity from every other scan here and the reason it is its own test.
+name = "AIKitPortability"
+language = "swift"
+package_path = "."
+test_target_name = "AIKitTests"
+type_patterns = ["AIKitPortabilityRatchetTests"]
+test_file_patterns = ["**/AIKitTests/Portability/*.swift"]
+expected_test_min = 4
+timeout_seconds = 300
+description = "Every URL-loading file guards for FoundationNetworking; no CoreFoundation or Apple-only framework; latency conversion; T-L-11. Run: kagami test --scope AIKitPortability"

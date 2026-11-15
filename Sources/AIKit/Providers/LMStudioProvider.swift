@@ -1,5 +1,12 @@
 import Foundation
 import Logging
+#if canImport(FoundationNetworking)
+    // Spec c8fa126c, the one conditional import the spec declares CORRECT: off
+    // Apple, Foundation's URL loading lives in its own module. This is upstream
+    // Foundation's split, not ours — without it `URLSession` is `AnyObject` and
+    // every call through it fails to type-check for a Linux target.
+    import FoundationNetworking
+#endif
 
 // MARK: - LMStudioProvider
 
@@ -26,26 +33,6 @@ public struct LMStudioProvider: AgentProviding, Sendable {
         case invalidResponse(String)
         case httpError(Int, String)
         case emptyContent
-    }
-
-    // MARK: - Response Models
-
-    struct ChatCompletionResponse: Decodable {
-        struct Choice: Decodable {
-            struct Message: Decodable {
-                let role: String
-                let content: String
-            }
-            let message: Message
-        }
-        let choices: [Choice]
-    }
-
-    struct ErrorResponse: Decodable {
-        struct ErrorDetail: Decodable {
-            let message: String
-        }
-        let error: ErrorDetail
     }
 
     // MARK: - Init
@@ -138,9 +125,9 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     // MARK: - Response Parsing
 
     func parseResponse(_ data: Data) throws -> String {
-        let decoded: ChatCompletionResponse
+        let decoded: LMStudioChatCompletionResponse
         do {
-            decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+            decoded = try JSONDecoder().decode(LMStudioChatCompletionResponse.self, from: data)
         } catch {
             throw LMStudioError.invalidResponse("Failed to decode response: \(error)")
         }
@@ -160,7 +147,37 @@ public struct LMStudioProvider: AgentProviding, Sendable {
     // MARK: - Error Parsing
 
     private func parseErrorMessage(_ data: Data) -> String? {
-        let decoded = try? JSONDecoder().decode(ErrorResponse.self, from: data)
+        let decoded = try? JSONDecoder().decode(LMStudioErrorResponse.self, from: data)
         return decoded?.error.message
+    }
+}
+
+// MARK: - Wire models
+
+// Lifted out of `LMStudioProvider` rather than nested three deep inside it: the
+// fleet's `nesting` rule caps types at one level, and a wire shape is not a
+// member of the client that happens to parse it. Named for the provider because
+// `ChatCompletionResponseDTO` in Engines/DTOs is OpenAI's own shape and these
+// two must not be mistaken for each other — one of them has `role`, the other
+// does not ([[a-wire-fixture-must-be-pinned-to-its-model-in-both-directions]]).
+
+struct LMStudioChatCompletionResponse: Decodable {
+    let choices: [Choice]
+
+    struct Choice: Decodable {
+        let message: Message
+    }
+
+    struct Message: Decodable {
+        let role: String
+        let content: String
+    }
+}
+
+struct LMStudioErrorResponse: Decodable {
+    let error: ErrorDetail
+
+    struct ErrorDetail: Decodable {
+        let message: String
     }
 }
