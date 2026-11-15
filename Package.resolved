@@ -1,5 +1,5 @@
 {
-  "originHash" : "3b445bb7db7e8e1bf7a72fd7de9f8f08217a3bd972b2b7a671cdbe8a8c9645b9",
+  "originHash" : "ef85a56c784ae749d6267df25505be652da10292fb3f16bb308c01977a0d46f7",
   "pins" : [
     {
       "identity" : "corekit",
@@ -22,7 +22,7 @@
     {
       "identity" : "shellkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/obyw-one/ShellKit",
+      "location" : "https://github.com/shikki-io/ShellKit",
       "state" : {
         "revision" : "239b357a71ce719cf3d5f6249fbdb37786568aa0",
         "version" : "0.6.0"

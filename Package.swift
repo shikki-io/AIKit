@@ -39,7 +39,16 @@ let package = Package(
         // that fix; the floor moves to 0.7.0 the moment it is tagged, and the
         // musl evidence in AIKit's PR was taken with `swift package edit
         // ShellKit --path` against the fixed checkout (spec c8fa126c W5).
-        .package(url: "https://github.com/obyw-one/ShellKit", from: "0.6.0"),
+        //
+        // URL: `shikki-io/ShellKit`, the canonical repository. This line said
+        // `obyw-one/ShellKit` until 2026-11-15 — a spelling inherited from
+        // develop, where it has been since the floor was 0.1.0. GitHub redirects
+        // it, so each branch resolved fine ALONE, which is why nothing caught it.
+        // But AIKit#24 declares `shikki-io/ShellKit`, and SwiftPM keys a package
+        // by URL: two spellings of one identity make the graph refuse as soon as
+        // both land on develop. Whichever merged second would have broken, and
+        // the failure would have pointed at the merge rather than at this line.
+        .package(url: "https://github.com/shikki-io/ShellKit", from: "0.6.0"),
     ],
     targets: [
         .target(
