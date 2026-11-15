@@ -1,4 +1,11 @@
 import Foundation
+#if canImport(FoundationNetworking)
+    // Spec c8fa126c, the one conditional import the spec declares CORRECT: off
+    // Apple, Foundation's URL loading lives in its own module. This is upstream
+    // Foundation's split, not ours — without it `URLSession` is `AnyObject` and
+    // every call through it fails to type-check for a Linux target.
+    import FoundationNetworking
+#endif
 
 /// Progress information for an ongoing download.
 public struct DownloadProgress: Sendable {
@@ -64,7 +71,8 @@ public struct ModelDownloader: Sendable {
         let (tempURL, response) = try await session.download(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse,
-              200..<400 ~= httpResponse.statusCode else {
+              200..<400 ~= httpResponse.statusCode
+        else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw AIKitError.downloadFailed("HTTP \(statusCode)")
         }

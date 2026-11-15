@@ -1,5 +1,12 @@
 import Foundation
 import NetKit
+#if canImport(FoundationNetworking)
+    // Spec c8fa126c, the one conditional import the spec declares CORRECT: off
+    // Apple, Foundation's URL loading lives in its own module. This is upstream
+    // Foundation's split, not ours — without it `URLSession` is `AnyObject` and
+    // every call through it fails to type-check for a Linux target.
+    import FoundationNetworking
+#endif
 
 /// AIProvider that talks to any OpenAI-compatible API.
 public struct OpenAIProvider: AIProvider, Sendable {
@@ -50,7 +57,13 @@ public struct OpenAIProvider: AIProvider, Sendable {
     public func stream(request: AIRequest) async throws -> AsyncThrowingStream<AIChunk, Error> {
         let chatRequest = buildChatRequest(from: request, stream: true)
         let endpoint = makeEndpoint(for: chatRequest)
-        let urlRequest = networkService.createRequest(endPoint: endpoint)
+        // NetKit 3.0 made `createRequest` `throws(NetworkError)`: an endpoint
+        // that does not form a URL, or a body JSON cannot represent, is now an
+        // error instead of a silently emptied request. Surfacing it here is the
+        // point — `stream` is already `async throws`, so the caller learns the
+        // request was never sent rather than waiting on a stream that will
+        // never yield.
+        let urlRequest = try networkService.createRequest(endPoint: endpoint)
 
         return AsyncThrowingStream { continuation in
             let delegate = SSEStreamDelegate(continuation: continuation)

@@ -1,4 +1,11 @@
 import Foundation
+#if canImport(FoundationNetworking)
+    // Spec c8fa126c, the one conditional import the spec declares CORRECT: off
+    // Apple, Foundation's URL loading lives in its own module. This is upstream
+    // Foundation's split, not ours — without it `URLSession` is `AnyObject` and
+    // every call through it fails to type-check for a Linux target.
+    import FoundationNetworking
+#endif
 
 // MARK: - ProviderHealthCheck
 
@@ -41,11 +48,18 @@ public struct ProviderHealthCheck: Sendable {
         request.httpMethod = "GET"
         request.timeoutInterval = timeout
 
-        let start = CFAbsoluteTimeGetCurrent()
+        // `ContinuousClock`, not `CFAbsoluteTimeGetCurrent`: CoreFoundation does
+        // not exist off Apple, and a latency measurement must not be the reason
+        // a health check cannot be compiled for Linux (spec c8fa126c). It is
+        // also the better clock for the job — `CFAbsoluteTimeGetCurrent` reads
+        // wall time, so an NTP step or a DST change during the request lands
+        // directly in the reported latency, while `ContinuousClock` is
+        // monotonic and keeps counting across sleep.
+        let start = ContinuousClock.now
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
-            let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000.0
+            let elapsed = Self.milliseconds(start.duration(to: .now))
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 return HealthStatus(available: false, latencyMs: nil, message: "Non-HTTP response")
@@ -72,4 +86,16 @@ public struct ProviderHealthCheck: Sendable {
             )
         }
     }
+
+    /// A `Duration` in milliseconds.
+    ///
+    /// `Duration.components` is `(seconds, attoseconds)`; an attosecond is
+    /// 1e-18 s, so a millisecond is 1e15 attoseconds. Reading the clock once
+    /// and converting here is deliberate — calling `.now` twice in one
+    /// expression measures two different instants.
+    static func milliseconds(_ duration: Duration) -> Double {
+        let parts = duration.components
+        return Double(parts.seconds) * 1000.0 + Double(parts.attoseconds) / 1_000_000_000_000_000.0
+    }
+
 }
