@@ -186,12 +186,116 @@ public struct TokenUsage: Sendable, Codable, Equatable {
 }
 
 /// A single chunk from a streaming response.
-public struct AIChunk: Sendable {
+///
+/// Door 2 (TALK) of BR-AIL-21: a consumer streams through `AIProvider.stream`
+/// and never sees a provider's chunk shape. Until now that promise held only
+/// for TEXT — `delta` plus `isComplete` — while `OpenAIChatCodec.chunk` decoded
+/// the role, the tool-call deltas and the finish reason from
+/// `ChatCompletionChunkDTO` and threw all three away. A chunk carrying only a
+/// tool-call delta (no text, no finish reason) was dropped entirely, so
+/// streaming a tool call through AIKit produced nothing at all and a consumer
+/// that needed one had to re-implement the wire shape. That is why shikki keeps
+/// its own `ChatCompletionReply` / `ToolCall` in `LocalHTTPAgentRunner`.
+///
+/// The fields below are what the DTO already parsed. Nothing new is read off
+/// the wire; what changes is that the public model stops narrowing it.
+public struct AIChunk: Sendable, Codable, Equatable {
+    /// The text this chunk adds. Empty for a chunk that carries only a
+    /// tool-call delta or only an ending.
     public var delta: String
     public var isComplete: Bool
 
-    public init(delta: String, isComplete: Bool = false) {
+    /// The role the provider declared for the message being streamed, when it
+    /// declared one. OpenAI-compatible servers send it on the first chunk only.
+    public var role: AIMessage.Role?
+
+    /// The tool calls this chunk advances, in wire order.
+    ///
+    /// Streaming tool calls arrive in pieces: the first chunk carries the id
+    /// and the function name, later chunks carry argument text only. The
+    /// consumer accumulates by ``AIToolCallDelta/index``.
+    public var toolCallDeltas: [AIToolCallDelta]?
+
+    /// Why the provider stopped, once it has. `nil` on every chunk before the
+    /// last. `isComplete` stays the plain answer to "is this the end"; this is
+    /// the reason, which a caller needs to tell a completed answer from a
+    /// truncated one or from one that ended to run a tool.
+    public var finishReason: AIFinishReason?
+
+    /// Which choice this chunk belongs to, when the provider numbers them.
+    public var choiceIndex: Int?
+
+    /// Every parameter after `isComplete` defaults, so the two-argument form
+    /// every existing caller and `AIKitPublicAPI.txt:453` already use keeps
+    /// compiling unchanged.
+    public init(
+        delta: String,
+        isComplete: Bool = false,
+        role: AIMessage.Role? = nil,
+        toolCallDeltas: [AIToolCallDelta]? = nil,
+        finishReason: AIFinishReason? = nil,
+        choiceIndex: Int? = nil
+    ) {
         self.delta = delta
         self.isComplete = isComplete
+        self.role = role
+        self.toolCallDeltas = toolCallDeltas
+        self.finishReason = finishReason
+        self.choiceIndex = choiceIndex
     }
+}
+
+/// One step of a tool call being streamed.
+///
+/// `argumentsFragment` is deliberately a `String` and NOT a typed JSON value,
+/// even once `CoreKit.JSONValue` becomes `Codable`: a provider streams the
+/// arguments as partial JSON text, and a fragment such as `{"pa` is not valid
+/// JSON until the whole call has arrived. Typing it would promise a parse that
+/// cannot succeed mid-stream. The typed-JSON question belongs to the COMPLETE
+/// call — `AITool.parametersSchema` and `AIToolCall.arguments`, both `String`
+/// today — and is left alone here on purpose (see this PR's body).
+public struct AIToolCallDelta: Sendable, Codable, Equatable {
+    /// The call this fragment belongs to. Fragments for one call share it, and
+    /// it is how a consumer concatenates them. Providers that omit it are
+    /// streaming a single call, which is index 0.
+    public var index: Int
+    /// The server-assigned call id, sent once, on the first fragment.
+    public var id: String?
+    /// The function name, sent once, on the first fragment.
+    public var name: String?
+    /// This chunk's slice of the argument JSON text.
+    public var argumentsFragment: String?
+
+    public init(index: Int, id: String? = nil, name: String? = nil, argumentsFragment: String? = nil) {
+        self.index = index
+        self.id = id
+        self.name = name
+        self.argumentsFragment = argumentsFragment
+    }
+}
+
+/// Why a provider stopped generating.
+///
+/// A `RawRepresentable` struct rather than an enum, on purpose: the wire
+/// vocabulary is open. A provider we have never seen may answer
+/// `"max_output_tokens"`, and an enum would force either a lossy `.other`
+/// mapping or a decode failure on a response that is otherwise perfectly good.
+/// This round-trips any value and still lets call sites switch on the four
+/// everyone sends.
+public struct AIFinishReason: RawRepresentable, Sendable, Codable, Equatable, Hashable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    /// The model finished its answer.
+    public static let stop = AIFinishReason(rawValue: "stop")
+    /// The model hit the token ceiling; the answer is truncated.
+    public static let length = AIFinishReason(rawValue: "length")
+    /// The model stopped to call a tool — the caller is expected to run it and
+    /// send the result back.
+    public static let toolCalls = AIFinishReason(rawValue: "tool_calls")
+    /// The provider's content filter stopped it.
+    public static let contentFilter = AIFinishReason(rawValue: "content_filter")
 }

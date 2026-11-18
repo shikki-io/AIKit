@@ -455,13 +455,18 @@ enum DeclaredEvidence {
         File(
             path: "Tests/AIKitTests/Support/WireFixtures.swift",
             kind: .capturedReply,
-            count: 9,
+            count: 10,
             reason: """
                 Four complete replies captured from the operator's LM Studio, one per HTTP \
                 family, kept with the fields AIKit does not read and pinned both ways by \
-                FixturePinTests. The other five are the suite's opaque JSON VALUES, spelled once \
+                FixturePinTests. The other six are the suite's opaque JSON VALUES, spelled once \
                 here so they stop being spelled in six suites: two tool schemas, two forms of \
-                tool-call arguments, and the empty object an accepted call answers with.
+                tool-call arguments, the empty object an accepted call answers with, and — \
+                raised 9 -> 10 for the streaming chunk work — `fixtureToolArgumentsJoined`, what \
+                a streamed tool call's argument fragments join into. Its two halves are declared \
+                beside it and are NOT counted here because neither is valid JSON on its own, \
+                which is the whole reason `AIToolCallDelta.argumentsFragment` is a String: a \
+                fragment cannot be parsed until the call has fully arrived.
                 """
         ),
         File(

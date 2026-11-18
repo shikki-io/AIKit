@@ -390,6 +390,22 @@ let fixtureToolSchema = #"{"type":"object"}"#
 /// A schema with a declared property, for a test that needs the nesting.
 let fixtureToolSchemaWithProperties = #"{"type":"object","properties":{"city":{"type":"string"}}}"#
 
+/// A streamed tool call's arguments, split where a provider splits them.
+///
+/// Also `.opaqueValue` (W24): the arguments belong to the tool, not to the wire
+/// standard, so there is no DTO to mint them from. Declared here rather than in
+/// the streaming suite for the same reason the schemas above are — one answer
+/// to "what do streamed arguments look like", and the halves are only
+/// meaningful next to the whole they join into.
+///
+/// Neither half is valid JSON on its own. That is the point: it is why
+/// `AIToolCallDelta.argumentsFragment` is a `String` and not a typed JSON
+/// value, and it is what a consumer must accumulate before parsing.
+let fixtureToolArgumentsHead = #"{"ci"#
+let fixtureToolArgumentsTail = #"ty":"Paris"}"#
+/// What the two fragments above join into — the only valid JSON of the three.
+let fixtureToolArgumentsJoined = #"{"city":"Paris"}"#
+
 /// The empty JSON object, `{}`.
 ///
 /// One constant for the three places it means something: a tool that declares
@@ -683,4 +699,75 @@ func mintHFModelReply(_ model: HFModelInfo) throws -> Data {
 /// LM Studio's native `GET /api/v1/models` reply.
 func mintLMStudioHostedModels(_ models: [LMStudioHostedModel]) throws -> String {
     try mintJSONText(LMStudioModelsReply(data: models))
+}
+
+// MARK: - Streaming chunks, minted from the DTO that reads them
+//
+// `capturedChatSSELines` is a real capture, and it is a TEXT stream: the
+// operator's LM Studio run on 2026-11-12 called no tool. There is no capture of
+// a streamed tool call, so the lines below are minted from
+// `ChatCompletionChunkDTO` itself rather than typed as JSON literals — the
+// discipline #24's review asked for ("typed Codable fixtures", not raw JSON
+// string literals), and the reason `FixtureLiteralRatchetTests` exists.
+//
+// Minting from the DTO the codec decodes is what makes the fixture evidence: if
+// the wire shape ever moves, these stop compiling instead of silently testing a
+// shape nothing sends.
+
+/// One `chat.completion.chunk` SSE line, built from the reading DTO.
+///
+/// `toolCalls` takes ``FixtureToolCallDelta`` — a struct and not a tuple, both
+/// because `large_tuple` caps a tuple at two members and because every field is
+/// optional, which is exactly the case a named type reads better than a
+/// position. A test states the two-chunk shape a real tool call arrives in: the
+/// first fragment carries the id and the name, the rest carry argument text only.
+struct FixtureToolCallDelta: Sendable {
+    var index: Int?
+    var id: String?
+    var name: String?
+    var arguments: String?
+
+    init(index: Int? = nil, id: String? = nil, name: String? = nil, arguments: String? = nil) {
+        self.index = index
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+    }
+}
+
+func mintChatChunkLine(
+    content: String? = nil,
+    role: String? = nil,
+    finishReason: String? = nil,
+    toolCalls: [FixtureToolCallDelta] = [],
+    choiceIndex: Int = 0
+) throws -> String {
+    let deltas: [ChatCompletionChunkDTO.ToolCallDelta]? = toolCalls.isEmpty
+        ? nil
+        : toolCalls.map { call in
+            ChatCompletionChunkDTO.ToolCallDelta(
+                index: call.index,
+                id: call.id,
+                type: "function",
+                function: ChatCompletionChunkDTO.ToolCallDelta.FunctionDelta(
+                    name: call.name,
+                    arguments: call.arguments
+                )
+            )
+        }
+    let dto = ChatCompletionChunkDTO(
+        id: "chatcmpl-fixture",
+        choices: [
+            ChatCompletionChunkDTO.Choice(
+                index: choiceIndex,
+                delta: ChatCompletionChunkDTO.Delta(
+                    role: role,
+                    content: content,
+                    toolCalls: deltas
+                ),
+                finishReason: finishReason
+            ),
+        ]
+    )
+    return "data: " + (try mintJSONText(dto))
 }
