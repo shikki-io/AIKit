@@ -34,7 +34,8 @@
 #
 # 2. TALK — one entry point, and orchestration over it (BR-AIL-15, BR-AIL-22).
 #    AIProvider, AIRequest, AIMessage, AIInput, AIMediaKind, AIMediaSource,
-#    ResponseFormat, AIResponse, AIOutput, AIChunk, TokenUsage, AICapabilities,
+#    ResponseFormat, AIResponse, AIOutput, AIChunk, AIToolCallDelta,
+#    AIFinishReason, TokenUsage, AICapabilities,
 #    AIProviderStatus, AIKitError, AIProviderAttempt, AIRequestTarget,
 #    FallbackEligibility, ProviderRouter, ProviderPreferences, PerformanceStore,
 #    PerformanceStat, UsageContext.
@@ -371,6 +372,8 @@ AIKit  enum.case  VideoResolution.hd720
 AIKit  enum.case  VideoResolution.uhd4K
 AIKit  func.op  AICLISubprocessOptions.!=(_:_:)
 AIKit  func.op  AICapabilities.!=(_:_:)
+AIKit  func.op  AIChunk.!=(_:_:)
+AIKit  func.op  AIFinishReason.!=(_:_:)
 AIKit  func.op  AIInput.!=(_:_:)
 AIKit  func.op  AIKitError.!=(_:_:)
 AIKit  func.op  AIKitNode.!=(_:_:)
@@ -399,6 +402,7 @@ AIKit  func.op  AIServerAddress.!=(_:_:)
 AIKit  func.op  AIServerAddress.Reach.!=(_:_:)
 AIKit  func.op  AITool.!=(_:_:)
 AIKit  func.op  AIToolCall.!=(_:_:)
+AIKit  func.op  AIToolCallDelta.!=(_:_:)
 AIKit  func.op  AgentSessionEntry.!=(_:_:)
 AIKit  func.op  AnthropicFamily.!=(_:_:)
 AIKit  func.op  BudgetLedger.LedgerError.!=(_:_:)
@@ -450,7 +454,10 @@ AIKit  init  AICapabilities.init(_:)
 AIKit  init  AICapabilities.init(arrayLiteral:)
 AIKit  init  AICapabilities.init(from:)
 AIKit  init  AICapabilities.init(rawValue:)
-AIKit  init  AIChunk.init(delta:isComplete:)
+AIKit  init  AIChunk.init(delta:isComplete:role:toolCallDeltas:finishReason:choiceIndex:)
+AIKit  init  AIChunk.init(from:)
+AIKit  init  AIFinishReason.init(from:)
+AIKit  init  AIFinishReason.init(rawValue:)
 AIKit  init  AIInput.init(from:)
 AIKit  init  AIInput.init(kind:data:mimeType:)
 AIKit  init  AIInput.init(kind:source:mimeType:)
@@ -501,6 +508,8 @@ AIKit  init  AITool.init(from:)
 AIKit  init  AITool.init(name:description:parametersSchema:)
 AIKit  init  AIToolCall.init(from:)
 AIKit  init  AIToolCall.init(id:name:arguments:)
+AIKit  init  AIToolCallDelta.init(from:)
+AIKit  init  AIToolCallDelta.init(index:id:name:argumentsFragment:)
 AIKit  init  AgentSessionEntry.init(sessionID:jsonlPath:projectSlug:cwd:mtime:sizeBytes:firstMessageTopic:)
 AIKit  init  AnthropicFamily.init(from:)
 AIKit  init  AnthropicFamily.init(rawValue:)
@@ -599,6 +608,12 @@ AIKit  method  AICapabilities.subtracting(_:)
 AIKit  method  AICapabilities.symmetricDifference(_:)
 AIKit  method  AICapabilities.union(_:)
 AIKit  method  AICapabilities.update(with:)
+AIKit  method  AIChunk.compactJSON()
+AIKit  method  AIChunk.prettyJSON()
+AIKit  method  AIFinishReason.compactJSON()
+AIKit  method  AIFinishReason.encode(to:)
+AIKit  method  AIFinishReason.hash(into:)
+AIKit  method  AIFinishReason.prettyJSON()
 AIKit  method  AIInput.compactJSON()
 AIKit  method  AIInput.prettyJSON()
 AIKit  method  AIKitAssembly.assemble(container:environment:)
@@ -665,6 +680,8 @@ AIKit  method  AITool.compactJSON()
 AIKit  method  AITool.prettyJSON()
 AIKit  method  AIToolCall.compactJSON()
 AIKit  method  AIToolCall.prettyJSON()
+AIKit  method  AIToolCallDelta.compactJSON()
+AIKit  method  AIToolCallDelta.prettyJSON()
 AIKit  method  AgentSessionEntry.ageSeconds(now:)
 AIKit  method  AgentSessionEntry.ageString(now:)
 AIKit  method  AgentSessionIndexProvider.resumeInvocation(sessionID:)
@@ -842,8 +859,19 @@ AIKit  property  AICapabilities.lessPrettyJson
 AIKit  property  AICapabilities.prettyJson
 AIKit  property  AICapabilities.rawAttachmentValueRepresentation
 AIKit  property  AICapabilities.rawValue
+AIKit  property  AIChunk.choiceIndex
 AIKit  property  AIChunk.delta
+AIKit  property  AIChunk.finishReason
 AIKit  property  AIChunk.isComplete
+AIKit  property  AIChunk.lessPrettyJson
+AIKit  property  AIChunk.prettyJson
+AIKit  property  AIChunk.role
+AIKit  property  AIChunk.toolCallDeltas
+AIKit  property  AIFinishReason.hashValue
+AIKit  property  AIFinishReason.lessPrettyJson
+AIKit  property  AIFinishReason.prettyJson
+AIKit  property  AIFinishReason.rawAttachmentValueRepresentation
+AIKit  property  AIFinishReason.rawValue
 AIKit  property  AIInput.data
 AIKit  property  AIInput.kind
 AIKit  property  AIInput.lessPrettyJson
@@ -991,6 +1019,12 @@ AIKit  property  AIToolCall.id
 AIKit  property  AIToolCall.lessPrettyJson
 AIKit  property  AIToolCall.name
 AIKit  property  AIToolCall.prettyJson
+AIKit  property  AIToolCallDelta.argumentsFragment
+AIKit  property  AIToolCallDelta.id
+AIKit  property  AIToolCallDelta.index
+AIKit  property  AIToolCallDelta.lessPrettyJson
+AIKit  property  AIToolCallDelta.name
+AIKit  property  AIToolCallDelta.prettyJson
 AIKit  property  AgentSessionEntry.cwd
 AIKit  property  AgentSessionEntry.firstMessageTopic
 AIKit  property  AgentSessionEntry.jsonlPath
@@ -1223,6 +1257,7 @@ AIKit  protocol  RuntimeEngine
 AIKit  struct  AICLISubprocessOptions
 AIKit  struct  AICapabilities
 AIKit  struct  AIChunk
+AIKit  struct  AIFinishReason
 AIKit  struct  AIInput
 AIKit  struct  AIKitAssembly
 AIKit  struct  AILocalModelPlacement
@@ -1243,6 +1278,7 @@ AIKit  struct  AIRoutingPolicy
 AIKit  struct  AIServerAddress
 AIKit  struct  AITool
 AIKit  struct  AIToolCall
+AIKit  struct  AIToolCallDelta
 AIKit  struct  AgentSessionEntry
 AIKit  struct  BudgetLedger.SlotPermit
 AIKit  struct  ClaudeSessionIndexProvider
@@ -1276,6 +1312,7 @@ AIKit  struct  ProviderRouter
 AIKit  struct  TokenUsage
 AIKit  struct  UsageContext
 AIKit  type.method  AICapabilities.makeFromRawAttachmentValue(_:)
+AIKit  type.method  AIFinishReason.makeFromRawAttachmentValue(_:)
 AIKit  type.method  AIKitNode.makeFromRawAttachmentValue(_:)
 AIKit  type.method  AIKitPaths.layer(root:nodeRoots:)
 AIKit  type.method  AIMediaKind.makeFromRawAttachmentValue(_:)
@@ -1328,6 +1365,10 @@ AIKit  type.property  AICapabilities.translation
 AIKit  type.property  AICapabilities.videoGeneration
 AIKit  type.property  AICapabilities.vision
 AIKit  type.property  AICapabilities.voiceToText
+AIKit  type.property  AIFinishReason.contentFilter
+AIKit  type.property  AIFinishReason.length
+AIKit  type.property  AIFinishReason.stop
+AIKit  type.property  AIFinishReason.toolCalls
 AIKit  type.property  AIKitNode.mount
 AIKit  type.property  AIKitPaths.nodes
 AIKit  type.property  AIKitPaths.owners

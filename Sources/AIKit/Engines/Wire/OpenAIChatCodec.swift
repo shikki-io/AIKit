@@ -168,10 +168,48 @@ struct OpenAIChatCodec: WireCodec {
 
         let delta = choice.delta.content ?? ""
         let isComplete = choice.finishReason != nil
-        // A chunk that carries neither text nor an ending is not news: the
-        // captured stream sends `{"delta":{"role":"assistant"}}` first and
-        // `{"delta":{"content":""}}` mid-run.
-        guard !delta.isEmpty || isComplete else { return nil }
-        return AIChunk(delta: delta, isComplete: isComplete)
+
+        // The DTO has always parsed these three; the public chunk used to drop
+        // them on the floor, which is why a consumer that needed a streamed
+        // tool call had to re-decode the wire itself.
+        let toolCallDeltas = Self.toolCallDeltas(of: choice.delta)
+        let finishReason = choice.finishReason.map(AIFinishReason.init(rawValue:))
+        let role = choice.delta.role.flatMap(AIMessage.Role.init(rawValue:))
+
+        // A chunk that carries neither text, nor a tool-call step, nor an
+        // ending is not news: the captured stream sends
+        // `{"delta":{"role":"assistant"}}` first and `{"delta":{"content":""}}`
+        // mid-run. A tool-call step IS news — dropping it was the defect, and
+        // a role-only priming chunk stays dropped.
+        guard !delta.isEmpty || isComplete || toolCallDeltas != nil else { return nil }
+
+        return AIChunk(
+            delta: delta,
+            isComplete: isComplete,
+            role: role,
+            toolCallDeltas: toolCallDeltas,
+            finishReason: finishReason,
+            choiceIndex: choice.index
+        )
+    }
+
+    /// Maps the wire's tool-call deltas, supplying the index a provider may omit.
+    ///
+    /// `index` is how a consumer concatenates fragments belonging to one call,
+    /// so it cannot be optional in the public model. OpenAI sends it; a
+    /// single-call stream from a smaller server may not, and position in the
+    /// array is then the only answer available.
+    private static func toolCallDeltas(
+        of delta: ChatCompletionChunkDTO.Delta
+    ) -> [AIToolCallDelta]? {
+        guard let wire = delta.toolCalls, !wire.isEmpty else { return nil }
+        return wire.enumerated().map { position, call in
+            AIToolCallDelta(
+                index: call.index ?? position,
+                id: call.id,
+                name: call.function?.name,
+                argumentsFragment: call.function?.arguments
+            )
+        }
     }
 }
